@@ -43,7 +43,7 @@ pnpm test:e2e
 
 1. Đọc [AGENTS.md](AGENTS.md).
 2. Chọn đúng context pack trong [docs/tasks](docs/tasks).
-3. Tạo branch `feat/<ticket-id>-<feature-name>`.
-4. Chỉ sửa folder được phép trong task pack.
-5. Gửi PR theo [docs/PR-CHECKLIST.md](docs/PR-CHECKLIST.md).
-
+3. Copy prompt phù hợp trong [docs/STARTER-PROMPTS.md](docs/STARTER-PROMPTS.md).
+4. Tạo branch `feat/<ticket-id>-<feature-name>`.
+5. Chỉ sửa folder được phép trong task pack.
+6. Gửi PR theo [docs/PR-CHECKLIST.md](docs/PR-CHECKLIST.md).
