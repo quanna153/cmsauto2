@@ -7,6 +7,7 @@
 3. Tag release base: `base-v1.0.0`.
 4. Tạo ticket bằng `docs/TASK-TEMPLATE.md`.
 5. Gắn đúng context pack trong `docs/tasks/`.
+6. Gửi người nhận link `docs/STARTER-PROMPTS.md`.
 
 ## Người nhận task
 
@@ -22,10 +23,11 @@ pnpm dev
 
 Không chia sẻ `.env.local`. Với task UI mock, chỉ cần chạy web và sửa đúng feature folder.
 
+Khi mở Codex hoặc Claude, copy prompt phù hợp trong `docs/STARTER-PROMPTS.md` và thay đúng tên task pack được giao.
+
 ## Trả bài
 
 1. Chạy verify trong context pack.
 2. Chụp desktop và mobile.
 3. Push branch, tạo PR vào `main`.
 4. Không gửi zip toàn bộ source.
-

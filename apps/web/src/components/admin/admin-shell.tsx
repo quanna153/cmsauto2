@@ -58,8 +58,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     await postJson("/session/logout", {});
-    client.setQueryData(["session"], undefined);
-    await session.refetch();
+    client.setQueryData(["session"], null);
   }
 
   if (session.isLoading) return <main className="mx-auto max-w-lg p-8"><LoadingSkeleton label="Đang kiểm tra phiên đăng nhập..." /></main>;
@@ -75,4 +74,3 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 function AuthPanel({ title, error, children }: { title: string; error: string | null; children: React.ReactNode }) {
   return <main className="grid min-h-screen place-items-center p-5"><section className="w-full max-w-md rounded-2xl border bg-white p-7 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a88412]">CMS Auto</p><h1 className="mb-5 mt-2 text-2xl font-bold">{title}</h1><div className="grid gap-3">{error ? <ErrorState message={error} /> : null}{children}</div></section></main>;
 }
-

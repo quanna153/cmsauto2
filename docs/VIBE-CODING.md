@@ -1,5 +1,7 @@
 # Hướng Dẫn Vibe Coding
 
+Prompt copy-paste cho từng loại task nằm tại `docs/STARTER-PROMPTS.md`.
+
 ## Cách bắt đầu
 
 Mở Codex hoặc Claude Code tại root repo và gửi prompt:
@@ -37,4 +39,3 @@ Không đổi contracts, backend hoặc root config.
 Review diff hiện tại theo scope của task pack.
 Kiểm tra file ngoài scope, responsive, state UI và lệnh verify.
 ```
-
