@@ -63,8 +63,13 @@ beforeAll(async () => {
 describe("SQLite foundation", () => {
   it("bootstraps exactly one super admin", async () => {
     await ensureAuthBootstrap();
-    const row = await queryFirst<{ count: number }>("SELECT COUNT(*) AS count FROM users WHERE role = 'super_admin'");
+    const row = await queryFirst<{ count: number; must_change_password: number }>(`
+      SELECT COUNT(*) AS count, must_change_password
+      FROM users
+      WHERE role = 'super_admin'
+    `);
     expect(Number(row?.count)).toBe(1);
+    expect(Number(row?.must_change_password)).toBe(0);
   });
 
   it("rejects stale article revisions without deleting server history", async () => {
