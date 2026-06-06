@@ -32,6 +32,8 @@ import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-vo
 import {
   appendHistory,
   createArticleLibraryItem,
+  createManualPublishedArticle,
+  createManualScheduledArticle,
   createArticleSession,
   deleteArticleLibraryItem,
   deleteArticleSession,
@@ -399,6 +401,13 @@ const articleSessionSchema = z.object({
 const articleSessionRequestSchema = z.object({
   article: articleSessionSchema
 });
+const manualArticleRequestSchema = z.object({
+  title: z.string().refine((value) => value.trim().length > 0, "Tiêu đề là bắt buộc."),
+  content: z.string().refine((value) => value.trim().length > 0, "Nội dung bài viết là bắt buộc.")
+}).strict();
+const manualScheduledArticleRequestSchema = manualArticleRequestSchema.extend({
+  publishAt: z.string().datetime()
+}).strict();
 const reviewGateRequestSchema = z.object({
   publishAt: z.string().datetime().nullable().optional()
 });
@@ -754,6 +763,26 @@ app.post("/api/articles", async (request, response, next) => {
   try {
     const payload = articleSessionRequestSchema.parse(request.body);
     const article = await createArticleSession(normalizeArticleSessionInput(payload.article), getAuth(request).user);
+    response.status(201).json({ article });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/articles/manual", async (request, response, next) => {
+  try {
+    const payload = manualArticleRequestSchema.parse(request.body);
+    const article = await createManualPublishedArticle(payload, getAuth(request).user);
+    response.status(201).json({ article });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/articles/manual/schedule", async (request, response, next) => {
+  try {
+    const payload = manualScheduledArticleRequestSchema.parse(request.body);
+    const article = await createManualScheduledArticle(payload, getAuth(request).user);
     response.status(201).json({ article });
   } catch (error) {
     next(error);

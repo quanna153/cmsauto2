@@ -537,6 +537,36 @@ function localeForLanguage(language: Language): Locale {
   return language === "vi" ? "vi-vn" : "en-us";
 }
 
+function slugifyManualTitle(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "bai-viet";
+}
+
+function uniquePublishedSlug(db: SqlDatabase, locale: Locale, title: string) {
+  const baseSlug = slugifyManualTitle(title);
+  let slug = baseSlug;
+  let suffix = 2;
+
+  while (dbFirst<{ id: string }>(db, `
+    SELECT id
+    FROM published_articles
+    WHERE locale = $locale AND slug = $slug
+    LIMIT 1
+  `, { $locale: locale, $slug: slug })) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
 function buildPublishProjection(article: ArticleSessionSnapshot, publishedAt: string): PublishedArticle {
   const draft = article.draft;
   if (!draft) {
@@ -1380,6 +1410,209 @@ export async function createArticleSession(article: ArticleSessionSnapshot, acto
   });
 
   return await readArticleById(normalized.id) ?? normalized;
+}
+
+export async function createManualPublishedArticle(
+  input: { title: string; content: string },
+  actor: OwnerContext
+) {
+  await ensureBootstrapData();
+
+  const articleId = crypto.randomUUID();
+  const remoteArticleId = crypto.randomUUID();
+  const publishedAt = nowIso();
+  const language: Language = "vi";
+  const locale = localeForLanguage(language);
+
+  await withTransaction((db) => {
+    const slug = uniquePublishedSlug(db, locale, input.title);
+    const livePath = `/${locale}/${slug}`;
+    const draft = {
+      title: input.title,
+      slug,
+      excerpt: "",
+      metaTitle: input.title,
+      metaDescription: "",
+      markdown: input.content
+    };
+    const article = normalizeArticleSession({
+      id: articleId,
+      revision: 1,
+      createdAt: publishedAt,
+      updatedAt: publishedAt,
+      inputs: {
+        language,
+        seedKeyword: input.title
+      },
+      activeStep: "ready",
+      keywordIdeas: [],
+      primaryKeywordId: null,
+      secondaryKeywordIds: [],
+      brief: null,
+      outline: null,
+      draft,
+      linkSuggestions: [],
+      finalMarkdown: input.content,
+      reviewStatus: "published",
+      reviewNote: "Đăng thủ công và publish ngay.",
+      publishAt: publishedAt,
+      publishedAt,
+      livePath,
+      remoteArticleId,
+      publishJobId: null,
+      lastPublishError: null,
+      versions: [{
+        id: crypto.randomUUID(),
+        createdAt: publishedAt,
+        label: "Đăng thủ công",
+        reviewStatus: "published",
+        title: input.title,
+        slug,
+        excerpt: "",
+        metaTitle: input.title,
+        metaDescription: "",
+        markdown: input.content
+      }],
+      statusTransitions: [{
+        id: crypto.randomUUID(),
+        createdAt: publishedAt,
+        fromStatus: null,
+        toStatus: "published",
+        note: "Đăng thủ công và publish ngay."
+      }]
+    });
+
+    writeArticleBase(db, article, actor.id);
+    insertOrUpdatePublishedArticle(db, {
+      id: remoteArticleId,
+      articleId,
+      slug,
+      locale,
+      language,
+      title: input.title,
+      excerpt: "",
+      metaTitle: input.title,
+      metaDescription: "",
+      markdown: input.content,
+      publishedAt,
+      livePath,
+      internalLinks: [],
+      primaryKeyword: "",
+      secondaryKeywords: []
+    });
+  });
+
+  const article = await readArticleById(articleId);
+  if (!article) {
+    throw new Error("Không đọc lại được bài viết thủ công vừa lưu.");
+  }
+
+  return article;
+}
+
+export async function createManualScheduledArticle(
+  input: { title: string; content: string; publishAt: string },
+  actor: OwnerContext
+) {
+  await ensureBootstrapData();
+
+  const articleId = crypto.randomUUID();
+  const publishJobId = crypto.randomUUID();
+  const createdAt = nowIso();
+  const language: Language = "vi";
+  const locale = localeForLanguage(language);
+  const scheduledAt = input.publishAt;
+
+  await withTransaction((db) => {
+    const slug = uniquePublishedSlug(db, locale, input.title);
+    const draft = {
+      title: input.title,
+      slug,
+      excerpt: "",
+      metaTitle: input.title,
+      metaDescription: "",
+      markdown: input.content
+    };
+    const article = normalizeArticleSession({
+      id: articleId,
+      revision: 1,
+      createdAt,
+      updatedAt: createdAt,
+      inputs: {
+        language,
+        seedKeyword: input.title
+      },
+      activeStep: "ready",
+      keywordIdeas: [],
+      primaryKeywordId: null,
+      secondaryKeywordIds: [],
+      brief: null,
+      outline: null,
+      draft,
+      linkSuggestions: [],
+      finalMarkdown: input.content,
+      reviewStatus: "scheduled",
+      reviewNote: `Đặt lịch đăng thủ công lúc ${scheduledAt}.`,
+      publishAt: scheduledAt,
+      publishedAt: null,
+      livePath: null,
+      remoteArticleId: null,
+      publishJobId,
+      lastPublishError: null,
+      versions: [{
+        id: crypto.randomUUID(),
+        createdAt,
+        label: "Đặt lịch đăng thủ công",
+        reviewStatus: "scheduled",
+        title: input.title,
+        slug,
+        excerpt: "",
+        metaTitle: input.title,
+        metaDescription: "",
+        markdown: input.content
+      }],
+      statusTransitions: [{
+        id: crypto.randomUUID(),
+        createdAt,
+        fromStatus: null,
+        toStatus: "scheduled",
+        note: "Đặt lịch đăng thủ công."
+      }]
+    });
+
+    writeArticleBase(db, article, actor.id);
+    db.run(`
+      INSERT INTO publish_jobs (
+        id, article_id, status, scheduled_at, started_at, completed_at,
+        retry_count, max_retries, last_error, idempotency_key, locked_at
+      ) VALUES (
+        $id, $articleId, 'scheduled', $scheduledAt, NULL, NULL,
+        0, $maxRetries, NULL, $idempotencyKey, NULL
+      )
+    `, {
+      $id: publishJobId,
+      $articleId: articleId,
+      $scheduledAt: scheduledAt,
+      $maxRetries: Number(process.env.PUBLISH_MAX_RETRIES ?? "3"),
+      $idempotencyKey: `${articleId}::${scheduledAt}`
+    } as never);
+    writePublishLog(db, {
+      id: crypto.randomUUID(),
+      publishJobId,
+      articleId,
+      eventType: "scheduled",
+      message: "Bài thủ công đã được đặt lịch publish.",
+      payload: { publishAt: scheduledAt },
+      createdAt
+    });
+  });
+
+  const article = await readArticleById(articleId);
+  if (!article) {
+    throw new Error("Không đọc lại được bài viết thủ công vừa đặt lịch.");
+  }
+
+  return article;
 }
 
 export async function patchArticleSession(

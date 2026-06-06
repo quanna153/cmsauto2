@@ -3,8 +3,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { ensureAuthBootstrap } from "./auth-store.js";
 import { queryFirst } from "./database.js";
 import {
+  createManualPublishedArticle,
+  createManualScheduledArticle,
   createArticleSession,
   patchArticleSession,
+  readPublishedArticleBySlug,
   readPublishedArticles,
   RevisionConflictError,
   reviewGateArticle,
@@ -84,5 +87,46 @@ describe("SQLite foundation", () => {
     await runDuePublishJobs();
     expect((await readPublishedArticles("vi-vn")).find((item) => item.articleId === vi.id)?.livePath).toBe("/vi-vn/bitcoin-la-gi");
     expect((await readPublishedArticles("en-us")).find((item) => item.articleId === en.id)?.livePath).toBe("/en-us/what-is-bitcoin");
+  });
+
+  it("stores manual admin posts verbatim and publishes them immediately to reader", async () => {
+    const title = `Bài thủ công ${crypto.randomUUID()}`;
+    const content = "  Nội dung nhập tay từ admin.\n\nGiữ nguyên xuống dòng và khoảng trắng cuối.  ";
+    const article = await createManualPublishedArticle({ title, content }, actor);
+
+    expect(article.reviewStatus).toBe("published");
+    expect(article.draft?.title).toBe(title);
+    expect(article.draft?.markdown).toBe(content);
+    expect(article.finalMarkdown).toBe(content);
+    expect(article.livePath).toBeTruthy();
+
+    const published = (await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id);
+    expect(published?.title).toBe(title);
+    expect(published?.markdown).toBe(content);
+    expect(published?.livePath).toBe(article.livePath);
+
+    const slug = article.livePath?.split("/").at(-1);
+    expect(slug).toBeTruthy();
+    expect((await readPublishedArticleBySlug("vi-vn", slug ?? ""))?.markdown).toBe(content);
+  });
+
+  it("stores manual scheduled posts without showing them to reader before the publish worker runs", async () => {
+    const title = `Bài đặt lịch ${crypto.randomUUID()}`;
+    const content = "Nội dung đặt lịch thủ công.";
+    const publishAt = new Date(Date.now() - 1000).toISOString();
+    const article = await createManualScheduledArticle({ title, content, publishAt }, actor);
+
+    expect(article.reviewStatus).toBe("scheduled");
+    expect(article.publishAt).toBe(publishAt);
+    expect(article.publishedAt).toBeNull();
+    expect(article.livePath).toBeNull();
+    expect(article.draft?.title).toBe(title);
+    expect(article.draft?.markdown).toBe(content);
+    expect((await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id)).toBeUndefined();
+
+    await runDuePublishJobs();
+    const published = (await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id);
+    expect(published?.title).toBe(title);
+    expect(published?.markdown).toBe(content);
   });
 });
