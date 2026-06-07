@@ -20,6 +20,7 @@ const envSchema = z.object({
   PUBLISH_RETRY_DELAY_MS: integerString.optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
+  TAVILY_API_KEY: z.string().min(1).optional(),
   KEYWORD_VOLUME_PROVIDER_ORDER: z.string().min(1).optional(),
   KEYWORD_VOLUME_CACHE_TTL_DAYS: integerString.optional(),
   KEYWORD_VOLUME_COUNTRY: z.string().min(2).optional(),

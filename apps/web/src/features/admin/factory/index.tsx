@@ -499,6 +499,19 @@ function BriefWorkspace({ brief, busy, onGenerate }: { brief: Brief | null; busy
       <ResultCard label="Góc triển khai"><p>{brief.angle}</p></ResultCard>
       <ResultCard label="Semantic topics"><TagList items={brief.semanticTopics} /></ResultCard>
       <ResultCard label="FAQ đề xuất"><List items={brief.candidateFaqs} /></ResultCard>
+      {brief.competitorPages && brief.competitorPages.length > 0 ? (
+        <ResultCard label="Top đối thủ (Tham khảo)">
+          <div className="grid gap-3">
+            {brief.competitorPages.map((page, i) => (
+              <a href={page.url} target="_blank" rel="noopener noreferrer" key={i} className="block rounded-lg border p-3 hover:bg-[#fbfbf9] transition">
+                <p className="text-xs font-semibold text-[#80640b]">{page.keyword}</p>
+                <h4 className="mt-1 text-sm font-bold text-[#172033] line-clamp-1">{page.title}</h4>
+                <p className="mt-1 text-xs text-[#566174] line-clamp-2">{page.snippet}</p>
+              </a>
+            ))}
+          </div>
+        </ResultCard>
+      ) : null}
     </div> : null}
   </ResultWorkspace>;
 }

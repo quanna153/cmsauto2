@@ -429,6 +429,7 @@ export async function enrichKeywordIdeasWithVolumes(
       });
       lastError = null;
     } catch (error) {
+      console.error(`[Volume Fetch Error - ${provider}]:`, error);
       lastError = error instanceof Error ? error : new Error("Volume provider lỗi không xác định.");
       lastFailedProvider = provider;
     }

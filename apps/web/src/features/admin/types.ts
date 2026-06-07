@@ -35,7 +35,7 @@ export type ArticleSession = {
   }>;
   primaryKeywordId: string | null;
   secondaryKeywordIds: string[];
-  brief: { searchIntent: string; angle: string; semanticTopics: string[]; candidateFaqs: string[] } | null;
+  brief: { searchIntent: string; angle: string; semanticTopics: string[]; candidateFaqs: string[]; competitorPages?: Array<{ keyword: string; url: string; title: string; snippet: string; }> } | null;
   outline: { title: string; introDirection: string; sections: Array<{ heading: string; bullets: string[] }> } | null;
   draft: { title: string; slug: string; excerpt: string; metaTitle: string; metaDescription: string; markdown: string } | null;
   linkSuggestions: InternalLinkSuggestion[];

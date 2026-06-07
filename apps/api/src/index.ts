@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
+import { searchTavily } from "./tavily.js";
 import { articlePatchSchema } from "@cmsauto/contracts";
 import { buildClearSessionCookie, buildSessionCookie, parseCookies, sessionCookieName } from "./auth.js";
 import {
@@ -955,7 +956,17 @@ app.post("/api/keywords/refresh-volume", async (request, response, next) => {
 app.post("/api/brief/generate", async (request, response, next) => {
   try {
     const payload = briefRequestSchema.parse(request.body);
+    
+    // Fetch competitor pages in parallel
+    const [primaryResults, ...secondaryResultsList] = await Promise.all([
+      searchTavily(payload.primaryKeyword, 10),
+      ...payload.secondaryKeywords.map((kw) => searchTavily(kw, 3)),
+    ]);
+
+    const competitorPages = [...primaryResults, ...secondaryResultsList.flat()];
+
     let brief = buildBrief(payload.primaryKeyword, payload.secondaryKeywords, payload.language);
+    brief.competitorPages = competitorPages;
 
     if (hasGeminiConfig()) {
       const aiResult = await generateStructuredJson({
@@ -984,7 +995,10 @@ app.post("/api/brief/generate", async (request, response, next) => {
         temperature: 0.4
       });
 
-      brief = aiResult.brief;
+      brief = {
+        ...aiResult.brief,
+        competitorPages
+      };
     }
 
     const record = await appendHistory("brief", payload, {
