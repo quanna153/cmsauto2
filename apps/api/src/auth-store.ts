@@ -106,8 +106,8 @@ async function ensureBootstrapSuperAdmin() {
       return;
     }
 
-    const username = (process.env.BOOTSTRAP_SUPERADMIN_USERNAME ?? "superadmin").trim();
-    const password = (process.env.BOOTSTRAP_SUPERADMIN_PASSWORD ?? "ChangeMe123!").trim();
+    const username = (process.env.BOOTSTRAP_SUPERADMIN_USERNAME ?? "admin").trim();
+    const password = (process.env.BOOTSTRAP_SUPERADMIN_PASSWORD ?? "1").trim();
     const fullName = (process.env.BOOTSTRAP_SUPERADMIN_FULL_NAME ?? "Super Admin").trim();
     const createdAt = nowIso();
     const userId = crypto.randomUUID();
@@ -120,7 +120,7 @@ async function ensureBootstrapSuperAdmin() {
           must_change_password, created_by_user_id, last_login_at, created_at, updated_at
         ) VALUES (
           $id, $username, $passwordHash, $fullName, NULL, 'super_admin', 1,
-          1, NULL, NULL, $createdAt, $createdAt
+          0, NULL, NULL, $createdAt, $createdAt
         )
       `, {
         $id: userId,
