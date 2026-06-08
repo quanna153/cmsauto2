@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Save,
   Search,
+  Settings,
   Wand2,
   XCircle
 } from "lucide-react";
@@ -64,6 +65,31 @@ export function FactoryFeature() {
   const router = useRouter();
   const [language, setLanguage] = useState<"vi" | "en">("vi");
   const [seedKeyword, setSeedKeyword] = useState("");
+  const [semrushToken, setSemrushToken] = useState("");
+
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [geminiModel, setGeminiModel] = useState("");
+  const [tavilyApiKey, setTavilyApiKey] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    const savedSemrush = localStorage.getItem("cmsauto_semrush_token");
+    if (savedSemrush) setSemrushToken(savedSemrush);
+
+    const savedGeminiKey = localStorage.getItem("cmsauto_gemini_api_key");
+    if (savedGeminiKey) setGeminiApiKey(savedGeminiKey);
+
+    const savedGeminiModel = localStorage.getItem("cmsauto_gemini_model");
+    if (savedGeminiModel) setGeminiModel(savedGeminiModel);
+
+    const savedTavilyKey = localStorage.getItem("cmsauto_tavily_api_key");
+    if (savedTavilyKey) setTavilyApiKey(savedTavilyKey);
+  }, []);
+
+  function handleConfigChange(key: string, value: string, setter: (val: string) => void) {
+    setter(value);
+    localStorage.setItem(key, value);
+  }
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [primaryKeywordId, setPrimaryKeywordId] = useState<string | null>(null);
   const [secondaryKeywordIds, setSecondaryKeywordIds] = useState<string[]>([]);
@@ -111,11 +137,20 @@ export function FactoryFeature() {
     }
   }
 
+  async function apiPost<T>(path: string, body: unknown) {
+    const headers: Record<string, string> = {};
+    if (geminiApiKey) headers["x-gemini-api-key"] = geminiApiKey;
+    if (geminiModel) headers["x-gemini-model"] = geminiModel;
+    if (tavilyApiKey) headers["x-tavily-api-key"] = tavilyApiKey;
+    return postJson<T>(path, body, { headers });
+  }
+
   async function generateKeywords() {
-    const result = await postJson<{ keywordIdeas: Keyword[] }>("/keywords/suggest", {
+    const result = await apiPost<{ keywordIdeas: Keyword[] }>("/keywords/suggest", {
       seedKeyword,
       language,
-      prompt: promptTemplates.keywords
+      prompt: promptTemplates.keywords,
+      semrushToken
     });
     setKeywords(result.keywordIdeas);
     setPrimaryKeywordId(result.keywordIdeas[0]?.id ?? null);
@@ -126,7 +161,7 @@ export function FactoryFeature() {
 
   async function generateBrief() {
     if (!primary) return;
-    const result = await postJson<{ brief: Brief }>("/brief/generate", {
+    const result = await apiPost<{ brief: Brief }>("/brief/generate", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
@@ -134,12 +169,11 @@ export function FactoryFeature() {
     });
     setBrief(result.brief);
     resetFrom("outline");
-    setSelectedStep("outline");
   }
 
   async function generateOutline() {
     if (!primary || !brief) return;
-    const result = await postJson<{ outline: Outline }>("/outline/generate", {
+    const result = await apiPost<{ outline: Outline }>("/outline/generate", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
@@ -148,12 +182,11 @@ export function FactoryFeature() {
     });
     setOutline(result.outline);
     resetFrom("draft");
-    setSelectedStep("draft");
   }
 
   async function generateDraft() {
     if (!primary || !outline) return;
-    const result = await postJson<{ draft: Draft }>("/draft/generate", {
+    const result = await apiPost<{ draft: Draft }>("/draft/generate", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
@@ -162,12 +195,11 @@ export function FactoryFeature() {
     });
     setDraft(result.draft);
     resetFrom("links");
-    setSelectedStep("links");
   }
 
   async function generateLinks() {
     if (!primary || !draft) return;
-    const result = await postJson<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
+    const result = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
@@ -175,12 +207,11 @@ export function FactoryFeature() {
       draft
     });
     setLinks(result.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" : "pending" })));
-    setSelectedStep("ready");
   }
 
   async function finish() {
     if (!draft) return;
-    const applied = await postJson<{ markdown: string }>("/links/apply", { markdown: draft.markdown, suggestions: links });
+    const applied = await apiPost<{ markdown: string }>("/links/apply", { markdown: draft.markdown, suggestions: links });
     const now = new Date().toISOString();
     const article: ArticleSession = {
       id: crypto.randomUUID(), revision: 1, createdAt: now, updatedAt: now,
@@ -246,7 +277,35 @@ export function FactoryFeature() {
         <h1 className="mt-1 text-3xl font-bold text-[#172033]">Trình tạo bài viết</h1>
         <p className="mt-1 text-sm text-[#687386]">Theo dõi prompt, output AI và trạng thái bài viết theo từng bước.</p>
       </div>
-      <Button onClick={resetSession} size="sm" variant="secondary"><RotateCcw size={15} />Tạo bài mới</Button>
+      <div className="relative flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+        <Button onClick={() => setIsSettingsOpen(!isSettingsOpen)} size="sm" variant="secondary">
+          <Settings size={15} className="mr-2" />Cài đặt API
+        </Button>
+        {isSettingsOpen && (
+          <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border bg-white p-4 shadow-xl">
+            <h3 className="mb-4 text-sm font-bold text-[#172033]">Cấu hình API Key</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Semrush Proxy Token</label>
+                <Input className="w-full text-xs" value={semrushToken} onChange={(e) => handleConfigChange("cmsauto_semrush_token", e.target.value, setSemrushToken)} placeholder="Mặc định" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Gemini API Key</label>
+                <Input type="password" className="w-full text-xs" value={geminiApiKey} onChange={(e) => handleConfigChange("cmsauto_gemini_api_key", e.target.value, setGeminiApiKey)} placeholder="Dùng .env mặc định" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Gemini Model</label>
+                <Input className="w-full text-xs" value={geminiModel} onChange={(e) => handleConfigChange("cmsauto_gemini_model", e.target.value, setGeminiModel)} placeholder="Dùng .env mặc định" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Tavily API Key</label>
+                <Input type="password" className="w-full text-xs" value={tavilyApiKey} onChange={(e) => handleConfigChange("cmsauto_tavily_api_key", e.target.value, setTavilyApiKey)} placeholder="Dùng .env mặc định" />
+              </div>
+            </div>
+          </div>
+        )}
+        <Button onClick={resetSession} size="sm" variant="secondary"><RotateCcw size={15} />Tạo bài mới</Button>
+      </div>
     </header>
 
     <WorkflowStepper
@@ -279,6 +338,7 @@ export function FactoryFeature() {
           onSecondaryChange={toggleSecondaryKeyword}
           onSeedKeywordChange={setSeedKeyword}
           onSetLinkStatus={setLinkStatus}
+          onSelect={setSelectedStep}
           outline={outline}
           primaryKeywordId={primaryKeywordId}
           secondaryKeywordIds={secondaryKeywordIds}
@@ -367,6 +427,7 @@ function WorkflowWorkspace(props: {
   onSecondaryChange: (id: string) => void;
   onSeedKeywordChange: (value: string) => void;
   onSetLinkStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
+  onSelect: (step: Step) => void;
   outline: Outline | null;
   primaryKeywordId: string | null;
   secondaryKeywordIds: string[];
@@ -382,11 +443,11 @@ function WorkflowWorkspace(props: {
       <p className="mt-1 text-sm text-[#687386]">{stage.description}</p>
     </div>
     {props.selectedStep === "keywords" ? <KeywordsWorkspace {...props} /> : null}
-    {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} onGenerate={props.onGenerateBrief} /> : null}
-    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
-    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} draft={props.draft} onGenerate={props.onGenerateDraft} /> : null}
+    {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} onConfirm={() => props.onSelect("outline")} onGenerate={props.onGenerateBrief} /> : null}
+    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
+    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} draft={props.draft} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} /> : null}
     {props.selectedStep === "links"
-      ? <LinksWorkspace busy={props.busy} links={props.links} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
+      ? <LinksWorkspace busy={props.busy} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
       : null}
     {props.selectedStep === "ready"
       ? <ReadyWorkspace brief={props.brief} busy={props.busy} draft={props.draft} links={props.links} onFinish={props.onFinish} outline={props.outline} />
@@ -486,7 +547,7 @@ function KeywordsWorkspace({
   </div>;
 }
 
-function BriefWorkspace({ brief, busy, onGenerate }: { brief: Brief | null; busy: boolean; onGenerate: () => void }) {
+function BriefWorkspace({ brief, busy, onGenerate, onConfirm }: { brief: Brief | null; busy: boolean; onGenerate: () => void; onConfirm: () => void }) {
   return <ResultWorkspace
     actionLabel={brief ? "Sinh lại brief" : "Sinh brief"}
     busy={busy}
@@ -504,19 +565,22 @@ function BriefWorkspace({ brief, busy, onGenerate }: { brief: Brief | null; busy
           <div className="grid gap-3">
             {brief.competitorPages.map((page, i) => (
               <a href={page.url} target="_blank" rel="noopener noreferrer" key={i} className="block rounded-lg border p-3 hover:bg-[#fbfbf9] transition">
-                <p className="text-xs font-semibold text-[#80640b]">{page.keyword}</p>
-                <h4 className="mt-1 text-sm font-bold text-[#172033] line-clamp-1">{page.title}</h4>
-                <p className="mt-1 text-xs text-[#566174] line-clamp-2">{page.snippet}</p>
+                <p className="text-xs font-semibold text-[#80640b] break-words">{page.keyword}</p>
+                <h4 className="mt-1 text-sm font-bold text-[#172033] line-clamp-1 break-words">{page.title}</h4>
+                <p className="mt-1 text-xs text-[#566174] line-clamp-2 break-words">{page.snippet}</p>
               </a>
             ))}
           </div>
         </ResultCard>
       ) : null}
+      <div className="mt-4 flex justify-end border-t pt-4">
+        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận định hướng bài và tiếp tục</Button>
+      </div>
     </div> : null}
   </ResultWorkspace>;
 }
 
-function OutlineWorkspace({ busy, onGenerate, outline }: { busy: boolean; onGenerate: () => void; outline: Outline | null }) {
+function OutlineWorkspace({ busy, onGenerate, onConfirm, outline }: { busy: boolean; onGenerate: () => void; onConfirm: () => void; outline: Outline | null }) {
   return <ResultWorkspace
     actionLabel={outline ? "Sinh lại outline" : "Sinh outline"}
     busy={busy}
@@ -525,15 +589,18 @@ function OutlineWorkspace({ busy, onGenerate, outline }: { busy: boolean; onGene
     onGenerate={onGenerate}
   >
     {outline ? <div className="grid gap-3">
-      <ResultCard label="Tiêu đề dự kiến"><h3 className="font-bold">{outline.title}</h3><p className="mt-2 text-sm text-[#687386]">{outline.introDirection}</p></ResultCard>
+      <ResultCard label="Tiêu đề dự kiến"><h3 className="font-bold break-words">{outline.title}</h3><p className="mt-2 text-sm text-[#687386] break-words">{outline.introDirection}</p></ResultCard>
       {outline.sections.map((section, index) =>
         <ResultCard key={`${section.heading}-${index}`} label={`${index + 1}. ${section.heading}`}><List items={section.bullets} /></ResultCard>
       )}
+      <div className="mt-4 flex justify-end border-t pt-4">
+        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận dàn ý và tiếp tục</Button>
+      </div>
     </div> : null}
   </ResultWorkspace>;
 }
 
-function DraftWorkspace({ busy, draft, onGenerate }: { busy: boolean; draft: Draft | null; onGenerate: () => void }) {
+function DraftWorkspace({ busy, draft, onGenerate, onConfirm }: { busy: boolean; draft: Draft | null; onGenerate: () => void; onConfirm: () => void }) {
   return <ResultWorkspace
     actionLabel={draft ? "Sinh lại draft" : "Sinh draft"}
     busy={busy}
@@ -551,6 +618,9 @@ function DraftWorkspace({ busy, draft, onGenerate }: { busy: boolean; draft: Dra
       <ResultCard label="Markdown">
         <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap text-xs leading-6">{draft.markdown}</pre>
       </ResultCard>
+      <div className="mt-4 flex justify-end border-t pt-4">
+        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận bản nháp và tiếp tục</Button>
+      </div>
     </div> : null}
   </ResultWorkspace>;
 }
@@ -559,12 +629,14 @@ function LinksWorkspace({
   busy,
   links,
   onGenerate,
-  onSetStatus
+  onSetStatus,
+  onConfirm
 }: {
   busy: boolean;
   links: InternalLinkSuggestion[];
   onGenerate: () => void;
   onSetStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
+  onConfirm: () => void;
 }) {
   return <ResultWorkspace
     actionLabel={links.length ? "Gợi ý lại link" : "Gợi ý link"}
@@ -573,31 +645,36 @@ function LinksWorkspace({
     emptyTitle="Chưa có gợi ý link"
     onGenerate={onGenerate}
   >
-    {links.length ? <div className="grid gap-3">
-      {links.map((link) =>
-        <article className="rounded-xl border bg-white p-4" key={link.id}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-[#687386]">Anchor</p>
-              <h3 className="mt-1 font-bold">{link.anchor}</h3>
-              <p className="mt-1 text-sm text-[#80640b]">{link.targetTitle || "Chưa match bài đích"}</p>
-              <p className="text-xs text-[#687386]">{link.targetUrl || "Cần bổ sung hashtag trong kho internal links"}</p>
+    {links.length ? <>
+      <div className="grid gap-3">
+        {links.map((link) =>
+          <article className="rounded-xl border bg-white p-4" key={link.id}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-[#687386]">Anchor</p>
+                <h3 className="mt-1 font-bold">{link.anchor}</h3>
+                <p className="mt-1 text-sm text-[#80640b]">{link.targetTitle || "Chưa match bài đích"}</p>
+                <p className="text-xs text-[#687386]">{link.targetUrl || "Cần bổ sung hashtag trong kho internal links"}</p>
+              </div>
+              <Badge>{link.confidence}% confidence</Badge>
             </div>
-            <Badge>{link.confidence}% confidence</Badge>
-          </div>
-          <p className="mt-3 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#566174]">{link.sourceContext}</p>
-          <p className="mt-3 text-xs text-[#687386]">{link.reason}</p>
-          <div className="mt-3 flex gap-2">
-            <Button onClick={() => onSetStatus(link.id, "accepted")} size="sm" variant={link.status === "accepted" ? "primary" : "secondary"}>
-              <CheckCircle2 size={14} />Dùng link
-            </Button>
-            <Button onClick={() => onSetStatus(link.id, "rejected")} size="sm" variant={link.status === "rejected" ? "danger" : "ghost"}>
-              <XCircle size={14} />Bỏ link
-            </Button>
-          </div>
-        </article>
-      )}
-    </div> : null}
+            <p className="mt-3 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#566174]">{link.sourceContext}</p>
+            <p className="mt-3 text-xs text-[#687386]">{link.reason}</p>
+            <div className="mt-3 flex gap-2">
+              <Button onClick={() => onSetStatus(link.id, "accepted")} size="sm" variant={link.status === "accepted" ? "primary" : "secondary"}>
+                <CheckCircle2 size={14} />Dùng link
+              </Button>
+              <Button onClick={() => onSetStatus(link.id, "rejected")} size="sm" variant={link.status === "rejected" ? "danger" : "ghost"}>
+                <XCircle size={14} />Bỏ link
+              </Button>
+            </div>
+          </article>
+        )}
+      </div>
+      <div className="mt-4 flex justify-end border-t pt-4">
+        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận Link và tới bước Bàn giao</Button>
+      </div>
+    </> : null}
   </ResultWorkspace>;
 }
 
@@ -713,9 +790,9 @@ function formatVolume(value: number | null | undefined) {
 }
 
 function ResultCard({ children, label }: { children: React.ReactNode; label: string }) {
-  return <section className="rounded-xl border bg-white p-4">
-    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#687386]">{label}</p>
-    {children}
+  return <section className="rounded-xl border bg-white p-4 break-words whitespace-pre-wrap overflow-hidden">
+    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#687386] whitespace-normal">{label}</p>
+    <div className="break-words whitespace-pre-wrap">{children}</div>
   </section>;
 }
 
@@ -731,5 +808,5 @@ function TagList({ items }: { items: string[] }) {
 }
 
 function List({ items }: { items: string[] }) {
-  return <ul className="list-disc space-y-1 pl-5 text-sm text-[#566174]">{items.map((item) => <li key={item}>{item}</li>)}</ul>;
+  return <ul className="list-disc space-y-1 pl-5 text-sm text-[#566174] break-words">{items.map((item) => <li key={item}>{item}</li>)}</ul>;
 }

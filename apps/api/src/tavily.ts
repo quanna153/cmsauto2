@@ -7,8 +7,8 @@ export type TavilyResult = {
   snippet: string;
 };
 
-export async function searchTavily(query: string, maxResults: number = 5): Promise<TavilyResult[]> {
-  const apiKey = env.TAVILY_API_KEY;
+export async function searchTavily(query: string, maxResults: number = 5, customApiKey?: string): Promise<TavilyResult[]> {
+  const apiKey = customApiKey || env.TAVILY_API_KEY;
   if (!apiKey) {
     return [];
   }

@@ -23,7 +23,6 @@ import {
   buildBrief,
   buildDraft,
   buildInternalLinkSuggestions,
-  buildKeywordIdeas,
   buildOutline,
   mapAnchorCandidatesToInternalLinks,
   slugify
@@ -58,13 +57,19 @@ import { publicReaderRouter } from "./routes/public-reader.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8787);
-const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: "50mb" }));
 
-app.use(cors({
-  origin: corsOrigin,
-  credentials: true
-}));
-app.use(express.json({ limit: "1mb" }));
+function getApiConfigFromHeaders(request: express.Request) {
+  return {
+    customConfig: {
+      model: request.headers["x-gemini-model"] as string | undefined,
+      apiKey: request.headers["x-gemini-api-key"] as string | undefined
+    },
+    tavilyApiKey: request.headers["x-tavily-api-key"] as string | undefined,
+    semrushToken: (request.headers["x-semrush-proxy-token"] as string | undefined) ?? process.env.SEMRUSH_PROXY_TOKEN
+  };
+}
 
 type AuthenticatedRequest = express.Request & {
   auth: AuthSessionState;
@@ -75,7 +80,8 @@ const briefSchema = z.object({
   searchIntent: z.string(),
   angle: z.string(),
   semanticTopics: z.array(z.string()),
-  candidateFaqs: z.array(z.string())
+  candidateFaqs: z.array(z.string()),
+  competitorPages: z.array(z.any()).optional()
 });
 const outlineSectionSchema = z.object({
   heading: z.string(),
@@ -294,7 +300,8 @@ const linkAnchorResponseJsonSchema = {
 const keywordRequestSchema = z.object({
   seedKeyword: z.string().min(1),
   language: languageSchema,
-  prompt: z.string().min(1)
+  prompt: z.string().min(1),
+  semrushToken: z.string().optional()
 });
 const keywordIdeasRefreshSchema = z.object({
   language: languageSchema,
@@ -868,14 +875,112 @@ app.patch("/api/prompts/:key", async (request, response, next) => {
 app.post("/api/keywords/suggest", async (request, response, next) => {
   try {
     const payload = keywordRequestSchema.parse(request.body);
-    let keywordIdeas = buildKeywordIdeas(payload.seedKeyword, payload.language);
+    const { customConfig, semrushToken: headerSemrushToken } = getApiConfigFromHeaders(request);
+    let keywordIdeas: KeywordIdea[] = [];
+    const modeLabel = "semrush";
 
-    if (hasGeminiConfig()) {
+    const semrushPayload = {
+      id: 16,
+      jsonrpc: "2.0",
+      method: "ideas.GetKeywords",
+      params: {
+        mode: 0,
+        currency: "USD",
+        database: "vn",
+        filter: {
+          phrase: [],
+          competition_level: [],
+          cpc: [],
+          difficulty: [],
+          results: [],
+          serp_features: [{ inverted: false, value: [] }],
+          volume: [],
+          words_count: [],
+          phrase_include_logic: 0
+        },
+        groups: [],
+        order: { direction: 1, field: "volume" },
+        groups_order: { direction: 1, field: "count" },
+        phrase: payload.seedKeyword,
+        questions_only: false,
+        page: { number: 1, size: 100 }
+      }
+    };
+
+    const finalSemrushToken = payload.semrushToken?.trim() || headerSemrushToken?.trim() || process.env.SEMRUSH_PROXY_TOKEN?.trim();
+
+    let availableServers = [6];
+    if (finalSemrushToken) {
+      availableServers = [1, 2, 3, 4, 5, 6];
+    }
+    // Trộn ngẫu nhiên danh sách server
+    availableServers.sort(() => Math.random() - 0.5);
+
+    let lastError: Error | null = null;
+    let dataResult: any = null;
+
+    for (const serverId of availableServers) {
+      const semrushDomain = `https://${serverId}.semrush.com.in`;
+      const headers: Record<string, string> = {
+        "accept": "*/*",
+        "Content-Type": "application/json"
+      };
+
+      if (serverId !== 6 && finalSemrushToken) {
+        headers["Cookie"] = `proxy_token=${finalSemrushToken}`;
+      }
+
+      try {
+        const semrushResponse = await fetch(`${semrushDomain}/kmtgw/v2/webapi`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(semrushPayload)
+        });
+
+        if (!semrushResponse.ok) {
+          throw new Error(`Semrush API lỗi ${semrushResponse.status} (server ${serverId}): ${await semrushResponse.text()}`);
+        }
+
+        const data = await semrushResponse.json() as any;
+        if (data.error) {
+          throw new Error(`Semrush error (server ${serverId}): ${JSON.stringify(data.error)}`);
+        }
+
+        dataResult = data.result;
+        break; // Thành công, thoát vòng lặp
+      } catch (err: any) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[Semrush Suggest] Failed on server ${serverId}`, lastError.message);
+      }
+    }
+
+    if (!dataResult) {
+      throw lastError || new Error("All Semrush servers failed.");
+    }
+
+    const keywords = dataResult.keywords || [];
+    const semrushDataString = keywords
+      .slice(0, 100)
+      .map((k: any) => {
+        let intentValue = "informational";
+        if (Array.isArray(k.intents)) {
+          if (k.intents.includes(2)) intentValue = "commercial";
+          else if (k.intents.includes(3)) intentValue = "transactional";
+          else if (k.intents.includes(1)) intentValue = "comparison";
+        }
+        return `- ${k.phrase} (volume: ${typeof k.volume === "number" ? k.volume : 0}, intent: ${intentValue})`;
+      })
+      .join("\n");
+
+    let aiSelectedKeywords: { keyword: string, intent: Intent, cluster: string }[] = [];
+
+    if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
           keyword: payload.seedKeyword,
-          language: payload.language
+          language: payload.language,
+          semrush_data: semrushDataString
         },
         contextLines: [
           `Từ khóa gốc: ${payload.seedKeyword}`,
@@ -892,38 +997,52 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
         }, null, 2),
         responseJsonSchema: keywordIdeaResponseJsonSchema,
         validator: geminiKeywordResultSchema,
-        temperature: 0.5
+        temperature: 0.5,
+        customConfig
       });
-
-      const seen = new Set<string>();
-      keywordIdeas = aiResult.keywordIdeas
-        .map((idea) => {
-          return {
-            id: slugify(idea.keyword),
-            keyword: idea.keyword.trim(),
-            intent: idea.intent as Intent,
-            cluster: idea.cluster.trim(),
-            monthlyVolume: null,
-            provider: "Chưa xác thực volume",
-            checkedAt: null,
-            status: "missing" as const
-          };
-        })
-        .filter((idea) => {
-          const key = idea.keyword.toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        })
-        .slice(0, 8);
+      aiSelectedKeywords = aiResult.keywordIdeas as { keyword: string, intent: Intent, cluster: string }[];
+    } else {
+      aiSelectedKeywords = keywords.slice(0, 8).map((k: any) => {
+        let intentValue: Intent = "informational";
+        if (Array.isArray(k.intents)) {
+          if (k.intents.includes(2)) intentValue = "commercial";
+          else if (k.intents.includes(3)) intentValue = "transactional";
+          else if (k.intents.includes(1)) intentValue = "comparison";
+        }
+        return {
+          keyword: k.phrase,
+          intent: intentValue,
+          cluster: payload.seedKeyword
+        };
+      });
     }
 
-    keywordIdeas = await enrichKeywordIdeasWithVolumes(keywordIdeas, {
-      language: payload.language
-    });
+    const seen = new Set<string>();
+
+    keywordIdeas = aiSelectedKeywords
+      .map((aiItem) => {
+        const match = keywords.find((k: any) => k.phrase.toLowerCase() === aiItem.keyword.toLowerCase());
+        return {
+          id: slugify(aiItem.keyword),
+          keyword: aiItem.keyword,
+          intent: aiItem.intent,
+          cluster: aiItem.cluster,
+          monthlyVolume: match && typeof match.volume === "number" ? match.volume : null,
+          provider: "Semrush",
+          checkedAt: new Date().toISOString(),
+          status: "verified" as const
+        };
+      })
+      .filter((idea: KeywordIdea) => {
+        const key = idea.keyword.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 8);
 
     const record = await appendHistory("keywords", payload, {
-      mode: hasGeminiConfig() ? "gemini" : "local",
+      mode: hasGeminiConfig(customConfig) ? "gemini" : modeLabel,
       keywordIdeas
     }, getAuth(request).user.id);
     response.json({ keywordIdeas, recordId: record.id });
@@ -956,26 +1075,32 @@ app.post("/api/keywords/refresh-volume", async (request, response, next) => {
 app.post("/api/brief/generate", async (request, response, next) => {
   try {
     const payload = briefRequestSchema.parse(request.body);
+    const { customConfig, tavilyApiKey } = getApiConfigFromHeaders(request);
     
     // Fetch competitor pages in parallel
     const [primaryResults, ...secondaryResultsList] = await Promise.all([
-      searchTavily(payload.primaryKeyword, 10),
-      ...payload.secondaryKeywords.map((kw) => searchTavily(kw, 3)),
+      searchTavily(payload.primaryKeyword, 10, tavilyApiKey),
+      ...payload.secondaryKeywords.map((kw) => searchTavily(kw, 3, tavilyApiKey)),
     ]);
 
     const competitorPages = [...primaryResults, ...secondaryResultsList.flat()];
 
+    const competitorDataString = competitorPages
+      .map((p, index) => `${index + 1}. [Từ khóa: ${p.keyword}] Title: ${p.title}\n   URL: ${p.url}\n   Snippet: ${p.snippet}`)
+      .join("\n\n");
+
     let brief = buildBrief(payload.primaryKeyword, payload.secondaryKeywords, payload.language);
     brief.competitorPages = competitorPages;
 
-    if (hasGeminiConfig()) {
+    if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
           keyword: payload.primaryKeyword,
           primary_keyword: payload.primaryKeyword,
           secondary_keywords: payload.secondaryKeywords.join(", "),
-          language: payload.language
+          language: payload.language,
+          competitor_data: competitorDataString
         },
         contextLines: [
           `Từ khóa chính: ${payload.primaryKeyword}`,
@@ -992,7 +1117,8 @@ app.post("/api/brief/generate", async (request, response, next) => {
         }, null, 2),
         responseJsonSchema: briefResponseJsonSchema,
         validator: geminiBriefSchema,
-        temperature: 0.4
+        temperature: 0.4,
+        customConfig
       });
 
       brief = {
@@ -1002,7 +1128,7 @@ app.post("/api/brief/generate", async (request, response, next) => {
     }
 
     const record = await appendHistory("brief", payload, {
-      mode: hasGeminiConfig() ? "gemini" : "local",
+      mode: hasGeminiConfig(customConfig) ? "gemini" : "local",
       brief
     }, getAuth(request).user.id);
     response.json({ brief, recordId: record.id });
@@ -1014,6 +1140,7 @@ app.post("/api/brief/generate", async (request, response, next) => {
 app.post("/api/outline/generate", async (request, response, next) => {
   try {
     const payload = outlineRequestSchema.parse(request.body);
+    const { customConfig } = getApiConfigFromHeaders(request);
     let outline = buildOutline(
       payload.primaryKeyword,
       payload.brief,
@@ -1021,7 +1148,12 @@ app.post("/api/outline/generate", async (request, response, next) => {
       payload.language
     );
 
-    if (hasGeminiConfig()) {
+    const competitorPages = payload.brief.competitorPages || [];
+    const competitorDataString = competitorPages
+      .map((p: any, index: number) => `${index + 1}. [Từ khóa: ${p.keyword}] Title: ${p.title}\n   URL: ${p.url}\n   Snippet: ${p.snippet}`)
+      .join("\n\n");
+
+    if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
@@ -1029,6 +1161,7 @@ app.post("/api/outline/generate", async (request, response, next) => {
           primary_keyword: payload.primaryKeyword,
           secondary_keywords: payload.secondaryKeywords.join(", "),
           language: payload.language,
+          competitor_data: competitorDataString,
           search_intent: payload.brief.searchIntent,
           angle: payload.brief.angle,
           semantic_topics: payload.brief.semanticTopics.join(", "),
@@ -1058,14 +1191,15 @@ app.post("/api/outline/generate", async (request, response, next) => {
         }, null, 2),
         responseJsonSchema: outlineResponseJsonSchema,
         validator: geminiOutlineSchema,
-        temperature: 0.5
+        temperature: 0.5,
+        customConfig
       });
 
       outline = aiResult.outline;
     }
 
     const record = await appendHistory("outline", payload, {
-      mode: hasGeminiConfig() ? "gemini" : "local",
+      mode: hasGeminiConfig(customConfig) ? "gemini" : "local",
       outline
     }, getAuth(request).user.id);
     response.json({ outline, recordId: record.id });
@@ -1077,6 +1211,7 @@ app.post("/api/outline/generate", async (request, response, next) => {
 app.post("/api/draft/generate", async (request, response, next) => {
   try {
     const payload = draftRequestSchema.parse(request.body);
+    const { customConfig } = getApiConfigFromHeaders(request);
     let draft = buildDraft(
       payload.primaryKeyword,
       payload.outline,
@@ -1084,7 +1219,7 @@ app.post("/api/draft/generate", async (request, response, next) => {
       payload.language
     );
 
-    if (hasGeminiConfig()) {
+    if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
@@ -1119,14 +1254,15 @@ app.post("/api/draft/generate", async (request, response, next) => {
         }, null, 2),
         responseJsonSchema: draftResponseJsonSchema,
         validator: geminiDraftSchema,
-        temperature: 0.4
+        temperature: 0.4,
+        customConfig
       });
 
       draft = aiResult.draft;
     }
 
     const record = await appendHistory("draft", payload, {
-      mode: hasGeminiConfig() ? "gemini" : "local",
+      mode: hasGeminiConfig(customConfig) ? "gemini" : "local",
       draft
     }, getAuth(request).user.id);
     response.json({ draft, recordId: record.id });
@@ -1138,6 +1274,7 @@ app.post("/api/draft/generate", async (request, response, next) => {
 app.post("/api/links/suggest", async (request, response, next) => {
   try {
     const payload = linksRequestSchema.parse(request.body);
+    const { customConfig } = getApiConfigFromHeaders(request);
     const articleLibrary = await readArticleLibrary(payload.language);
 
     if (articleLibrary.length === 0) {
@@ -1155,7 +1292,7 @@ app.post("/api/links/suggest", async (request, response, next) => {
       articleLibrary
     );
 
-    if (hasGeminiConfig()) {
+    if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
