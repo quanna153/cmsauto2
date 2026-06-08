@@ -8,6 +8,8 @@ import type {
   Draft,
   HistoryRecord,
   HistoryStep,
+  ArticleLibraryImportItem,
+  ArticleLibraryImportResult,
   InternalLinkSuggestion,
   KeywordIdea,
   Language,
@@ -75,6 +77,36 @@ let publishWorkerRunning = false;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function parseKeywordLabels(labels: string[] | undefined) {
+  const seen = new Set<string>();
+  return (labels ?? [])
+    .flatMap((label) => label.split(/[,;\n]+/))
+    .map((label) => label.trim().replace(/^#+/, "").trim())
+    .filter((label) => {
+      const key = label.toLocaleLowerCase();
+      if (!label || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
+function inferLanguageFromUrl(url: string): Language | null {
+  const normalized = url.toLowerCase();
+  if (normalized.includes("/vi-vn/")) {
+    return "vi";
+  }
+  if (normalized.includes("/en-us/") || isValidInternalLinkUrl(url)) {
+    return "en";
+  }
+  return null;
+}
+
+function isValidInternalLinkUrl(url: string) {
+  return url.startsWith("/") || url.startsWith("https://") || url.startsWith("http://");
 }
 
 function normalizeReviewText(value: string) {
@@ -748,10 +780,11 @@ async function bootstrapArticleLibraryIfNeeded(db: SqlDatabase) {
 
   for (const article of bootstrap.articles) {
     db.run(`
-      INSERT INTO article_library (id, title, url, language, summary, keywords_json)
-      VALUES ($id, $title, $url, $language, $summary, $keywordsJson)
+      INSERT INTO article_library (id, created_at, title, url, language, summary, keywords_json)
+      VALUES ($id, $createdAt, $title, $url, $language, $summary, $keywordsJson)
     `, {
       $id: article.id,
+      $createdAt: article.createdAt ?? nowIso(),
       $title: article.title,
       $url: article.url,
       $language: article.language,
@@ -1056,6 +1089,7 @@ export async function readArticleLibrary(language?: Language) {
     ? await queryAll<{
       id: string;
       revision: number;
+      created_at: string | null;
       title: string;
       url: string;
       language: Language;
@@ -1070,6 +1104,7 @@ export async function readArticleLibrary(language?: Language) {
     : await queryAll<{
       id: string;
       revision: number;
+      created_at: string | null;
       title: string;
       url: string;
       language: Language;
@@ -1084,6 +1119,7 @@ export async function readArticleLibrary(language?: Language) {
   return rows.map((row) => ({
     id: row.id,
     revision: Number(row.revision),
+    createdAt: row.created_at ?? nowIso(),
     title: row.title,
     url: row.url,
     language: row.language,
@@ -1098,14 +1134,16 @@ export class ResourceRevisionConflictError extends Error {
   }
 }
 
-export async function createArticleLibraryItem(article: ArticleLibraryItem) {
+export async function createArticleLibraryItem(article: Omit<ArticleLibraryItem, "revision" | "createdAt"> & { revision?: number; createdAt?: string }) {
   await ensureBootstrapData();
+  const createdAt = article.createdAt ?? nowIso();
   await withTransaction((db) => {
     db.run(`
-      INSERT INTO article_library (id, revision, title, url, language, summary, keywords_json)
-      VALUES ($id, 1, $title, $url, $language, $summary, $keywordsJson)
+      INSERT INTO article_library (id, revision, created_at, title, url, language, summary, keywords_json)
+      VALUES ($id, 1, $createdAt, $title, $url, $language, $summary, $keywordsJson)
     `, {
       $id: article.id,
+      $createdAt: createdAt,
       $title: article.title,
       $url: article.url,
       $language: article.language,
@@ -1114,7 +1152,93 @@ export async function createArticleLibraryItem(article: ArticleLibraryItem) {
     } as never);
   });
 
-  return (await readArticleLibrary()).find((item) => item.id === article.id) ?? article;
+  return (await readArticleLibrary()).find((item) => item.id === article.id) ?? { ...article, revision: article.revision ?? 1, createdAt };
+}
+
+export async function importArticleLibraryItems(items: ArticleLibraryImportItem[]): Promise<ArticleLibraryImportResult> {
+  await ensureBootstrapData();
+  const errors: ArticleLibraryImportResult["errors"] = [];
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  await withTransaction((db) => {
+    items.forEach((item, index) => {
+      const row = index + 2;
+      const title = item.title.trim();
+      const url = item.url.trim();
+      const language = item.language ?? inferLanguageFromUrl(url);
+      const keywords = parseKeywordLabels(item.keywords);
+
+      if (!title || !url) {
+        skipped += 1;
+        errors.push({ row, message: "Thiếu title hoặc url." });
+        return;
+      }
+      if (!isValidInternalLinkUrl(url)) {
+        skipped += 1;
+        errors.push({ row, message: "URL phải bắt đầu bằng /, http:// hoặc https://." });
+        return;
+      }
+      if (language !== "vi" && language !== "en") {
+        skipped += 1;
+        errors.push({ row, message: "Thiếu language và không thể suy ra từ URL hợp lệ." });
+        return;
+      }
+
+      const existing = dbFirst<{ id: string; keywords_json: string }>(db, `
+        SELECT id, keywords_json
+        FROM article_library
+        WHERE lower(url) = lower($url)
+        LIMIT 1
+      `, { $url: url });
+
+      if (existing) {
+        const nextKeywords = keywords.length > 0 ? keywords : parseJson<string[]>(existing.keywords_json, []);
+        db.run(`
+          UPDATE article_library
+          SET revision = revision + 1,
+              title = $title,
+              url = $url,
+              language = $language,
+              summary = $summary,
+              keywords_json = $keywordsJson
+          WHERE id = $id
+        `, {
+          $id: existing.id,
+          $title: title,
+          $url: url,
+          $language: language,
+          $summary: "",
+          $keywordsJson: JSON.stringify(nextKeywords)
+        } as never);
+        updated += 1;
+        return;
+      }
+
+      db.run(`
+        INSERT INTO article_library (id, revision, created_at, title, url, language, summary, keywords_json)
+        VALUES ($id, 1, $createdAt, $title, $url, $language, $summary, $keywordsJson)
+      `, {
+        $id: crypto.randomUUID(),
+        $createdAt: nowIso(),
+        $title: title,
+        $url: url,
+        $language: language,
+        $summary: "",
+        $keywordsJson: JSON.stringify(keywords)
+      } as never);
+      created += 1;
+    });
+  });
+
+  return {
+    created,
+    updated,
+    skipped,
+    errors,
+    articles: await readArticleLibrary()
+  };
 }
 
 export async function patchArticleLibraryItem(

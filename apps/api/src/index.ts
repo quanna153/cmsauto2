@@ -21,12 +21,17 @@ import {
   applyInternalLinks,
   buildBrief,
   buildDraft,
-  buildInternalLinkSuggestions,
+  buildInternalLinkMappingCsv,
+  buildInternalLinkSuggestionsFromAnchorCandidates,
   buildKeywordIdeas,
   buildOutline,
+  findInternalLinkAnchorCandidates,
   mapAnchorCandidatesToInternalLinks,
+  mapAnchorTextCandidatesToInternalLinkCandidates,
+  selectInternalLinkCandidatesForAnchorCandidates,
   slugify
 } from "./factory.js";
+import type { AnchorTextCandidate } from "./factory.js";
 import { generateStructuredJson, hasGeminiConfig } from "./gemini.js";
 import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-volume.js";
 import {
@@ -35,6 +40,7 @@ import {
   createArticleSession,
   deleteArticleLibraryItem,
   deleteArticleSession,
+  importArticleLibraryItems,
   patchArticleLibraryItem,
   patchArticleSession,
   patchPromptTemplate,
@@ -97,26 +103,44 @@ const suggestionSchema: z.ZodType<InternalLinkSuggestion> = z.object({
   id: z.string(),
   sourceContext: z.string(),
   anchor: z.string(),
+  targetArticleId: z.string().optional(),
   targetTitle: z.string(),
   targetUrl: z.string(),
   matchedKeyword: z.string().nullable(),
   matchStatus: z.enum(["matched", "unmatched"]),
   reason: z.string(),
   confidence: z.number(),
+  matchScore: z.number().optional(),
+  relevanceScore: z.number().optional(),
+  intentScore: z.number().optional(),
+  expectationScore: z.number().optional(),
   status: z.enum(["pending", "accepted", "rejected"])
 });
 const articleLibraryItemSchema = z.object({
   id: z.string(),
   revision: z.number().int().positive().optional(),
+  createdAt: z.string(),
   title: z.string(),
   url: z.string(),
   language: languageSchema,
   summary: z.string(),
   keywords: z.array(z.string())
 }) satisfies z.ZodType<ArticleLibraryItem>;
+const articleLibraryCreateSchema = articleLibraryItemSchema.omit({
+  revision: true,
+  createdAt: true
+});
+const articleLibraryImportSchema = z.object({
+  items: z.array(z.object({
+    title: z.string().min(1),
+    url: z.string().min(1),
+    keywords: z.array(z.string()).optional(),
+    language: languageSchema.nullable().optional()
+  })).min(1)
+});
 const articleLibraryPatchSchema = z.object({
   expectedRevision: z.number().int().positive(),
-  changes: articleLibraryItemSchema.omit({ id: true, revision: true }).partial()
+  changes: articleLibraryCreateSchema.partial()
 });
 const promptTemplatesSchema = z.object({
   keywords: z.string().min(1),
@@ -141,11 +165,17 @@ const geminiBriefSchema = z.object({ brief: briefSchema });
 const geminiOutlineSchema = z.object({ outline: outlineSchema });
 const geminiDraftSchema = z.object({ draft: draftSchema });
 const geminiLinkAnchorsSchema = z.object({
-  anchorSuggestions: z.array(z.object({
-    anchor: z.string().min(1),
-    sourceContext: z.string().min(1),
-    reason: z.string().min(1),
-    confidence: z.number().min(0).max(100)
+  anchorCandidates: z.array(z.object({
+    anchorText: z.string().min(1),
+    startOffset: z.number().int().min(0),
+    endOffset: z.number().int().min(1),
+    confidence: z.number().min(0).max(1),
+    reason: z.object({
+      standaloneTopic: z.boolean(),
+      informationGap: z.boolean(),
+      learningValue: z.boolean(),
+      semanticClarity: z.boolean()
+    })
   })).max(8)
 });
 const keywordIdeaResponseJsonSchema = {
@@ -263,32 +293,38 @@ const draftResponseJsonSchema = {
   },
   required: ["draft"]
 } as const;
-const linkAnchorResponseJsonSchema = {
+const linkAnchorCandidatesResponseJsonSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    anchorSuggestions: {
+    anchorCandidates: {
       type: "array",
       maxItems: 8,
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
-          anchor: { type: "string", description: "Cụm từ đã xuất hiện trong bản nháp." },
-          sourceContext: { type: "string", description: "Câu hoặc đoạn ngắn chứa anchor." },
-          reason: { type: "string", description: "Lý do anchor này đáng cân nhắc để gắn internal link." },
-          confidence: {
-            type: "integer",
-            minimum: 0,
-            maximum: 100,
-            description: "Mức độ tự tin theo thang 0-100."
+          anchorText: { type: "string", description: "Exact phrase from articleContent that can become an anchor." },
+          startOffset: { type: "integer", minimum: 0, description: "Start offset in articleContent." },
+          endOffset: { type: "integer", minimum: 1, description: "End offset in articleContent." },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          reason: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              standaloneTopic: { type: "boolean" },
+              informationGap: { type: "boolean" },
+              learningValue: { type: "boolean" },
+              semanticClarity: { type: "boolean" }
+            },
+            required: ["standaloneTopic", "informationGap", "learningValue", "semanticClarity"]
           }
         },
-        required: ["anchor", "sourceContext", "reason", "confidence"]
+        required: ["anchorText", "startOffset", "endOffset", "confidence", "reason"]
       }
     }
   },
-  required: ["anchorSuggestions"]
+  required: ["anchorCandidates"]
 } as const;
 const keywordRequestSchema = z.object({
   seedKeyword: z.string().min(1),
@@ -724,8 +760,17 @@ app.get("/api/article-library", async (request, response, next) => {
 
 app.post("/api/article-library", async (request, response, next) => {
   try {
-    const article = articleLibraryItemSchema.parse(request.body);
+    const article = articleLibraryCreateSchema.parse(request.body);
     response.status(201).json({ article: await createArticleLibraryItem(article) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/article-library/import", async (request, response, next) => {
+  try {
+    const payload = articleLibraryImportSchema.parse(request.body);
+    response.status(201).json(await importArticleLibraryItems(payload.items));
   } catch (error) {
     next(error);
   }
@@ -1128,12 +1173,19 @@ app.post("/api/links/suggest", async (request, response, next) => {
 
     if (articleLibrary.length === 0) {
       response.status(400).json({
-        error: "Kho bài nội bộ đang trống. Chưa thể đề xuất internal links."
+        error: "Internal Link Library is empty. Cannot generate internal link suggestions yet."
       });
       return;
     }
 
-    let suggestions = buildInternalLinkSuggestions(
+    const localAnchorCandidates = findInternalLinkAnchorCandidates(payload.draft, payload.language, articleLibrary);
+    let candidateLibraryCount = selectInternalLinkCandidatesForAnchorCandidates(
+      payload.draft,
+      payload.language,
+      articleLibrary,
+      localAnchorCandidates
+    ).length;
+    let suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(
       payload.draft,
       payload.primaryKeyword,
       payload.secondaryKeywords,
@@ -1145,41 +1197,54 @@ app.post("/api/links/suggest", async (request, response, next) => {
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
-          keyword: payload.primaryKeyword,
-          primary_keyword: payload.primaryKeyword,
-          secondary_keywords: payload.secondaryKeywords.join(", "),
-          language: payload.language,
-          draft_title: payload.draft.title,
-          draft_markdown: payload.draft.markdown
+          articleTitle: payload.draft.title,
+          articleContent: payload.draft.markdown,
+          language: payload.language
         },
         contextLines: [
-          `Từ khóa chính: ${payload.primaryKeyword}`,
-          `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
-          `Ngôn ngữ: ${payload.language}`,
-          `Tiêu đề bài: ${payload.draft.title}`,
-          `Slug: ${payload.draft.slug}`,
-          `Markdown bài:\n${payload.draft.markdown}`
+          `articleTitle: ${payload.draft.title}`,
+          `language: ${payload.language}`,
+          `articleContent:\n${payload.draft.markdown}`
         ],
         jsonShapeHint: JSON.stringify({
-          anchorSuggestions: [
+          anchorCandidates: [
             {
-              anchor: "string",
-              sourceContext: "string",
-              reason: "string",
-              confidence: 90
+              anchorText: "Proof of Stake",
+              startOffset: 145,
+              endOffset: 159,
+              confidence: 0.95,
+              reason: {
+                standaloneTopic: true,
+                informationGap: true,
+                learningValue: true,
+                semanticClarity: true
+              }
             }
           ]
         }, null, 2),
-        responseJsonSchema: linkAnchorResponseJsonSchema,
+        responseJsonSchema: linkAnchorCandidatesResponseJsonSchema,
         validator: geminiLinkAnchorsSchema,
         temperature: 0.3
       });
 
-      const aiMatchedSuggestions = mapAnchorCandidatesToInternalLinks(
+      const aiAnchorCandidates: AnchorTextCandidate[] = aiResult.anchorCandidates.filter((candidate) =>
+        candidate.reason.standaloneTopic
+        || candidate.reason.informationGap
+        || candidate.reason.learningValue
+        || candidate.reason.semanticClarity
+      );
+      const aiCandidateLibrary = selectInternalLinkCandidatesForAnchorCandidates(
         payload.draft,
         payload.language,
         articleLibrary,
-        aiResult.anchorSuggestions
+        aiAnchorCandidates
+      );
+      candidateLibraryCount = aiCandidateLibrary.length;
+      const aiMatchedSuggestions = mapAnchorCandidatesToInternalLinks(
+        payload.draft,
+        payload.language,
+        aiCandidateLibrary,
+        mapAnchorTextCandidatesToInternalLinkCandidates(payload.draft.markdown, payload.language, aiAnchorCandidates)
       );
 
       if (aiMatchedSuggestions.length > 0) {
@@ -1188,19 +1253,34 @@ app.post("/api/links/suggest", async (request, response, next) => {
     }
 
     const record = await appendHistory("links", payload, {
-      mode: hasGeminiConfig() ? "anchor-ai + keyword-labels" : "keyword-labels",
+      mode: hasGeminiConfig() ? "anchor-ai + library-match" : "local-anchor + library-match",
       articleLibraryCount: articleLibrary.length,
+      candidateLibraryCount,
       suggestions
     }, getAuth(request).user.id);
-    response.json({ suggestions, recordId: record.id });
+    response.json({
+      suggestions,
+      mappingCsv: buildInternalLinkMappingCsv(payload.draft.title, suggestions),
+      recordId: record.id
+    });
   } catch (error) {
     next(error);
   }
 });
-
 app.post("/api/links/apply", async (request, response, next) => {
   try {
     const payload = applyLinksRequestSchema.parse(request.body);
+    const allowedUrls = new Set((await readArticleLibrary()).map((article) => article.url));
+    const invalidSuggestion = payload.suggestions.find((suggestion) =>
+      suggestion.status === "accepted" && (!suggestion.targetUrl.trim() || !allowedUrls.has(suggestion.targetUrl))
+    );
+    if (invalidSuggestion) {
+      response.status(400).json({
+        error: "Internal link URL must exist in Internal Link Library before apply."
+      });
+      return;
+    }
+
     const markdown = applyInternalLinks(payload.markdown, payload.suggestions);
     const record = await appendHistory("apply-links", payload, { markdown }, getAuth(request).user.id);
     response.json({ markdown, recordId: record.id });

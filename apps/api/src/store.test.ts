@@ -4,7 +4,9 @@ import { ensureAuthBootstrap } from "./auth-store.js";
 import { queryFirst } from "./database.js";
 import {
   createArticleSession,
+  importArticleLibraryItems,
   patchArticleSession,
+  readArticleLibrary,
   readPublishedArticles,
   RevisionConflictError,
   reviewGateArticle,
@@ -84,5 +86,23 @@ describe("SQLite foundation", () => {
     await runDuePublishJobs();
     expect((await readPublishedArticles("vi-vn")).find((item) => item.articleId === vi.id)?.livePath).toBe("/vi-vn/bitcoin-la-gi");
     expect((await readPublishedArticles("en-us")).find((item) => item.articleId === en.id)?.livePath).toBe("/en-us/what-is-bitcoin");
+  });
+
+  it("imports default English article library URLs without an /en-us/ prefix", async () => {
+    const url = `/what-is-proof-of-stake-${crypto.randomUUID()}`;
+    const result = await importArticleLibraryItems([{
+      title: "What Is Proof of Stake",
+      url,
+      keywords: []
+    }]);
+
+    expect(result.skipped).toBe(0);
+    expect(result.created).toBe(1);
+    const imported = (await readArticleLibrary("en")).find((item) => item.url === url);
+    expect(imported).toMatchObject({
+      title: "What Is Proof of Stake",
+      language: "en",
+      url
+    });
   });
 });
