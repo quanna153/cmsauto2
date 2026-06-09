@@ -28,6 +28,8 @@ export async function AboutFeature({ locale }: { locale: Locale }) {
 function AboutPage({ content, locale }: { content: AboutPageContent; locale: Locale }) {
   const featuredPrinciple = content.principles[0]!;
   const heroSuffix = locale === "vi-vn" ? "và đội ngũ CoinView" : "and the editorial team";
+  const featureTitle = locale === "vi-vn" ? "Tòa soạn CoinView" : "CoinView newsroom";
+  const closingTitle = locale === "vi-vn" ? "Cam kết biên tập" : "Editorial commitment";
 
   return (
     <main className="min-h-screen bg-[#f5fbf7] text-[#071b14]">
@@ -57,7 +59,7 @@ function AboutPage({ content, locale }: { content: AboutPageContent; locale: Loc
                 {content.eyebrow}
               </span>
               <p className="mt-7 text-xs font-semibold text-[#9ecbb4]">{content.heroBadge}</p>
-              <h2 className="mt-3 max-w-3xl text-2xl font-black leading-tight md:text-3xl">{content.title}</h2>
+              <h2 className="mt-3 max-w-3xl text-2xl font-black leading-tight md:text-3xl">{featureTitle}</h2>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-[#c9ddcf]">{content.summary}</p>
             </div>
             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -184,7 +186,7 @@ function AboutPage({ content, locale }: { content: AboutPageContent; locale: Loc
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase text-[#73e0a1]">{content.heroBadge}</p>
-              <h2 className="mt-2 text-xl font-black">{content.title}</h2>
+              <h2 className="mt-2 text-xl font-black">{closingTitle}</h2>
             </div>
             <Building2 size={28} className="text-[#73e0a1]" />
           </div>
