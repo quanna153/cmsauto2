@@ -52,22 +52,43 @@ export type InternalLinkSuggestion = {
   id: string;
   sourceContext: string;
   anchor: string;
+  targetArticleId?: string;
   targetTitle: string;
   targetUrl: string;
   matchedKeyword: string | null;
   matchStatus: "matched" | "unmatched";
   reason: string;
   confidence: number;
+  matchScore?: number;
+  relevanceScore?: number;
+  intentScore?: number;
+  expectationScore?: number;
   status: "pending" | "accepted" | "rejected";
 };
 
 export type ArticleLibraryItem = {
   id: string;
   revision: number;
+  createdAt: string;
   title: string;
   url: string;
   language: "vi" | "en";
   summary: string;
   keywords: string[];
+};
+
+export type ArticleLibraryImportItem = {
+  title: string;
+  url: string;
+  keywords?: string[];
+  language?: "vi" | "en" | null;
+};
+
+export type ArticleLibraryImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+  articles: ArticleLibraryItem[];
 };
 
