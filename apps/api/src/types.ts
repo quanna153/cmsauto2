@@ -33,6 +33,12 @@ export type Brief = {
   angle: string;
   semanticTopics: string[];
   candidateFaqs: string[];
+  competitorPages?: Array<{
+    keyword: string;
+    url: string;
+    title: string;
+    snippet: string;
+  }>;
 };
 
 export type OutlineSection = {
