@@ -1,2 +1,10 @@
-import { marketCards } from "./mock";
-export async function getMarketCards() { return marketCards; }
+import type { Locale } from "@cmsauto/contracts";
+import { marketCards, marketPages } from "./mock";
+
+export async function getMarketsPage(locale: Locale) {
+  return marketPages[locale];
+}
+
+export async function getMarketCards() {
+  return marketCards;
+}
