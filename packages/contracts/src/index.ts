@@ -6,7 +6,11 @@ export type Locale = z.infer<typeof localeSchema>;
 export const languageSchema = z.enum(["vi", "en"]);
 export type Language = z.infer<typeof languageSchema>;
 
+export const articleSectionSchema = z.enum(["knowledge", "articles", "markets", "analysis"]);
+export type ArticleSection = z.infer<typeof articleSectionSchema>;
+
 export const articleEditableFieldsSchema = z.object({
+  articleSection: articleSectionSchema.optional(),
   inputs: z.object({
     language: languageSchema,
     seedKeyword: z.string()

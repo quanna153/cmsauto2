@@ -15,12 +15,14 @@ export type AdminUser = {
 };
 
 export type ReviewStatus = "editor_ready" | "needs_fix" | "scheduled" | "publishing" | "published" | "failed";
+export type ArticleSection = "knowledge" | "articles" | "markets" | "analysis";
 
 export type ArticleSession = {
   id: string;
   revision: number;
   createdAt: string;
   updatedAt: string;
+  articleSection?: ArticleSection;
   inputs: { language: "vi" | "en"; seedKeyword: string };
   activeStep: "keywords" | "brief" | "outline" | "draft" | "links" | "ready";
   keywordIdeas: Array<{
@@ -91,4 +93,3 @@ export type ArticleLibraryImportResult = {
   errors: Array<{ row: number; message: string }>;
   articles: ArticleLibraryItem[];
 };
-

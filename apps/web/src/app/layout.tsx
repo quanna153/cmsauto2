@@ -6,10 +6,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "CMS Auto",
-    template: "%s | CMS Auto"
+    default: "CoinRadar",
+    template: "%s | CoinRadar"
   },
-  description: "Nền tảng nội dung và bài viết tài chính."
+  description: "Radar tin tức, kiến thức và dữ liệu thị trường crypto dành cho nhà đầu tư Việt."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -18,6 +18,7 @@ const envSchema = z.object({
   PUBLISH_WORKER_POLL_MS: integerString.optional(),
   PUBLISH_MAX_RETRIES: integerString.optional(),
   PUBLISH_RETRY_DELAY_MS: integerString.optional(),
+  TRADINGVIEW_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).optional(),
   GEMINI_API_KEY: z.string().min(1).optional(),
   KEYWORD_VOLUME_PROVIDER_ORDER: z.string().min(1).optional(),

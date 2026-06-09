@@ -498,6 +498,11 @@ function validateArticleForReview(article: ArticleSessionSnapshot) {
   const issues: string[] = [];
   const draft = article.draft;
   const markdown = article.finalMarkdown || article.draft?.markdown || "";
+  const isManualArticle = article.activeStep === "ready"
+    && article.keywordIdeas.length === 0
+    && article.primaryKeywordId === null
+    && article.secondaryKeywordIds.length === 0
+    && article.linkSuggestions.length === 0;
   const keywordScope = [
     draft?.title ?? "",
     draft?.metaTitle ?? "",
@@ -515,7 +520,7 @@ function validateArticleForReview(article: ArticleSessionSnapshot) {
   if (!draft) {
     issues.push("Chưa có bản nháp hoàn chỉnh.");
   }
-  if (!primaryKeyword) {
+  if (!isManualArticle && !primaryKeyword) {
     issues.push("Chưa chốt từ khóa chính.");
   }
   if (!draft?.title.trim()) {
@@ -530,13 +535,13 @@ function validateArticleForReview(article: ArticleSessionSnapshot) {
   if (!draft?.metaDescription.trim()) {
     issues.push("Thiếu meta description.");
   }
-  if (markdown.trim().length < 2400) {
+  if (!isManualArticle && markdown.trim().length < 2400) {
     issues.push("Nội dung bài còn quá ngắn để giao tự động.");
   }
-  if (primaryKeyword && !normalizeReviewText(keywordScope).includes(normalizeReviewText(primaryKeyword.keyword))) {
+  if (!isManualArticle && primaryKeyword && !normalizeReviewText(keywordScope).includes(normalizeReviewText(primaryKeyword.keyword))) {
     issues.push("Nội dung chưa chứa rõ từ khóa chính.");
   }
-  if (acceptedLinksReady.length === 0) {
+  if (!isManualArticle && acceptedLinksReady.length === 0) {
     issues.push("Chưa có internal link nào được chốt.");
   }
 
@@ -587,6 +592,7 @@ function buildPublishProjection(article: ArticleSessionSnapshot, publishedAt: st
   return {
     id: crypto.randomUUID(),
     articleId: article.id,
+    articleSection: article.articleSection ?? "articles",
     slug: draft.slug,
     locale: localeForLanguage(article.inputs.language),
     language: article.inputs.language,
@@ -1934,6 +1940,7 @@ export async function readPublishedArticles(locale?: Locale) {
   return rows.map((row) => ({
     id: row.id,
     articleId: row.article_id,
+    articleSection: "articles",
     slug: row.slug,
     locale: row.locale,
     language: row.language,

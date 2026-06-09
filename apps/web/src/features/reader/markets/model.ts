@@ -1,7 +1,4 @@
-export type MarketCard = {
-  title: string;
-  description: string;
-};
+export type MarketCard = { title: string; description: string };
 
 export type MarketAsset = {
   name: string;
@@ -54,4 +51,10 @@ export type MarketPageContent = {
   emptyDescription: string;
   errorTitle: string;
   errorDescription: string;
+};
+
+export type Coin = {
+  name: string;
+  symbol: string;
+  tradingViewSymbol: string;
 };
