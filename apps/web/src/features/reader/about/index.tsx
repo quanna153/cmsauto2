@@ -1,113 +1,242 @@
 import type { Locale } from "@cmsauto/contracts";
-import { ArrowRight, BarChart3, Clock3, Newspaper } from "lucide-react";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { ArrowRight, Building2, CheckCircle2, FileText, Users, Workflow } from "lucide-react";
 
-import { getAboutCards } from "./adapter";
+import type { AboutPageContent, AboutPillar } from "./model";
+import { getAboutPage } from "./adapter";
 
-function href(locale: Locale, path: string) {
-  return `/${locale}${path}`;
-}
-
-function InfoPill({
-  align = "left",
-  description,
-  icon,
-  title
-}: {
-  align?: "left" | "right";
-  description: string;
-  icon: ReactNode;
-  title: string;
-}) {
-  return (
-    <div
-      className={`absolute z-10 w-[13.5rem] rounded-lg border border-[#e3edf7] bg-white/95 px-4 py-3 shadow-[0_12px_32px_rgba(15,23,42,0.16)] backdrop-blur ${
-        align === "left" ? "left-0 top-[5.2rem]" : "right-0 top-4"
-      }`}
-    >
-      <div className="flex gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#e8f8ff] text-[#24aee4]">{icon}</span>
-        <span>
-          <strong className="block text-sm font-semibold text-[#111633]">{title}</strong>
-          <span className="mt-2 block text-xs leading-5 text-[#687386]">{description}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
+const pillarToneClass: Record<AboutPillar["tone"], string> = {
+  amber: "bg-[#fff5cf] text-[#8a5a00]",
+  blue: "bg-[#e3f1ff] text-[#155b91]",
+  green: "bg-[#dcf8e9] text-[#0c7a45]",
+  violet: "bg-[#eee6ff] text-[#6140a8]",
+};
 
 export async function AboutFeature({ locale }: { locale: Locale }) {
-  const cards = await getAboutCards();
+  try {
+    const content = await getAboutPage(locale);
+
+    if (!content.pillars.length || !content.principles.length) {
+      return <AboutEmptyState content={content} />;
+    }
+
+    return <AboutPage content={content} locale={locale} />;
+  } catch {
+    return <AboutErrorState locale={locale} />;
+  }
+}
+
+function AboutPage({ content, locale }: { content: AboutPageContent; locale: Locale }) {
+  const featuredPrinciple = content.principles[0]!;
+  const heroSuffix = locale === "vi-vn" ? "và đội ngũ CoinView" : "and the editorial team";
+  const featureTitle = locale === "vi-vn" ? "Tòa soạn CoinView" : "CoinView newsroom";
+  const closingTitle = locale === "vi-vn" ? "Cam kết biên tập" : "Editorial commitment";
 
   return (
-    <main className="bg-white text-[#111633]">
-      <section className="mx-auto grid max-w-7xl gap-10 px-5 py-14 lg:grid-cols-[minmax(0,1.08fr)_minmax(22rem,0.72fr)] lg:items-center lg:py-20">
-        <div>
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#24aee4]">Tầm nhìn CoinRadar</p>
-          <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-normal text-[#111633] sm:text-5xl lg:text-[3.35rem]">
-            <span className="text-[#24aee4]">Tầm nhìn</span> - Kết nối người Việt với dòng chảy tài chính số toàn cầu.
+    <main className="min-h-screen bg-[#f5fbf7] text-[#071b14]">
+      <section className="border-b border-[#dcefe5] bg-[#f1fff8] px-5 py-10 text-center md:py-14">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-xs font-bold uppercase text-[#0b9b5b]">{content.heroBadge}</p>
+          <h1 className="mx-auto mt-4 max-w-4xl text-3xl font-black uppercase leading-tight md:text-5xl">
+            {content.title} <span className="text-[#0b9b5b]">{heroSuffix}</span>
           </h1>
-          <div className="mt-7 max-w-3xl space-y-5 text-base leading-8 text-[#5f6f82] sm:text-lg sm:leading-9">
-            <p>
-              CoinRadar hướng tới trở thành nền tảng truyền thông và dữ liệu crypto uy tín dành cho cộng đồng nhà đầu tư Việt, đóng vai trò cầu nối
-              giữa người dùng với công nghệ blockchain, Web3 và thị trường tài chính số toàn cầu.
-            </p>
-            <p>
-              Trong dài hạn, CoinRadar mong muốn góp phần xây dựng một cộng đồng nhà đầu tư có kiến thức, tư duy độc lập và khả năng thích nghi với
-              những thay đổi của nền kinh tế số; đồng thời trở thành điểm đến thông tin đáng tin cậy cho những ai muốn theo dõi, nghiên cứu và khám phá
-              thị trường crypto một cách chuyên nghiệp.
-            </p>
-          </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              className="inline-flex items-center gap-2 rounded-md bg-[#0f4fe6] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0d43c4]"
-              href={href(locale, "/markets")}
-            >
-              Xem thị trường <ArrowRight size={16} />
-            </Link>
-            <Link
-              className="inline-flex items-center gap-2 rounded-md border border-[#d8e2ef] px-5 py-3 text-sm font-semibold text-[#111633] transition hover:border-[#24aee4] hover:text-[#0f4fe6]"
-              href={href(locale, "/knowledge")}
-            >
-              Khám phá kiến thức <ArrowRight size={16} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="relative mx-auto min-h-[22rem] w-full max-w-[34rem] lg:min-h-[30rem]" aria-hidden="true">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-full border-t-[3px] border-[#2eaaf4]" />
-          <InfoPill
-            description="Tổng hợp và phân tích tự động, có chọn lọc bởi đội ngũ biên tập."
-            icon={<Newspaper size={17} />}
-            title="100+ nguồn tin"
-          />
-          <InfoPill
-            align="right"
-            description="Cập nhật giá, ETF, dòng tiền và tin tức thị trường."
-            icon={<BarChart3 size={17} />}
-            title="24/7"
-          />
-          <div className="absolute bottom-0 right-4 h-[22rem] w-[22rem] overflow-hidden rounded-full bg-[#eaf4fb] shadow-[0_22px_60px_rgba(36,174,228,0.2)] sm:h-[27rem] sm:w-[27rem] lg:h-[30rem] lg:w-[30rem]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(36,174,228,0.5)_0,rgba(36,174,228,0.18)_18%,transparent_32%)]" />
-            <div className="absolute -left-8 top-10 h-56 w-36 rotate-[-18deg] rounded-[55%] bg-[radial-gradient(circle,#2d68ad_1.8px,transparent_2px)] [background-size:8px_8px] opacity-75" />
-            <div className="absolute right-12 top-8 h-64 w-44 rotate-[12deg] rounded-[50%] bg-[radial-gradient(circle,#2d68ad_1.8px,transparent_2px)] [background-size:8px_8px] opacity-75" />
-            <div className="absolute bottom-12 left-14 h-36 w-40 rotate-[24deg] rounded-[50%] bg-[radial-gradient(circle,#2d68ad_1.8px,transparent_2px)] [background-size:8px_8px] opacity-70" />
-            <div className="absolute bottom-6 right-8 h-52 w-24 rotate-[16deg] rounded-[50%] bg-[radial-gradient(circle,#2d68ad_1.8px,transparent_2px)] [background-size:8px_8px] opacity-70" />
+          <p className="mx-auto mt-4 max-w-3xl text-sm leading-7 text-[#5e7168] md:text-base">{content.lead}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-[#dcefe5] py-4 text-xs font-semibold text-[#456157]">
+            {content.meta.map((item) => (
+              <span className="inline-flex items-center gap-2" key={item}>
+                <span className="h-2 w-2 rounded-full bg-[#10a962]" />
+                {item}
+              </span>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-5 pb-14 md:grid-cols-3">
-        {cards.map((card) => (
-          <article className="rounded-lg border border-[#dbe5f0] bg-[#f8fbff] p-5" key={card.title}>
-            <div className="mb-4 flex size-10 items-center justify-center rounded-md bg-white text-[#0f4fe6] shadow-sm">
-              <Clock3 size={18} />
+      <div className="mx-auto max-w-6xl px-5 py-8 md:py-10">
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <article className="overflow-hidden rounded-lg border border-[#d9e9df] bg-white shadow-sm">
+            <div className="min-h-[244px] bg-[linear-gradient(135deg,#03160f,#07361f_58%,#031009)] p-6 text-white md:p-8">
+              <span className="inline-flex rounded-full border border-[#66d59a]/40 bg-[#e9fff3] px-4 py-1.5 text-xs font-bold text-[#087943]">
+                {content.eyebrow}
+              </span>
+              <p className="mt-7 text-xs font-semibold text-[#9ecbb4]">{content.heroBadge}</p>
+              <h2 className="mt-3 max-w-3xl text-2xl font-black leading-tight md:text-3xl">{featureTitle}</h2>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-[#c9ddcf]">{content.summary}</p>
             </div>
-            <h2 className="text-base font-semibold text-[#111633]">{card.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-[#687386]">{card.description}</p>
+            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase text-[#0b9b5b]">{featuredPrinciple.tag}</p>
+                <h3 className="mt-2 text-base font-black">{featuredPrinciple.title}</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-[#5e7168]">{featuredPrinciple.description}</p>
+              </div>
+              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#0da75b] px-5 py-2.5 text-xs font-bold text-white">
+                {content.principlesLinkLabel}
+                <ArrowRight size={14} />
+              </span>
+            </div>
           </article>
-        ))}
+
+          <aside className="rounded-lg border border-[#d9e9df] bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#e4f0e9] px-4 py-3">
+              <h2 className="inline-flex items-center gap-2 text-sm font-bold">
+                <CheckCircle2 size={16} className="text-[#0da75b]" />
+                {content.principlesHeading}
+              </h2>
+              <span className="text-xs font-semibold text-[#0da75b]">{locale}</span>
+            </div>
+            <div className="divide-y divide-[#e8f1ec]">
+              {content.principles.map((principle, index) => (
+                <article className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 px-4 py-4" key={principle.title}>
+                  <span className="text-sm font-bold text-[#10a962]">{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <h3 className="text-sm font-bold leading-5">{principle.title}</h3>
+                    <p className="mt-1 text-xs leading-5 text-[#6b7c74]">{principle.tag}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </aside>
+        </section>
+
+        <section className="mt-10 grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div>
+            <p className="text-xs font-black uppercase text-[#0b9b5b]">{content.eyebrow}</p>
+            <h2 className="mt-2 text-2xl font-black">{content.pillarsHeading}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-7 text-[#5e7168]">{content.pillarsDescription}</p>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {content.pillars.map((pillar) => (
+                <article className="overflow-hidden rounded-lg border border-[#d9e9df] bg-white shadow-sm" key={pillar.title}>
+                  <div className={`${pillarToneClass[pillar.tone]} flex min-h-24 items-center justify-between gap-4 px-5 py-5`}>
+                    <span className="text-2xl font-black">{pillar.marker}</span>
+                    <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-bold">{pillar.eyebrow}</span>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-black">{pillar.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[#60736a]">{pillar.description}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <aside className="space-y-5">
+            <section className="rounded-lg border border-[#d9e9df] bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-[#e4f0e9] px-4 py-3">
+                <h2 className="inline-flex items-center gap-2 text-sm font-bold">
+                  <Users size={16} className="text-[#0da75b]" />
+                  {content.teamHeading}
+                </h2>
+                <span className="text-xs font-semibold text-[#0da75b]">{locale}</span>
+              </div>
+              <div className="divide-y divide-[#e8f1ec]">
+                {content.metrics.map((metric) => (
+                  <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-3 px-4 py-4" key={metric.label}>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0da75b] text-xs font-black text-white">
+                      {metric.value}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">{metric.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-[#6b7c74]">{metric.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-[#d9e9df] bg-white p-4 shadow-sm">
+              <h2 className="inline-flex items-center gap-2 text-sm font-bold">
+                <FileText size={16} className="text-[#0da75b]" />
+                {locale === "vi-vn" ? "Ghi chú biên tập" : "Editorial notes"}
+              </h2>
+              <div className="mt-4 space-y-4">
+                {content.teamNotes.map((note) => (
+                  <article key={note.title}>
+                    <h3 className="text-sm font-black">{note.title}</h3>
+                    <p className="mt-1 text-xs leading-5 text-[#6b7c74]">{note.description}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </section>
+
+        <section className="mt-10 rounded-lg border border-[#d9e9df] bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-4 border-b border-[#e4f0e9] pb-4">
+            <h2 className="inline-flex items-center gap-2 text-sm font-black">
+              <Workflow size={16} className="text-[#0da75b]" />
+              {content.workflowHeading}
+            </h2>
+            <span className="text-xs font-bold text-[#0da75b]">{content.workflowLinkLabel}</span>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {content.workflow.map((step, index) => (
+              <article className="grid grid-cols-[38px_minmax(0,1fr)] gap-3" key={step.title}>
+                <span className="flex h-8 w-8 items-center justify-center rounded bg-[#e8f8ef] text-xs font-black text-[#0b9b5b]">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <h3 className="text-sm font-black">{step.title}</h3>
+                  <p className="mt-1 text-xs leading-5 text-[#6b7c74]">{step.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-lg border border-[#d9e9df] bg-[linear-gradient(135deg,#03160f,#07361f_58%,#031009)] p-5 text-white shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase text-[#73e0a1]">{content.heroBadge}</p>
+              <h2 className="mt-2 text-xl font-black">{closingTitle}</h2>
+            </div>
+            <Building2 size={28} className="text-[#73e0a1]" />
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export function AboutLoadingState() {
+  return (
+    <main className="min-h-screen bg-[#f5fbf7] px-5 py-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="h-56 animate-pulse rounded-lg bg-[#dcefe5]" />
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
+          <div className="h-72 animate-pulse rounded-lg bg-[#dcefe5]" />
+          <div className="h-72 animate-pulse rounded-lg bg-[#dcefe5]" />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function AboutEmptyState({ content }: { content: AboutPageContent }) {
+  return (
+    <main className="min-h-screen bg-[#f5fbf7] px-5 py-10">
+      <section className="mx-auto max-w-3xl rounded-lg border border-[#d9e9df] bg-white p-6 shadow-sm">
+        <p className="text-xs font-bold uppercase text-[#0b9b5b]">{content.eyebrow}</p>
+        <h1 className="mt-2 text-2xl font-black">{content.emptyTitle}</h1>
+        <p className="mt-3 leading-7 text-[#60736a]">{content.emptyDescription}</p>
+      </section>
+    </main>
+  );
+}
+
+function AboutErrorState({ locale }: { locale: Locale }) {
+  const isVietnamese = locale === "vi-vn";
+
+  return (
+    <main className="min-h-screen bg-[#f5fbf7] px-5 py-10">
+      <section className="mx-auto max-w-3xl rounded-lg border border-[#f3c6c6] bg-white p-6 shadow-sm">
+        <p className="text-xs font-bold uppercase text-[#c2410c]">About</p>
+        <h1 className="mt-2 text-2xl font-black">
+          {isVietnamese ? "Không tải được trang giới thiệu" : "Could not load the about page"}
+        </h1>
+        <p className="mt-3 leading-7 text-[#60736a]">
+          {isVietnamese
+            ? "Vui lòng thử lại sau hoặc kiểm tra adapter của feature reader/about."
+            : "Please try again later or check the reader/about adapter."}
+        </p>
       </section>
     </main>
   );

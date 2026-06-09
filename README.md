@@ -21,10 +21,14 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm dev
 ```
 
+Người mới setup env theo [docs/ENV-SETUP.md](docs/ENV-SETUP.md).
+
 - Admin: `http://localhost:5173/admin`
 - Reader Việt Nam: `http://localhost:5173/vi-vn`
 - Reader English: `http://localhost:5173/en-us`
 - API health: `http://localhost:8787/api/health`
+
+Tài khoản superadmin local mặc định: `admin` / `1`.
 
 DB SQLite được tạo local tại `apps/api/data/cmsauto.sqlite`. Không commit DB hoặc `.env.local`.
 
@@ -42,8 +46,9 @@ pnpm test:e2e
 ## Bắt đầu task
 
 1. Đọc [AGENTS.md](AGENTS.md).
-2. Chọn đúng context pack trong [docs/tasks](docs/tasks).
-3. Copy prompt phù hợp trong [docs/STARTER-PROMPTS.md](docs/STARTER-PROMPTS.md).
-4. Tạo branch `feat/<ticket-id>-<feature-name>`.
-5. Chỉ sửa folder được phép trong task pack.
-6. Gửi PR theo [docs/PR-CHECKLIST.md](docs/PR-CHECKLIST.md).
+2. Người mới dùng GitHub đọc [docs/GITHUB-SETUP-AND-PUSH.md](docs/GITHUB-SETUP-AND-PUSH.md).
+3. Chọn đúng context pack trong [docs/tasks](docs/tasks).
+4. Copy prompt phù hợp trong [docs/STARTER-PROMPTS.md](docs/STARTER-PROMPTS.md).
+5. Tạo branch `feat/<ticket-id>-<feature-name>`.
+6. Chỉ sửa folder được phép trong task pack.
+7. Gửi PR theo [docs/PR-CHECKLIST.md](docs/PR-CHECKLIST.md).

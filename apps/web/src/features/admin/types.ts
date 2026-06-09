@@ -22,7 +22,7 @@ export type ArticleSession = {
   revision: number;
   createdAt: string;
   updatedAt: string;
-  articleSection: ArticleSection;
+  articleSection?: ArticleSection;
   inputs: { language: "vi" | "en"; seedKeyword: string };
   activeStep: "keywords" | "brief" | "outline" | "draft" | "links" | "ready";
   keywordIdeas: Array<{
@@ -54,18 +54,24 @@ export type InternalLinkSuggestion = {
   id: string;
   sourceContext: string;
   anchor: string;
+  targetArticleId?: string;
   targetTitle: string;
   targetUrl: string;
   matchedKeyword: string | null;
   matchStatus: "matched" | "unmatched";
   reason: string;
   confidence: number;
+  matchScore?: number;
+  relevanceScore?: number;
+  intentScore?: number;
+  expectationScore?: number;
   status: "pending" | "accepted" | "rejected";
 };
 
 export type ArticleLibraryItem = {
   id: string;
   revision: number;
+  createdAt: string;
   title: string;
   url: string;
   language: "vi" | "en";
@@ -73,3 +79,17 @@ export type ArticleLibraryItem = {
   keywords: string[];
 };
 
+export type ArticleLibraryImportItem = {
+  title: string;
+  url: string;
+  keywords?: string[];
+  language?: "vi" | "en" | null;
+};
+
+export type ArticleLibraryImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+  articles: ArticleLibraryItem[];
+};
