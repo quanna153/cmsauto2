@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 :root {
-  --background: #f7f7f4;
-  --foreground: #172033;
+  --background: #f7fbf8;
+  --foreground: #07110c;
   --surface: #ffffff;
-  --surface-muted: #f1f2ee;
-  --border: #e3e5df;
-  --muted: #687386;
-  --brand: #a88412;
-  --brand-strong: #80640b;
-  --brand-soft: #fbf5dc;
+  --surface-muted: #f1fbf4;
+  --border: #d7e7dc;
+  --muted: #5f6b63;
+  --brand: #16a34a;
+  --brand-strong: #047857;
+  --brand-soft: #ecfdf5;
   --danger: #c93a3a;
   --success: #15803d;
 }
@@ -39,15 +43,15 @@ textarea {
 }
 
 .article-prose {
-  color: #273247;
-  font-family: Georgia, "Times New Roman", serif;
+  color: #29352e;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 1.125rem;
   line-height: 1.9;
 }
 
 .article-prose h2,
 .article-prose h3 {
-  color: #172033;
+  color: #07110c;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   font-weight: 700;
   line-height: 1.3;

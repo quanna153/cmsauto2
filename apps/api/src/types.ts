@@ -1,5 +1,6 @@
 export type Language = "vi" | "en";
 export type Locale = "vi-vn" | "en-us";
+export type ArticleSection = "knowledge" | "articles" | "markets" | "analysis";
 export type Intent = "informational" | "commercial" | "comparison" | "transactional";
 export type DataStatus = "verified" | "missing" | "failed";
 export type PromptKey = "keywords" | "brief" | "outline" | "draft" | "links";
@@ -109,6 +110,7 @@ export type ArticleSessionSnapshot = {
   revision?: number;
   createdAt: string;
   updatedAt: string;
+  articleSection?: ArticleSection;
   inputs: {
     language: Language;
     seedKeyword: string;
@@ -178,6 +180,7 @@ export type PublishLog = {
 export type PublishedArticle = {
   id: string;
   articleId: string;
+  articleSection: ArticleSection;
   slug: string;
   locale: Locale;
   language: Language;
