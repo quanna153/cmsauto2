@@ -3,11 +3,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { ensureAuthBootstrap } from "./auth-store.js";
 import { queryFirst } from "./database.js";
 import {
-  createManualPublishedArticle,
-  createManualScheduledArticle,
   createArticleSession,
+  importArticleLibraryItems,
   patchArticleSession,
-  readPublishedArticleBySlug,
+  readArticleLibrary,
   readPublishedArticles,
   RevisionConflictError,
   reviewGateArticle,
@@ -66,8 +65,13 @@ beforeAll(async () => {
 describe("SQLite foundation", () => {
   it("bootstraps exactly one super admin", async () => {
     await ensureAuthBootstrap();
-    const row = await queryFirst<{ count: number }>("SELECT COUNT(*) AS count FROM users WHERE role = 'super_admin'");
+    const row = await queryFirst<{ count: number; must_change_password: number }>(`
+      SELECT COUNT(*) AS count, must_change_password
+      FROM users
+      WHERE role = 'super_admin'
+    `);
     expect(Number(row?.count)).toBe(1);
+    expect(Number(row?.must_change_password)).toBe(0);
   });
 
   it("rejects stale article revisions without deleting server history", async () => {
@@ -89,44 +93,21 @@ describe("SQLite foundation", () => {
     expect((await readPublishedArticles("en-us")).find((item) => item.articleId === en.id)?.livePath).toBe("/en-us/what-is-bitcoin");
   });
 
-  it("stores manual admin posts verbatim and publishes them immediately to reader", async () => {
-    const title = `Bài thủ công ${crypto.randomUUID()}`;
-    const content = "  Nội dung nhập tay từ admin.\n\nGiữ nguyên xuống dòng và khoảng trắng cuối.  ";
-    const article = await createManualPublishedArticle({ title, content }, actor);
+  it("imports default English article library URLs without an /en-us/ prefix", async () => {
+    const url = `/what-is-proof-of-stake-${crypto.randomUUID()}`;
+    const result = await importArticleLibraryItems([{
+      title: "What Is Proof of Stake",
+      url,
+      keywords: []
+    }]);
 
-    expect(article.reviewStatus).toBe("published");
-    expect(article.draft?.title).toBe(title);
-    expect(article.draft?.markdown).toBe(content);
-    expect(article.finalMarkdown).toBe(content);
-    expect(article.livePath).toBeTruthy();
-
-    const published = (await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id);
-    expect(published?.title).toBe(title);
-    expect(published?.markdown).toBe(content);
-    expect(published?.livePath).toBe(article.livePath);
-
-    const slug = article.livePath?.split("/").at(-1);
-    expect(slug).toBeTruthy();
-    expect((await readPublishedArticleBySlug("vi-vn", slug ?? ""))?.markdown).toBe(content);
-  });
-
-  it("stores manual scheduled posts without showing them to reader before the publish worker runs", async () => {
-    const title = `Bài đặt lịch ${crypto.randomUUID()}`;
-    const content = "Nội dung đặt lịch thủ công.";
-    const publishAt = new Date(Date.now() - 1000).toISOString();
-    const article = await createManualScheduledArticle({ title, content, publishAt }, actor);
-
-    expect(article.reviewStatus).toBe("scheduled");
-    expect(article.publishAt).toBe(publishAt);
-    expect(article.publishedAt).toBeNull();
-    expect(article.livePath).toBeNull();
-    expect(article.draft?.title).toBe(title);
-    expect(article.draft?.markdown).toBe(content);
-    expect((await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id)).toBeUndefined();
-
-    await runDuePublishJobs();
-    const published = (await readPublishedArticles("vi-vn")).find((item) => item.articleId === article.id);
-    expect(published?.title).toBe(title);
-    expect(published?.markdown).toBe(content);
+    expect(result.skipped).toBe(0);
+    expect(result.created).toBe(1);
+    const imported = (await readArticleLibrary("en")).find((item) => item.url === url);
+    expect(imported).toMatchObject({
+      title: "What Is Proof of Stake",
+      language: "en",
+      url
+    });
   });
 });

@@ -1,5 +1,7 @@
 # PR Checklist
 
+Người chưa biết đăng nhập GitHub, push branch hoặc tạo PR đọc `docs/GITHUB-SETUP-AND-PUSH.md`.
+
 ## Trước khi push
 
 ```bash
@@ -23,4 +25,3 @@ pnpm test:e2e
 - Xác nhận không sửa shared path ngoài scope.
 - Đính kèm screenshot desktop và mobile.
 - Ghi lại lệnh verify đã chạy.
-

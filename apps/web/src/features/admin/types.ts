@@ -15,12 +15,14 @@ export type AdminUser = {
 };
 
 export type ReviewStatus = "editor_ready" | "needs_fix" | "scheduled" | "publishing" | "published" | "failed";
+export type ArticleSection = "knowledge" | "articles" | "markets" | "analysis";
 
 export type ArticleSession = {
   id: string;
   revision: number;
   createdAt: string;
   updatedAt: string;
+  articleSection?: ArticleSection;
   inputs: { language: "vi" | "en"; seedKeyword: string };
   activeStep: "keywords" | "brief" | "outline" | "draft" | "links" | "ready";
   keywordIdeas: Array<{
@@ -35,7 +37,7 @@ export type ArticleSession = {
   }>;
   primaryKeywordId: string | null;
   secondaryKeywordIds: string[];
-  brief: { searchIntent: string; angle: string; semanticTopics: string[]; candidateFaqs: string[] } | null;
+  brief: { searchIntent: string; angle: string; semanticTopics: string[]; candidateFaqs: string[]; competitorPages?: Array<{ keyword: string; url: string; title: string; snippet: string; }> } | null;
   outline: { title: string; introDirection: string; sections: Array<{ heading: string; bullets: string[] }> } | null;
   draft: { title: string; slug: string; excerpt: string; metaTitle: string; metaDescription: string; markdown: string } | null;
   linkSuggestions: InternalLinkSuggestion[];
@@ -52,18 +54,24 @@ export type InternalLinkSuggestion = {
   id: string;
   sourceContext: string;
   anchor: string;
+  targetArticleId?: string;
   targetTitle: string;
   targetUrl: string;
   matchedKeyword: string | null;
   matchStatus: "matched" | "unmatched";
   reason: string;
   confidence: number;
+  matchScore?: number;
+  relevanceScore?: number;
+  intentScore?: number;
+  expectationScore?: number;
   status: "pending" | "accepted" | "rejected";
 };
 
 export type ArticleLibraryItem = {
   id: string;
   revision: number;
+  createdAt: string;
   title: string;
   url: string;
   language: "vi" | "en";
@@ -71,3 +79,17 @@ export type ArticleLibraryItem = {
   keywords: string[];
 };
 
+export type ArticleLibraryImportItem = {
+  title: string;
+  url: string;
+  keywords?: string[];
+  language?: "vi" | "en" | null;
+};
+
+export type ArticleLibraryImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+  articles: ArticleLibraryItem[];
+};

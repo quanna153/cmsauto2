@@ -12,7 +12,7 @@ test("clears the admin shell after logout", async ({ page }) => {
   let loggedIn = false;
   const user = {
     id: "playwright-superadmin",
-    username: "superadmin",
+    username: "admin",
     fullName: "Playwright Super Admin",
     email: null,
     role: "super_admin",
@@ -42,8 +42,8 @@ test("clears the admin shell after logout", async ({ page }) => {
   });
 
   await page.goto("/admin/dashboard");
-  await page.getByPlaceholder("Username").fill("superadmin");
-  await page.getByPlaceholder("Mật khẩu").fill("TestPassword123");
+  await page.getByPlaceholder("Username").fill("admin");
+  await page.getByPlaceholder("Mật khẩu").fill("1");
   await page.getByRole("button", { name: "Đăng nhập" }).click();
   await expect(page.getByRole("heading", { name: "Tổng quan vận hành" })).toBeVisible();
 

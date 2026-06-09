@@ -32,8 +32,8 @@ export function getJson<T>(path: string) {
   return requestJson<T>(path);
 }
 
-export function postJson<T>(path: string, body: unknown) {
-  return requestJson<T>(path, { method: "POST", body: JSON.stringify(body) });
+export function postJson<T>(path: string, body: unknown, init?: RequestInit) {
+  return requestJson<T>(path, { method: "POST", body: JSON.stringify(body), ...init });
 }
 
 export function patchJson<T>(path: string, body: unknown) {

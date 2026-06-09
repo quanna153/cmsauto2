@@ -3,6 +3,7 @@ import type { Locale } from "@cmsauto/contracts";
 export type ReaderArticle = {
   id: string;
   articleId: string;
+  articleSection?: "knowledge" | "articles" | "markets" | "analysis";
   slug: string;
   locale: Locale;
   language: "vi" | "en";
@@ -23,4 +24,3 @@ export type ReaderListResponse = {
   pageSize: number;
   total: number;
 };
-

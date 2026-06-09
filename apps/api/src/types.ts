@@ -1,5 +1,6 @@
 export type Language = "vi" | "en";
 export type Locale = "vi-vn" | "en-us";
+export type ArticleSection = "knowledge" | "articles" | "markets" | "analysis";
 export type Intent = "informational" | "commercial" | "comparison" | "transactional";
 export type DataStatus = "verified" | "missing" | "failed";
 export type PromptKey = "keywords" | "brief" | "outline" | "draft" | "links";
@@ -32,6 +33,12 @@ export type Brief = {
   angle: string;
   semanticTopics: string[];
   candidateFaqs: string[];
+  competitorPages?: Array<{
+    keyword: string;
+    url: string;
+    title: string;
+    snippet: string;
+  }>;
 };
 
 export type OutlineSection = {
@@ -57,6 +64,7 @@ export type Draft = {
 export type ArticleLibraryItem = {
   id: string;
   revision?: number;
+  createdAt: string;
   title: string;
   url: string;
   language: Language;
@@ -64,16 +72,41 @@ export type ArticleLibraryItem = {
   keywords: string[];
 };
 
+export type ArticleLibraryImportItem = {
+  title: string;
+  url: string;
+  keywords?: string[];
+  language?: Language | null;
+};
+
+export type ArticleLibraryImportError = {
+  row: number;
+  message: string;
+};
+
+export type ArticleLibraryImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: ArticleLibraryImportError[];
+  articles: ArticleLibraryItem[];
+};
+
 export type InternalLinkSuggestion = {
   id: string;
   sourceContext: string;
   anchor: string;
+  targetArticleId?: string;
   targetTitle: string;
   targetUrl: string;
   matchedKeyword: string | null;
   matchStatus: "matched" | "unmatched";
   reason: string;
   confidence: number;
+  matchScore?: number;
+  relevanceScore?: number;
+  intentScore?: number;
+  expectationScore?: number;
   status: "pending" | "accepted" | "rejected";
 };
 
@@ -109,6 +142,7 @@ export type ArticleSessionSnapshot = {
   revision?: number;
   createdAt: string;
   updatedAt: string;
+  articleSection?: ArticleSection;
   inputs: {
     language: Language;
     seedKeyword: string;
@@ -178,6 +212,7 @@ export type PublishLog = {
 export type PublishedArticle = {
   id: string;
   articleId: string;
+  articleSection: ArticleSection;
   slug: string;
   locale: Locale;
   language: Language;

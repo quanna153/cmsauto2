@@ -106,6 +106,7 @@ CREATE INDEX IF NOT EXISTS idx_article_status_transitions_article_id ON article_
 CREATE TABLE IF NOT EXISTS article_library (
   id TEXT PRIMARY KEY,
   revision INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
   title TEXT NOT NULL,
   url TEXT NOT NULL,
   language TEXT NOT NULL,
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS article_library (
 );
 
 CREATE INDEX IF NOT EXISTS idx_article_library_language ON article_library(language);
+CREATE INDEX IF NOT EXISTS idx_article_library_url ON article_library(url);
 
 CREATE TABLE IF NOT EXISTS prompt_templates (
   key TEXT PRIMARY KEY,
@@ -306,6 +308,12 @@ function createAdapter(nativeDatabase: Database.Database): SqlDatabase {
 
 function migrate(nativeDatabase: Database.Database) {
   nativeDatabase.exec(migrationV1);
+  const articleLibraryColumns = nativeDatabase.prepare("PRAGMA table_info(article_library)").all() as Array<{ name: string }>;
+  if (!articleLibraryColumns.some((column) => column.name === "created_at")) {
+    nativeDatabase.exec("ALTER TABLE article_library ADD COLUMN created_at TEXT");
+    nativeDatabase.prepare("UPDATE article_library SET created_at = ? WHERE created_at IS NULL OR created_at = ''")
+      .run(new Date().toISOString());
+  }
   nativeDatabase.prepare(`
     INSERT OR IGNORE INTO schema_migrations (version, applied_at)
     VALUES (1, ?)

@@ -4,18 +4,18 @@ import "./config.js";
 const geminiModel = process.env.GEMINI_MODEL?.trim();
 const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
 
-export function hasGeminiConfig() {
-  return Boolean(geminiModel && geminiApiKey);
+export function hasGeminiConfig(overrides?: { model?: string; apiKey?: string }) {
+  return Boolean((overrides?.model || geminiModel) && (overrides?.apiKey || geminiApiKey));
 }
 
-export function getGeminiConfig() {
-  if (!hasGeminiConfig()) {
-    throw new Error("Thiếu GEMINI_MODEL hoặc GEMINI_API_KEY.");
+export function getGeminiConfig(overrides?: { model?: string; apiKey?: string }) {
+  if (!hasGeminiConfig(overrides)) {
+    throw new Error("Thiếu cấu hình Gemini Model hoặc API Key.");
   }
 
   return {
-    model: geminiModel as string,
-    apiKey: geminiApiKey as string
+    model: (overrides?.model || geminiModel) as string,
+    apiKey: (overrides?.apiKey || geminiApiKey) as string
   };
 }
 
@@ -54,8 +54,9 @@ export async function generateStructuredJson<T>(options: {
   responseJsonSchema: Record<string, unknown>;
   validator: z.ZodType<T>;
   temperature?: number;
+  customConfig?: { model?: string; apiKey?: string };
 }) {
-  const { model, apiKey } = getGeminiConfig();
+  const { model, apiKey } = getGeminiConfig(options.customConfig);
 
   const renderedPrompt = renderPrompt(options.prompt, options.variables);
   const userText = [

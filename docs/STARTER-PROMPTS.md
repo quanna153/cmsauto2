@@ -5,9 +5,13 @@ Tài liệu này dành cho người nhận task nhưng không cần biết code 
 ## Trước Khi Chat Với AI
 
 1. Clone repo và tạo branch theo `docs/HANDOFF.md`.
-2. Xác định đúng task pack trong `docs/tasks/`.
-3. Đính kèm ảnh mockup nếu task có UI.
-4. Copy một prompt bên dưới và thay phần trong dấu `<...>`.
+2. Nếu chưa biết đăng nhập GitHub, tạo branch hoặc push code, đọc `docs/GITHUB-SETUP-AND-PUSH.md`.
+3. Xác định đúng task pack trong `docs/tasks/`.
+4. Setup env theo `docs/ENV-SETUP.md`.
+5. Đính kèm ảnh mockup nếu task có UI.
+6. Copy một prompt bên dưới và thay phần trong dấu `<...>`.
+
+Prompt để AI hỗ trợ setup GitHub, tạo branch, push code và tạo PR nằm trong `docs/GITHUB-SETUP-AND-PUSH.md`.
 
 ## Prompt Dùng Cho Hầu Hết Task UI
 
