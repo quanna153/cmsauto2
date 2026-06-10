@@ -4,7 +4,7 @@ import { readVolumeCache, upsertVolumeCache } from "./store.js";
 import type { DataStatus, KeywordIdea, Language } from "./types.js";
 
 
-type VolumeProviderName = "dataforseo" | "ahrefs" | "keywordtool";
+type VolumeProviderName = "semrush" | "ahrefs" | "keywordtool";
 
 type VolumeLookupResult = {
   monthlyVolume: number | null;
@@ -29,17 +29,9 @@ const ahrefsOverviewSchema = z.object({
   }))
 });
 
-const dataForSeoResponseSchema = z.object({
-  status_code: z.number(),
-  status_message: z.string(),
-  tasks: z.array(z.object({
-    status_code: z.number(),
-    status_message: z.string(),
-    result: z.array(z.object({
-      keyword: z.string(),
-      search_volume: z.number().nullable().optional()
-    })).optional()
-  }))
+const semrushKeywordSchema = z.object({
+  phrase: z.string(),
+  volume: z.number().nullable().optional()
 });
 
 function nowStamp() {
@@ -74,14 +66,24 @@ function isFreshCache(cachedAt: string) {
 }
 
 function configuredProviders() {
-  const requestedOrder = (process.env.KEYWORD_VOLUME_PROVIDER_ORDER ?? "dataforseo,ahrefs,keywordtool")
+  const requestedOrder = (process.env.KEYWORD_VOLUME_PROVIDER_ORDER ?? "semrush,ahrefs,keywordtool")
     .split(",")
     .map((item) => item.trim().toLowerCase())
-    .filter(Boolean) as VolumeProviderName[];
+    .filter(isVolumeProviderName);
 
-  return requestedOrder.filter((provider, index, collection) => {
+  const providers = requestedOrder.length > 0
+    ? requestedOrder
+    : process.env.SEMRUSH_PROXY_TOKEN?.trim()
+      ? ["semrush" as const]
+      : [];
+
+  return providers.filter((provider, index, collection) => {
     if (collection.indexOf(provider) !== index) {
       return false;
+    }
+
+    if (provider === "semrush") {
+      return Boolean(process.env.SEMRUSH_PROXY_TOKEN?.trim());
     }
 
     if (provider === "ahrefs") {
@@ -92,15 +94,12 @@ function configuredProviders() {
       return Boolean(process.env.KEYWORDTOOL_API_KEY?.trim());
     }
 
-    if (provider === "dataforseo") {
-      return Boolean(
-        (process.env.DATAFORSEO_LOGIN?.trim() && process.env.DATAFORSEO_PASSWORD?.trim())
-        || process.env.DATAFORSEO_BASIC_AUTH?.trim()
-      );
-    }
-
     return false;
   });
+}
+
+function isVolumeProviderName(value: string): value is VolumeProviderName {
+  return value === "semrush" || value === "ahrefs" || value === "keywordtool";
 }
 
 function countryForLanguage(language: Language) {
@@ -111,108 +110,97 @@ function keywordToolMetricsLanguage(language: Language) {
   return (process.env.KEYWORD_VOLUME_METRICS_LANGUAGE?.trim() || language).toLowerCase();
 }
 
-function envByLanguage(baseName: string, language: Language) {
-  const languageKey = `${baseName}_${language.toUpperCase()}`;
-  const scopedValue = process.env[languageKey]?.trim();
-  if (scopedValue) {
-    return scopedValue;
-  }
-
-  return process.env[baseName]?.trim() || "";
-}
-
-function dataForSeoLocationName(language: Language) {
-  const explicit = envByLanguage("DATAFORSEO_LOCATION_NAME", language);
-  if (explicit) {
-    return explicit;
-  }
-
-  const country = countryForLanguage(language);
-  const knownLocations: Record<string, string> = {
-    VN: "Vietnam",
-    US: "United States",
-    GB: "United Kingdom",
-    AU: "Australia",
-    CA: "Canada",
-    SG: "Singapore"
-  };
-
-  return knownLocations[country] ?? "Vietnam";
-}
-
-function dataForSeoLanguageName(language: Language) {
-  const explicit = envByLanguage("DATAFORSEO_LANGUAGE_NAME", language);
-  if (explicit) {
-    return explicit;
-  }
-
-  return language === "vi" ? "Vietnamese" : "English";
-}
-
-function dataForSeoAuthorizationHeader() {
-  const basic = process.env.DATAFORSEO_BASIC_AUTH?.trim();
-  if (basic) {
-    return `Basic ${basic}`;
-  }
-
-  const login = process.env.DATAFORSEO_LOGIN?.trim();
-  const password = process.env.DATAFORSEO_PASSWORD?.trim();
-
-  if (!login || !password) {
-    throw new Error("Thiếu DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD.");
-  }
-
-  return `Basic ${Buffer.from(`${login}:${password}`).toString("base64")}`;
-}
-
-async function fetchDataForSeoVolumes(
+async function fetchSemrushVolumes(
   keywords: string[],
   context: VolumeProviderContext
 ) {
-  const response = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live", {
-    method: "POST",
-    headers: {
-      Authorization: dataForSeoAuthorizationHeader(),
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    },
-    body: JSON.stringify([
-      {
-        location_name: dataForSeoLocationName(context.language),
-        language_name: dataForSeoLanguageName(context.language),
-        keywords
-      }
-    ])
-  });
-
-  if (!response.ok) {
-    throw new Error(`DataForSEO API lỗi ${response.status}: ${await response.text()}`);
-  }
-
-  const payload = dataForSeoResponseSchema.parse(await response.json());
-  const task = payload.tasks[0];
-
-  if (!task) {
-    throw new Error("DataForSEO không trả về task result.");
-  }
-
-  if (payload.status_code !== 20000 || task.status_code !== 20000) {
-    throw new Error(`DataForSEO lỗi ${task.status_code}: ${task.status_message}`);
+  const token = process.env.SEMRUSH_PROXY_TOKEN?.trim();
+  if (!token) {
+    throw new Error("Thiếu SEMRUSH_PROXY_TOKEN.");
   }
 
   const stamp = nowStamp();
+  const results = new Map<string, VolumeLookupResult>();
 
-  return new Map(
-    (task.result ?? []).map((item) => [
-      normalizeKeyword(item.keyword),
-      {
-        monthlyVolume: typeof item.search_volume === "number" ? item.search_volume : null,
-        provider: "DataForSEO Google Ads",
-        checkedAt: stamp,
-        status: typeof item.search_volume === "number" ? "verified" : "missing"
-      } satisfies VolumeLookupResult
-    ])
-  );
+  for (const keyword of keywords) {
+    const rows = await fetchSemrushKeywordRows(keyword, context, token);
+    const normalizedKeyword = normalizeKeyword(keyword);
+    const match = rows.find((row) => normalizeKeyword(row.phrase) === normalizedKeyword);
+    results.set(normalizedKeyword, {
+      monthlyVolume: typeof match?.volume === "number" ? match.volume : null,
+      provider: "Semrush",
+      checkedAt: stamp,
+      status: typeof match?.volume === "number" ? "verified" : "missing"
+    });
+  }
+
+  return results;
+}
+
+async function fetchSemrushKeywordRows(keyword: string, context: VolumeProviderContext, token: string) {
+  const payload = {
+    id: 16,
+    jsonrpc: "2.0",
+    method: "ideas.GetKeywords",
+    params: {
+      mode: 0,
+      currency: "USD",
+      database: context.language === "vi" ? "vn" : "us",
+      filter: {
+        phrase: [],
+        competition_level: [],
+        cpc: [],
+        difficulty: [],
+        results: [],
+        serp_features: [{ inverted: false, value: [] }],
+        volume: [],
+        words_count: [],
+        phrase_include_logic: 0
+      },
+      groups: [],
+      order: { direction: 1, field: "volume" },
+      groups_order: { direction: 1, field: "count" },
+      phrase: keyword,
+      questions_only: false,
+      page: { number: 1, size: 20 }
+    }
+  };
+
+  const servers = [1, 2, 3, 4, 5, 6];
+  let lastError: Error | null = null;
+
+  for (const serverId of servers) {
+    try {
+      const headers: Record<string, string> = {
+        Accept: "*/*",
+        "Content-Type": "application/json"
+      };
+      if (serverId !== 6) {
+        headers.Cookie = `proxy_token=${token}`;
+      }
+
+      const response = await fetch(`https://${serverId}.semrush.com.in/kmtgw/v2/webapi`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Semrush API lỗi ${response.status} (server ${serverId}): ${await response.text()}`);
+      }
+
+      const data = await response.json() as { error?: unknown; result?: { keywords?: unknown[] } };
+      if (data.error) {
+        throw new Error(`Semrush error (server ${serverId}): ${JSON.stringify(data.error)}`);
+      }
+
+      return z.array(semrushKeywordSchema).parse(data.result?.keywords ?? []);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error("Không lấy được volume từ Semrush.");
 }
 
 async function fetchAhrefsVolumes(
@@ -313,8 +301,8 @@ async function fetchProviderVolumes(
   keywords: string[],
   context: VolumeProviderContext
 ) {
-  if (provider === "dataforseo") {
-    return fetchDataForSeoVolumes(keywords, context);
+  if (provider === "semrush") {
+    return fetchSemrushVolumes(keywords, context);
   }
 
   if (provider === "ahrefs") {
@@ -454,7 +442,7 @@ export async function enrichKeywordIdeasWithVolumes(
       : {
           ...idea,
           monthlyVolume: null,
-          provider: summarizeProviderError(lastFailedProvider ?? providers[0] ?? "dataforseo", lastError),
+          provider: summarizeProviderError(lastFailedProvider ?? providers[0] ?? "semrush", lastError),
           checkedAt: nowStamp(),
           status: "failed" as const
         }

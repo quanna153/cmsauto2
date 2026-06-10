@@ -91,7 +91,7 @@ export function ReaderFooter({ locale }: { locale: Locale }) {
   };
 
   return (
-    <footer className="bg-[#03130b] text-white" id="site-footer">
+    <footer className="bg-[#0F1115] text-white" id="site-footer">
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-9 md:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_1fr_0.8fr_0.8fr_0.8fr]">
         <section>
           <CoinRadarLogo href={homeHref} tone="dark" />
@@ -99,7 +99,7 @@ export function ReaderFooter({ locale }: { locale: Locale }) {
             CoinRadar mang đến góc nhìn toàn diện về thị trường Crypto dành cho nhà đầu tư Việt. Dữ liệu được cập nhật liên tục, trình bày trực
             quan, giúp bạn theo dõi biến động, nhận diện xu hướng và đưa ra quyết định chủ động hơn.
           </p>
-          <form className="mt-6 flex max-w-md overflow-hidden rounded-full border border-[#22c55e]/35 bg-white/6">
+          <form className="mt-6 flex max-w-md overflow-hidden rounded-lg border border-[#C8A227]/35 bg-white/6">
             <label className="sr-only" htmlFor="footer-email">
               Địa chỉ email của bạn
             </label>
@@ -109,7 +109,7 @@ export function ReaderFooter({ locale }: { locale: Locale }) {
               placeholder="Địa chỉ email của bạn"
               type="email"
             />
-            <button className="bg-[#16a34a] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#047857]" type="button">
+            <button className="bg-[#C8A227] px-5 py-3 text-sm font-bold text-[#0F1115] transition hover:bg-[#F5E7B3]" type="button">
               Liên Hệ Ngay
             </button>
           </form>
@@ -121,12 +121,12 @@ export function ReaderFooter({ locale }: { locale: Locale }) {
         <FooterColumn links={marketLinks} locale={locale} title="Thị Trường" />
       </div>
 
-      <div className="border-t border-white/10 bg-[#07110c] px-5 py-4">
+      <div className="border-t border-white/10 bg-[#111827] px-5 py-4">
         <div className="relative mx-auto max-w-7xl text-center text-xs font-semibold text-white/70">
           Copyright © CoinRadar Việt Nam 2026. All Rights Reserved
           <a
             aria-label={isNearTop ? "Xuống cuối trang" : "Lên đầu trang"}
-            className="fixed bottom-5 right-5 z-40 flex size-11 items-center justify-center rounded-full bg-[#16a34a] text-white shadow-lg shadow-slate-950/20 transition hover:bg-[#047857] focus:outline-none focus:ring-2 focus:ring-[#22c55e] focus:ring-offset-2 focus:ring-offset-[#07110c]"
+            className="fixed bottom-5 right-5 z-40 flex size-11 items-center justify-center rounded-lg bg-[#C8A227] text-[#0F1115] shadow-lg shadow-slate-950/20 transition hover:bg-[#F5E7B3] focus:outline-none focus:ring-2 focus:ring-[#C8A227] focus:ring-offset-2 focus:ring-offset-[#111827]"
             href={isNearTop ? "#site-footer" : "#top"}
             onClick={handleScrollToggle}
           >
@@ -145,7 +145,7 @@ function FooterColumn({ title, links, locale }: { title: string; links: FooterLi
       <ul className="mt-4 grid gap-3 text-sm text-white/72">
         {links.map((link) => (
           <li key={link.label}>
-            <Link className="transition hover:text-[#22c55e]" href={`/${locale}${link.path}`}>
+            <Link className="transition hover:text-[#F5E7B3]" href={`/${locale}${link.path}`}>
               {link.label}
             </Link>
           </li>

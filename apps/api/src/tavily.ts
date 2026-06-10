@@ -5,6 +5,7 @@ export type TavilyResult = {
   url: string;
   title: string;
   snippet: string;
+  rawContent?: string;
 };
 
 export async function searchTavily(query: string, maxResults: number = 5, customApiKey?: string): Promise<TavilyResult[]> {
@@ -22,10 +23,10 @@ export async function searchTavily(query: string, maxResults: number = 5, custom
       body: JSON.stringify({
         api_key: apiKey,
         query: query,
-        search_depth: "basic",
+        search_depth: "advanced",
         include_answer: false,
         include_images: false,
-        include_raw_content: false,
+        include_raw_content: true,
         max_results: maxResults,
         include_domains: [],
         exclude_domains: [],
@@ -45,6 +46,7 @@ export async function searchTavily(query: string, maxResults: number = 5, custom
       url: item.url,
       title: item.title,
       snippet: item.content,
+      rawContent: typeof item.raw_content === "string" ? item.raw_content.slice(0, 4000) : undefined,
     }));
   } catch (error) {
     console.error("Failed to fetch from Tavily:", error);

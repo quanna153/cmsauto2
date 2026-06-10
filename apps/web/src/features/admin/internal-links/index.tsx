@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Plus, Save, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,9 +146,28 @@ export function InternalLinksFeature() {
   const [url, setUrl] = useState("");
   const [language, setLanguage] = useState<"vi" | "en">("vi");
   const [keywordLabels, setKeywordLabels] = useState("");
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryLanguage, setLibraryLanguage] = useState<"all" | "vi" | "en">("all");
+  const [libraryPage, setLibraryPage] = useState(1);
   const [importError, setImportError] = useState("");
   const [importResult, setImportResult] = useState<ArticleLibraryImportResult | null>(null);
   const parsedKeywords = parseKeywordLabels(keywordLabels);
+  const pageSize = 25;
+  const filteredArticles = useMemo(() => {
+    const articles = query.data?.articles ?? [];
+    const normalizedSearch = librarySearch.trim().toLocaleLowerCase();
+
+    return articles.filter((article) => {
+      const matchesLanguage = libraryLanguage === "all" || article.language === libraryLanguage;
+      const matchesSearch = !normalizedSearch
+        || [article.title, article.url, article.keywords.join(" ")].join(" ").toLocaleLowerCase().includes(normalizedSearch);
+
+      return matchesLanguage && matchesSearch;
+    });
+  }, [libraryLanguage, librarySearch, query.data?.articles]);
+  const pageCount = Math.max(1, Math.ceil(filteredArticles.length / pageSize));
+  const currentPage = Math.min(libraryPage, pageCount);
+  const visibleArticles = filteredArticles.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const create = useMutation({
     mutationFn: () => postJson("/article-library", {
       id: crypto.randomUUID(),
@@ -272,17 +291,52 @@ export function InternalLinksFeature() {
         ? <ErrorState message={query.error.message} />
         : !query.data?.articles.length
           ? <EmptyState description="Import article URLs and titles to seed automated internal link suggestions." title="The library is empty" />
-          : <div className="grid gap-3">
-              {query.data.articles.map((article) =>
-                <ArticleLibraryCard
-                  article={article}
-                  isPending={updateArticle.isPending}
-                  key={article.id}
-                  onRemove={() => remove.mutate(article.id)}
-                  onSave={(changes) => updateArticle.mutate({ article, changes })}
+          : <>
+              <section className="mb-4 grid gap-3 rounded-xl border bg-white p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-center">
+                <Input
+                  onChange={(event) => {
+                    setLibrarySearch(event.target.value);
+                    setLibraryPage(1);
+                  }}
+                  placeholder="Search title, URL, or keyword"
+                  value={librarySearch}
                 />
-              )}
-            </div>}
+                <Select
+                  onChange={(event) => {
+                    setLibraryLanguage(event.target.value as "all" | "vi" | "en");
+                    setLibraryPage(1);
+                  }}
+                  value={libraryLanguage}
+                >
+                  <option value="all">All languages</option>
+                  <option value="vi">Vietnamese</option>
+                  <option value="en">English</option>
+                </Select>
+                <p className="text-sm font-semibold text-[#566174] lg:text-right">
+                  {filteredArticles.length} / {query.data.articles.length} links
+                </p>
+              </section>
+              {visibleArticles.length === 0
+                ? <EmptyState description="Try another title, URL, keyword, or language filter." title="No matching links" />
+                : <div className="grid gap-3">
+                    {visibleArticles.map((article) =>
+                      <ArticleLibraryCard
+                        article={article}
+                        isPending={updateArticle.isPending}
+                        key={article.id}
+                        onRemove={() => remove.mutate(article.id)}
+                        onSave={(changes) => updateArticle.mutate({ article, changes })}
+                      />
+                    )}
+                  </div>}
+              <div className="mt-4 flex flex-col gap-3 rounded-xl border bg-white p-4 text-sm font-semibold text-[#566174] sm:flex-row sm:items-center sm:justify-between">
+                <span>Page {currentPage} of {pageCount}</span>
+                <div className="flex gap-2">
+                  <Button disabled={currentPage <= 1} onClick={() => setLibraryPage((page) => Math.max(1, page - 1))} size="sm" variant="secondary">Previous</Button>
+                  <Button disabled={currentPage >= pageCount} onClick={() => setLibraryPage((page) => Math.min(pageCount, page + 1))} size="sm" variant="secondary">Next</Button>
+                </div>
+              </div>
+            </>}
   </>;
 }
 

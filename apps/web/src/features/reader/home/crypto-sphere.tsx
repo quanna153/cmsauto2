@@ -265,8 +265,8 @@ export function CryptoSphere() {
     const atmosphere = new THREE.Mesh(
       new THREE.SphereGeometry(1.7, 96, 96),
       new THREE.MeshBasicMaterial({
-        color: 0x60a5fa,
-        opacity: 0.14,
+        color: 0xc8a227,
+        opacity: 0.16,
         side: THREE.BackSide,
         transparent: true
       })
@@ -276,11 +276,11 @@ export function CryptoSphere() {
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(1.48, 128, 128),
       new THREE.MeshStandardMaterial({
-        color: 0xdff8ee,
-        emissive: 0x6ee7b7,
-        emissiveIntensity: 0.08,
-        metalness: 0.03,
-        opacity: 0.9,
+        color: 0xf8f5eb,
+        emissive: 0xc8a227,
+        emissiveIntensity: 0.1,
+        metalness: 0.08,
+        opacity: 0.94,
         roughness: 0.7,
         transparent: true
       })
@@ -289,10 +289,10 @@ export function CryptoSphere() {
 
     let landGeometry = buildLandMassGeometry(isLandPoint);
     const landMaterial = new THREE.MeshBasicMaterial({
-      color: 0xd0d5d2,
+      color: 0x0f1115,
       depthTest: false,
       depthWrite: false,
-      opacity: 0.86,
+      opacity: 0.76,
       side: THREE.DoubleSide,
       transparent: true
     });
@@ -316,9 +316,9 @@ export function CryptoSphere() {
       });
 
     const ringMaterialA = new THREE.MeshBasicMaterial({
-      color: 0x60a5fa,
+      color: 0xc8a227,
       depthWrite: false,
-      opacity: 0.42,
+      opacity: 0.52,
       transparent: true
     });
     const ringA = new THREE.Mesh(new THREE.TorusGeometry(1.74, 0.006, 8, 220), ringMaterialA);
@@ -497,7 +497,7 @@ export function CryptoSphere() {
       onPointerEnter={() => setIsHovering(true)}
       onPointerLeave={() => setIsHovering(false)}
     >
-      <div className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(34,197,94,0.13),rgba(125,211,252,0.13)_42%,transparent_72%)] blur-2xl" />
+      <div className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(200,162,39,0.2),rgba(15,17,21,0.1)_42%,transparent_72%)] blur-2xl" />
       <canvas
         aria-label="Quả cầu địa lý 3D, có thể kéo để xoay"
         className={`absolute inset-0 h-full w-full ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
@@ -508,7 +508,7 @@ export function CryptoSphere() {
         width={700}
       />
       <div
-        className={`pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-[#22c55e]/25 bg-[#07110c]/92 px-3 py-1 text-[11px] font-semibold text-[#bbf7d0] shadow-sm transition ${
+        className={`pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-lg border border-[#C8A227]/30 bg-[#0F1115]/92 px-3 py-1 text-[11px] font-semibold text-[#F5E7B3] shadow-sm transition ${
           isDragging || isHovering ? "opacity-100" : "opacity-0"
         }`}
       >
@@ -519,7 +519,7 @@ export function CryptoSphere() {
 
         return (
           <div
-            className="pointer-events-none absolute left-0 top-0 hidden w-44 rounded-lg border border-[#d7e7dc] bg-white/96 px-3 py-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.16)] backdrop-blur transition-[opacity,transform] duration-300 md:block"
+            className="pointer-events-none absolute left-0 top-0 hidden w-44 rounded-lg border border-[#E5E7EB] bg-white/96 px-3 py-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.16)] backdrop-blur transition-[opacity,transform] duration-300 md:block"
             key={card.title}
             ref={(element) => {
               cardRefs.current[index] = element;
@@ -527,12 +527,12 @@ export function CryptoSphere() {
             style={{ opacity: index < 2 ? 1 : 0 }}
           >
             <div className="flex gap-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#07110c] text-[#22c55e]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#0F1115] text-[#F5E7B3]">
                 <Icon size={16} />
               </span>
               <span>
-                <strong className="block text-xs font-bold text-[#07110c]">{card.title}</strong>
-                <span className="mt-1 block text-[11px] leading-4 text-[#5f6b63]">{card.description}</span>
+                <strong className="block text-xs font-bold text-[#111827]">{card.title}</strong>
+                <span className="mt-1 block text-[11px] leading-4 text-[#4B5563]">{card.description}</span>
               </span>
             </div>
           </div>

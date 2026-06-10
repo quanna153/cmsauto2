@@ -3,6 +3,12 @@ import express from "express";
 import { z } from "zod";
 import { searchTavily } from "./tavily.js";
 import { articlePatchSchema } from "@cmsauto/contracts";
+import {
+  ArticleImageProviderError,
+  ArticleImageProviderNotConfiguredError,
+  articleImageHealth,
+  generateArticleImage
+} from "./article-images.js";
 import { buildClearSessionCookie, buildSessionCookie, parseCookies, sessionCookieName } from "./auth.js";
 import {
   authenticateUser,
@@ -24,7 +30,6 @@ import {
   buildDraft,
   buildInternalLinkMappingCsv,
   buildInternalLinkSuggestionsFromAnchorCandidates,
-  buildKeywordIdeas,
   buildOutline,
   findInternalLinkAnchorCandidates,
   mapAnchorCandidatesToInternalLinks,
@@ -91,7 +96,13 @@ function getApiConfigFromHeaders(request: express.Request) {
       apiKey: request.headers["x-gemini-api-key"] as string | undefined
     },
     tavilyApiKey: request.headers["x-tavily-api-key"] as string | undefined,
-    semrushToken: (request.headers["x-semrush-proxy-token"] as string | undefined) ?? process.env.SEMRUSH_PROXY_TOKEN
+    semrushToken: (request.headers["x-semrush-proxy-token"] as string | undefined) ?? process.env.SEMRUSH_PROXY_TOKEN,
+    imageConfig: {
+      provider: request.headers["x-image-generation-provider"] as string | undefined,
+      model: request.headers["x-image-generation-model"] as string | undefined,
+      apiKey: request.headers["x-image-generation-api-key"] as string | undefined,
+      proxyToken: request.headers["x-image-generation-proxy-token"] as string | undefined
+    }
   };
 }
 
@@ -100,21 +111,68 @@ type AuthenticatedRequest = express.Request & {
 };
 
 const languageSchema = z.enum(["vi", "en"]);
+const competitorPageSchema = z.object({
+  keyword: z.string(),
+  url: z.string(),
+  title: z.string(),
+  snippet: z.string(),
+  rawContent: z.string().optional()
+});
+const competitorInsightSchema = z.object({
+  rank: z.number().int().positive(),
+  keyword: z.string(),
+  url: z.string(),
+  title: z.string(),
+  contentSummary: z.string(),
+  seoIntent: z.string(),
+  outlinePattern: z.string(),
+  strengths: z.array(z.string()),
+  gaps: z.array(z.string()),
+  recommendedTakeaway: z.string()
+});
 const briefSchema = z.object({
   searchIntent: z.string(),
   angle: z.string(),
   semanticTopics: z.array(z.string()),
   candidateFaqs: z.array(z.string()),
-  competitorPages: z.array(z.any()).optional()
+  competitorPages: z.array(competitorPageSchema).optional(),
+  competitorInsights: z.array(competitorInsightSchema).optional()
 });
 const outlineSectionSchema = z.object({
   heading: z.string(),
   bullets: z.array(z.string())
 });
+const keywordCoverageSchema = z.object({
+  keyword: z.string(),
+  monthlyVolume: z.number().nullable(),
+  intent: z.enum(["informational", "commercial", "comparison", "transactional"]),
+  placement: z.string()
+});
 const outlineSchema = z.object({
   title: z.string(),
   introDirection: z.string(),
-  sections: z.array(outlineSectionSchema)
+  sections: z.array(outlineSectionSchema),
+  keywordCoverage: z.array(keywordCoverageSchema).optional()
+});
+const articleImageKindSchema = z.enum(["hero", "inline", "thumbnail"]);
+const articleImageAspectRatioSchema = z.enum(["16:9", "4:3", "1:1", "3:4"]);
+const generatedArticleImageSchema = z.object({
+  id: z.string(),
+  kind: articleImageKindSchema,
+  provider: z.string(),
+  model: z.string(),
+  status: z.enum(["planned", "generated", "failed"]),
+  prompt: z.string(),
+  revisedPrompt: z.string().optional(),
+  url: z.string().optional(),
+  base64: z.string().optional(),
+  mimeType: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  aspectRatio: articleImageAspectRatioSchema,
+  altText: z.string(),
+  caption: z.string().optional(),
+  createdAt: z.string()
 });
 const draftSchema = z.object({
   title: z.string(),
@@ -122,7 +180,8 @@ const draftSchema = z.object({
   excerpt: z.string(),
   metaTitle: z.string(),
   metaDescription: z.string(),
-  markdown: z.string()
+  markdown: z.string(),
+  generatedImages: z.array(generatedArticleImageSchema).optional()
 });
 const suggestionSchema: z.ZodType<InternalLinkSuggestion> = z.object({
   id: z.string(),
@@ -252,9 +311,42 @@ const briefResponseJsonSchema = {
           maxItems: 8,
           items: { type: "string" },
           description: "Danh sách câu hỏi FAQ ngắn gọn."
+        },
+        competitorInsights: {
+          type: "array",
+          minItems: 1,
+          maxItems: 10,
+          description: "Một insight SEO cho từng bài trong Top 10 đối thủ của từ khóa chính.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              rank: { type: "integer", minimum: 1, maximum: 10 },
+              keyword: { type: "string" },
+              url: { type: "string" },
+              title: { type: "string" },
+              contentSummary: { type: "string", description: "Tóm tắt nội dung/cách triển khai của bài đối thủ." },
+              seoIntent: { type: "string", description: "Intent SEO mà bài đối thủ đang phục vụ." },
+              outlinePattern: { type: "string", description: "Cách bài đối thủ tổ chức heading/luồng trình bày." },
+              strengths: {
+                type: "array",
+                minItems: 1,
+                maxItems: 4,
+                items: { type: "string" }
+              },
+              gaps: {
+                type: "array",
+                minItems: 1,
+                maxItems: 4,
+                items: { type: "string" }
+              },
+              recommendedTakeaway: { type: "string", description: "Điểm nên kế thừa hoặc cải thiện khi viết bài mới." }
+            },
+            required: ["rank", "keyword", "url", "title", "contentSummary", "seoIntent", "outlinePattern", "strengths", "gaps", "recommendedTakeaway"]
+          }
         }
       },
-      required: ["searchIntent", "angle", "semanticTopics", "candidateFaqs"]
+      required: ["searchIntent", "angle", "semanticTopics", "candidateFaqs", "competitorInsights"]
     }
   },
   required: ["brief"]
@@ -272,7 +364,7 @@ const outlineResponseJsonSchema = {
         sections: {
           type: "array",
           minItems: 4,
-          maxItems: 7,
+          maxItems: 10,
           items: {
             type: "object",
             additionalProperties: false,
@@ -288,9 +380,29 @@ const outlineResponseJsonSchema = {
             },
             required: ["heading", "bullets"]
           }
+        },
+        keywordCoverage: {
+          type: "array",
+          minItems: 1,
+          maxItems: 8,
+          description: "Danh sách từ khóa chính/phụ và vị trí nên phủ trong outline.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              keyword: { type: "string" },
+              monthlyVolume: { type: ["number", "null"] },
+              intent: {
+                type: "string",
+                enum: ["informational", "commercial", "comparison", "transactional"]
+              },
+              placement: { type: "string", description: "Section/heading/bullet nơi từ khóa này được xử lý." }
+            },
+            required: ["keyword", "monthlyVolume", "intent", "placement"]
+          }
         }
       },
-      required: ["title", "introDirection", "sections"]
+      required: ["title", "introDirection", "sections", "keywordCoverage"]
     }
   },
   required: ["outline"]
@@ -357,15 +469,175 @@ const keywordRequestSchema = z.object({
   prompt: z.string().min(1),
   semrushToken: z.string().optional()
 });
+const keywordIdeaInputSchema = z.object({
+  id: z.string(),
+  keyword: z.string().min(1),
+  intent: z.enum(["informational", "commercial", "comparison", "transactional"]),
+  cluster: z.string().min(1),
+  monthlyVolume: z.number().nullable().optional(),
+  provider: z.string().optional(),
+  checkedAt: z.string().nullable().optional(),
+  status: z.enum(["verified", "missing", "failed"]).optional()
+});
 const keywordIdeasRefreshSchema = z.object({
   language: languageSchema,
-  keywordIdeas: z.array(z.object({
-    id: z.string(),
-    keyword: z.string().min(1),
-    intent: z.enum(["informational", "commercial", "comparison", "transactional"]),
-    cluster: z.string().min(1)
-  })).min(1)
+  keywordIdeas: z.array(keywordIdeaInputSchema).min(1)
 });
+
+function trimForPrompt(value: string | undefined, maxLength = 4000) {
+  const text = value?.trim() ?? "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function formatCompetitorPagesForPrompt(pages: Array<z.infer<typeof competitorPageSchema>>) {
+  return pages
+    .map((page, index) => [
+      `${index + 1}. [Từ khóa: ${page.keyword}] Title: ${page.title}`,
+      `   URL: ${page.url}`,
+      `   Snippet: ${trimForPrompt(page.snippet, 900)}`,
+      page.rawContent ? `   Content: ${trimForPrompt(page.rawContent, 2500)}` : null
+    ].filter(Boolean).join("\n"))
+    .join("\n\n");
+}
+
+function normalizeKeywordIdeaInput(
+  idea: z.infer<typeof keywordIdeaInputSchema>
+): KeywordIdea {
+  return {
+    id: idea.id,
+    keyword: idea.keyword,
+    intent: idea.intent,
+    cluster: idea.cluster,
+    monthlyVolume: idea.monthlyVolume ?? null,
+    provider: idea.provider ?? "Semrush",
+    checkedAt: idea.checkedAt ?? null,
+    status: idea.status ?? "missing"
+  };
+}
+
+function buildKeywordPlanForOutline(
+  primaryKeyword: string,
+  secondaryKeywords: string[],
+  keywordIdeas?: Array<z.infer<typeof keywordIdeaInputSchema>>
+) {
+  const normalizedIdeas = (keywordIdeas ?? []).map(normalizeKeywordIdeaInput);
+  const fallbackKeywords = [primaryKeyword, ...secondaryKeywords].map((keyword, index) => ({
+    id: keyword.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    keyword,
+    intent: "informational" as const,
+    cluster: index === 0 ? "primary" : "secondary",
+    monthlyVolume: null,
+    provider: "unknown",
+    checkedAt: null,
+    status: "missing" as const
+  }));
+
+  const ideas = normalizedIdeas.length > 0 ? normalizedIdeas : fallbackKeywords;
+  const uniqueIdeas = new Map<string, KeywordIdea>();
+  for (const idea of ideas) {
+    const key = idea.keyword.toLowerCase();
+    if (!uniqueIdeas.has(key)) {
+      uniqueIdeas.set(key, idea);
+    }
+  }
+
+  return Array.from(uniqueIdeas.values()).map((idea, index) => ({
+    ...idea,
+    role: index === 0 || idea.keyword.toLowerCase() === primaryKeyword.toLowerCase() ? "primary" : "secondary"
+  }));
+}
+
+function formatKeywordPlanForPrompt(keywordPlan: ReturnType<typeof buildKeywordPlanForOutline>) {
+  return keywordPlan
+    .map((idea, index) => [
+      `${index + 1}. ${idea.role.toUpperCase()}: ${idea.keyword}`,
+      `   intent: ${idea.intent}`,
+      `   cluster: ${idea.cluster}`,
+      `   volume: ${idea.monthlyVolume ?? "missing"}`,
+      `   provider: ${idea.provider}`,
+      `   status: ${idea.status}`
+    ].join("\n"))
+    .join("\n\n");
+}
+
+function formatCompetitorInsightsForPrompt(insights: NonNullable<z.infer<typeof briefSchema>["competitorInsights"]>) {
+  return insights
+    .map((insight) => [
+      `${insight.rank}. ${insight.title}`,
+      `   keyword: ${insight.keyword}`,
+      `   url: ${insight.url}`,
+      `   summary: ${insight.contentSummary}`,
+      `   seoIntent: ${insight.seoIntent}`,
+      `   outlinePattern: ${insight.outlinePattern}`,
+      `   strengths: ${insight.strengths.join(" | ")}`,
+      `   gaps: ${insight.gaps.join(" | ")}`,
+      `   takeaway: ${insight.recommendedTakeaway}`
+    ].join("\n"))
+    .join("\n\n");
+}
+
+function ensureCompetitorInsights(
+  pages: Array<z.infer<typeof competitorPageSchema>>,
+  insights: NonNullable<z.infer<typeof briefSchema>["competitorInsights"]> | undefined,
+  primaryKeyword: string
+) {
+  const byUrl = new Map((insights ?? []).map((insight) => [insight.url, insight]));
+  const byRank = new Map((insights ?? []).map((insight) => [insight.rank, insight]));
+
+  return pages.slice(0, 10).map((page, index) => {
+    const rank = index + 1;
+    const existing = byUrl.get(page.url) ?? byRank.get(rank);
+    if (existing) {
+      return { ...existing, rank, keyword: existing.keyword || primaryKeyword };
+    }
+
+    const sourceText = trimForPrompt(page.rawContent || page.snippet, 650);
+    return {
+      rank,
+      keyword: primaryKeyword,
+      url: page.url,
+      title: page.title,
+      contentSummary: sourceText || `Competitor page covering ${primaryKeyword}.`,
+      seoIntent: `Informational page targeting ${primaryKeyword}.`,
+      outlinePattern: "Use the title and available content summary to infer the page's explanation flow, then compare it with other top results.",
+      strengths: ["Covers a top-ranking angle for the primary keyword."],
+      gaps: ["Requires synthesis with the other top results to find a stronger original angle."],
+      recommendedTakeaway: "Use this result as one SERP reference point when shaping the final outline."
+    };
+  });
+}
+
+function cleanGeneratedOutlineText(value: string) {
+  const hasSelfCorrection = /self-correction|the schema|schema says|i will|no, the/i.test(value);
+  if (!hasSelfCorrection) {
+    return value.trim();
+  }
+
+  return value
+    .split(/\s+(?:The schema|schema says|I will|No, the|\(Self-correction)/i)[0]
+    ?.trim()
+    .replace(/\s+\($/, "")
+    || value.trim();
+}
+
+function sanitizeOutline(outline: z.infer<typeof outlineSchema>) {
+  return {
+    ...outline,
+    title: cleanGeneratedOutlineText(outline.title),
+    introDirection: cleanGeneratedOutlineText(outline.introDirection),
+    sections: outline.sections.map((section) => ({
+      heading: cleanGeneratedOutlineText(section.heading),
+      bullets: section.bullets
+        .map(cleanGeneratedOutlineText)
+        .filter((bullet) => bullet.length > 0)
+    })),
+    keywordCoverage: outline.keywordCoverage?.map((item) => ({
+      ...item,
+      placement: cleanGeneratedOutlineText(item.placement)
+    }))
+  };
+}
+
 const briefRequestSchema = z.object({
   primaryKeyword: z.string().min(1),
   secondaryKeywords: z.array(z.string()).min(1),
@@ -377,7 +649,8 @@ const outlineRequestSchema = z.object({
   secondaryKeywords: z.array(z.string()).min(1),
   language: languageSchema,
   prompt: z.string().min(1),
-  brief: briefSchema
+  brief: briefSchema,
+  keywordIdeas: z.array(keywordIdeaInputSchema).optional()
 });
 const draftRequestSchema = z.object({
   primaryKeyword: z.string().min(1),
@@ -385,6 +658,19 @@ const draftRequestSchema = z.object({
   language: languageSchema,
   prompt: z.string().min(1),
   outline: outlineSchema
+});
+const articleImageRequestSchema = z.object({
+  primaryKeyword: z.string().min(1),
+  secondaryKeywords: z.array(z.string()).default([]),
+  language: languageSchema,
+  title: z.string().optional(),
+  excerpt: z.string().optional(),
+  prompt: z.string().optional(),
+  kind: articleImageKindSchema.default("hero"),
+  aspectRatio: articleImageAspectRatioSchema.default("16:9"),
+  stylePreset: z.string().optional(),
+  outline: outlineSchema.optional(),
+  draft: draftSchema.optional()
 });
 const linksRequestSchema = z.object({
   primaryKeyword: z.string().min(1),
@@ -575,12 +861,15 @@ app.post("/api/session/login", async (request, response, next) => {
 
 app.get("/api/health", (_request, response) => {
   const volumeHealth = keywordVolumeHealth();
+  const imageHealth = articleImageHealth();
   response.json({
     ok: true,
     service: "cms-auto-v3-backend",
     aiMode: hasGeminiConfig() ? "gemini" : "local",
     volumeProvider: volumeHealth.activeProvider,
     volumeProviderConfigured: volumeHealth.configured,
+    imageProvider: imageHealth.provider,
+    imageProviderConfigured: imageHealth.configured,
     timestamp: new Date().toISOString()
   });
 });
@@ -1167,17 +1456,10 @@ app.post("/api/brief/generate", async (request, response, next) => {
     const payload = briefRequestSchema.parse(request.body);
     const { customConfig, tavilyApiKey } = getApiConfigFromHeaders(request);
     
-    // Fetch competitor pages in parallel
-    const [primaryResults, ...secondaryResultsList] = await Promise.all([
-      searchTavily(payload.primaryKeyword, 10, tavilyApiKey),
-      ...payload.secondaryKeywords.map((kw) => searchTavily(kw, 3, tavilyApiKey)),
-    ]);
-
-    const competitorPages = [...primaryResults, ...secondaryResultsList.flat()];
-
-    const competitorDataString = competitorPages
-      .map((p, index) => `${index + 1}. [Từ khóa: ${p.keyword}] Title: ${p.title}\n   URL: ${p.url}\n   Snippet: ${p.snippet}`)
-      .join("\n\n");
+    const primaryResults = await searchTavily(payload.primaryKeyword, 10, tavilyApiKey);
+    const competitorPages = primaryResults;
+    const topPrimaryCompetitors = primaryResults.slice(0, 10);
+    const competitorDataString = formatCompetitorPagesForPrompt(topPrimaryCompetitors);
 
     let brief = buildBrief(payload.primaryKeyword, payload.secondaryKeywords, payload.language);
     brief.competitorPages = competitorPages;
@@ -1202,7 +1484,21 @@ app.post("/api/brief/generate", async (request, response, next) => {
             searchIntent: "string",
             angle: "string",
             semanticTopics: ["string"],
-            candidateFaqs: ["string"]
+            candidateFaqs: ["string"],
+            competitorInsights: [
+              {
+                rank: 1,
+                keyword: "string",
+                url: "string",
+                title: "string",
+                contentSummary: "string",
+                seoIntent: "string",
+                outlinePattern: "string",
+                strengths: ["string"],
+                gaps: ["string"],
+                recommendedTakeaway: "string"
+              }
+            ]
           }
         }, null, 2),
         responseJsonSchema: briefResponseJsonSchema,
@@ -1216,6 +1512,16 @@ app.post("/api/brief/generate", async (request, response, next) => {
         competitorPages
       };
     }
+
+    brief = {
+      ...brief,
+      competitorPages,
+      competitorInsights: ensureCompetitorInsights(
+        topPrimaryCompetitors,
+        brief.competitorInsights,
+        payload.primaryKeyword
+      )
+    };
 
     const record = await appendHistory("brief", payload, {
       mode: hasGeminiConfig(customConfig) ? "gemini" : "local",
@@ -1239,9 +1545,15 @@ app.post("/api/outline/generate", async (request, response, next) => {
     );
 
     const competitorPages = payload.brief.competitorPages || [];
-    const competitorDataString = competitorPages
-      .map((p: any, index: number) => `${index + 1}. [Từ khóa: ${p.keyword}] Title: ${p.title}\n   URL: ${p.url}\n   Snippet: ${p.snippet}`)
-      .join("\n\n");
+    const competitorInsights = payload.brief.competitorInsights || [];
+    const keywordPlan = buildKeywordPlanForOutline(
+      payload.primaryKeyword,
+      payload.secondaryKeywords,
+      payload.keywordIdeas
+    );
+    const competitorDataString = formatCompetitorPagesForPrompt(competitorPages.filter((page) => page.keyword === payload.primaryKeyword).slice(0, 10));
+    const keywordPlanString = formatKeywordPlanForPrompt(keywordPlan);
+    const competitorInsightsString = formatCompetitorInsightsForPrompt(competitorInsights);
 
     if (hasGeminiConfig(customConfig)) {
       const aiResult = await generateStructuredJson({
@@ -1252,6 +1564,8 @@ app.post("/api/outline/generate", async (request, response, next) => {
           secondary_keywords: payload.secondaryKeywords.join(", "),
           language: payload.language,
           competitor_data: competitorDataString,
+          keyword_plan: keywordPlanString,
+          competitor_insights: competitorInsightsString,
           search_intent: payload.brief.searchIntent,
           angle: payload.brief.angle,
           semantic_topics: payload.brief.semanticTopics.join(", "),
@@ -1261,6 +1575,8 @@ app.post("/api/outline/generate", async (request, response, next) => {
         contextLines: [
           `Từ khóa chính: ${payload.primaryKeyword}`,
           `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
+          `Keyword plan có volume:\n${keywordPlanString}`,
+          `10 insight đối thủ:\n${competitorInsightsString}`,
           `Ngôn ngữ: ${payload.language}`,
           `Search intent: ${payload.brief.searchIntent}`,
           `Góc bài: ${payload.brief.angle}`,
@@ -1276,6 +1592,14 @@ app.post("/api/outline/generate", async (request, response, next) => {
                 heading: "string",
                 bullets: ["string"]
               }
+            ],
+            keywordCoverage: [
+              {
+                keyword: "string",
+                monthlyVolume: 100,
+                intent: "informational | commercial | comparison | transactional",
+                placement: "string"
+              }
             ]
           }
         }, null, 2),
@@ -1285,7 +1609,7 @@ app.post("/api/outline/generate", async (request, response, next) => {
         customConfig
       });
 
-      outline = aiResult.outline;
+      outline = sanitizeOutline(aiResult.outline);
     }
 
     const record = await appendHistory("outline", payload, {
@@ -1357,6 +1681,26 @@ app.post("/api/draft/generate", async (request, response, next) => {
     }, getAuth(request).user.id);
     response.json({ draft, recordId: record.id });
   } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/article-images/generate", async (request, response, next) => {
+  try {
+    const payload = articleImageRequestSchema.parse(request.body);
+    const { imageConfig } = getApiConfigFromHeaders(request);
+    const image = await generateArticleImage(payload, imageConfig);
+    const record = await appendHistory("image", payload, {
+      mode: image.provider,
+      image
+    }, getAuth(request).user.id);
+
+    response.json({ image, recordId: record.id });
+  } catch (error) {
+    if (error instanceof ArticleImageProviderNotConfiguredError || error instanceof ArticleImageProviderError) {
+      response.status(error.statusCode).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 });

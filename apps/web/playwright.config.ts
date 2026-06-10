@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL ?? "chrome";
+
 export default defineConfig({
   testDir: "./e2e",
   webServer: {
@@ -8,7 +10,8 @@ export default defineConfig({
     reuseExistingServer: true
   },
   use: {
-    baseURL: "http://127.0.0.1:5173"
+    baseURL: "http://127.0.0.1:5173",
+    channel: browserChannel
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },

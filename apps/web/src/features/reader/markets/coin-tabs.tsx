@@ -18,12 +18,12 @@ export function CoinTabs({ coins, selectedCoin, onSelect }: { coins: Coin[]; sel
   }, [coins, query]);
 
   return (
-    <section className="rounded-xl border bg-white p-4">
+    <section className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
       <label className="text-sm font-semibold" htmlFor="coin-search">
         Tìm coin
       </label>
       <div className="relative mt-2">
-        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#687386]" size={17} />
+        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#4B5563]" size={17} />
         <Input
           className="pl-9"
           id="coin-search"
@@ -38,8 +38,8 @@ export function CoinTabs({ coins, selectedCoin, onSelect }: { coins: Coin[]; sel
           return (
             <button
               className={cn(
-                "flex min-h-14 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:border-[#a88412] hover:bg-[#fbf5dc]",
-                active ? "border-[#a88412] bg-[#fbf5dc] text-[#80640b]" : "bg-white text-[#273247]"
+                "flex min-h-14 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition hover:border-[#C8A227] hover:bg-[#FAFAF7]",
+                active ? "border-[#C8A227] bg-[#F5E7B3]/45 text-[#A88412]" : "bg-white text-[#111827]"
               )}
               key={coin.symbol}
               onClick={() => onSelect(coin)}
@@ -47,13 +47,13 @@ export function CoinTabs({ coins, selectedCoin, onSelect }: { coins: Coin[]; sel
             >
               <span>
                 <span className="block font-bold">{coin.symbol}</span>
-                <span className="line-clamp-1 text-xs text-[#687386]">{coin.name}</span>
+                <span className="line-clamp-1 text-xs text-[#4B5563]">{coin.name}</span>
               </span>
             </button>
           );
         })}
       </Tabs>
-      {filteredCoins.length === 0 ? <p className="mt-4 rounded-lg bg-[#f1f2ee] p-3 text-sm text-[#687386]">Không tìm thấy coin phù hợp.</p> : null}
+      {filteredCoins.length === 0 ? <p className="mt-4 rounded-lg bg-[#FAFAF7] p-3 text-sm text-[#4B5563]">Không tìm thấy coin phù hợp.</p> : null}
     </section>
   );
 }

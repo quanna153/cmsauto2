@@ -5,6 +5,10 @@ import { ArrowRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { publicApiUrl } from "@/lib/api";
+
+import { TradingViewChart } from "../markets/trading-view-chart";
+
 type TradeCoin = {
   name: string;
   symbol: string;
@@ -13,10 +17,10 @@ type TradeCoin = {
   change: number;
 };
 
-type BinanceTicker = {
-  symbol: string;
-  lastPrice: string;
-  priceChangePercent: string;
+type MarketTicker = {
+  pair: string;
+  price: number;
+  changePercent: number;
 };
 
 const tradeCoins: TradeCoin[] = [
@@ -43,23 +47,6 @@ function formatPrice(price: number) {
   });
 }
 
-function buildTradingViewSrc(pair: string) {
-  const params = new URLSearchParams({
-    symbol: `BINANCE:${pair}`,
-    interval: "60",
-    timezone: "Asia/Ho_Chi_Minh",
-    theme: "light",
-    style: "1",
-    locale: "vi",
-    hide_side_toolbar: "1",
-    allow_symbol_change: "0",
-    save_image: "0",
-    studies: "Volume@tv-basicstudies"
-  });
-
-  return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
-}
-
 function coinIconUrl(symbol: string) {
   return `https://assets.coincap.io/assets/icons/${symbol.toLowerCase()}@2x.png`;
 }
@@ -83,7 +70,7 @@ function CoinLogo({ symbol, size = "sm" }: { symbol: string; size?: "sm" | "md" 
         }}
         src={coinIconUrl(symbol)}
       />
-      <span className={`hidden h-full w-full items-center justify-center rounded-full bg-[#03130b] ${textSize} font-black text-[#22c55e]`}>
+      <span className={`hidden h-full w-full items-center justify-center rounded-full bg-[#0F1115] ${textSize} font-black text-[#F5E7B3]`}>
         {symbol.slice(0, 1)}
       </span>
     </span>
@@ -100,28 +87,28 @@ export function HomeTradeSection({ locale }: { locale: Locale }) {
 
     async function loadPrices() {
       try {
-        const symbols = encodeURIComponent(JSON.stringify(Array.from(new Set(tradeCoins.map((coin) => coin.pair)))));
-        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${symbols}`);
+        const pairs = Array.from(new Set(tradeCoins.map((coin) => coin.pair))).join(",");
+        const response = await fetch(publicApiUrl(`/public/markets/tickers?pairs=${encodeURIComponent(pairs)}`));
         if (!response.ok) {
           return;
         }
 
-        const payload = (await response.json()) as BinanceTicker[];
+        const payload = (await response.json()) as { tickers: MarketTicker[] };
         if (cancelled) {
           return;
         }
 
         setCoins((current) =>
           current.map((coin) => {
-            const live = payload.find((item) => item.symbol === coin.pair);
+            const live = payload.tickers.find((item) => item.pair === coin.pair);
             if (!live) {
               return coin;
             }
 
             return {
               ...coin,
-              change: Number(live.priceChangePercent),
-              price: Number(live.lastPrice)
+              change: live.changePercent,
+              price: live.price
             };
           })
         );
@@ -153,26 +140,26 @@ export function HomeTradeSection({ locale }: { locale: Locale }) {
     <section className="mx-auto max-w-7xl px-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#047857]">Trade</p>
-          <h2 className="mt-2 text-2xl font-medium tracking-tight text-[#07110c] md:text-3xl">Biểu đồ giá coin theo thời gian thực</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#A88412]">Trade</p>
+          <h2 className="mt-2 text-2xl font-medium tracking-tight text-[#111827] md:text-3xl">Biểu đồ giá coin theo thời gian thực</h2>
         </div>
-        <Link className="inline-flex items-center gap-2 text-sm font-medium text-[#047857] transition hover:text-[#07110c]" href={href(locale, "/markets")}>
+        <Link className="inline-flex items-center gap-2 text-sm font-medium text-[#A88412] transition hover:text-[#111827]" href={href(locale, "/markets")}>
           Mở trang thị trường <ArrowRight size={16} />
         </Link>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <article className="rounded-lg border border-[#d7e7dc] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
+        <article className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="flex items-center gap-4">
               <CoinLogo size="md" symbol={selectedCoin.symbol} />
               <div>
-                <p className="text-sm font-medium text-[#5f6b63]">
+                <p className="text-sm font-medium text-[#4B5563]">
                   {selectedCoin.name} {selectedCoin.symbol}
                 </p>
-                <h3 className="text-2xl font-semibold tracking-tight text-[#07110c]">${formatPrice(selectedCoin.price)}</h3>
+                <h3 className="text-2xl font-semibold tracking-tight text-[#111827]">${formatPrice(selectedCoin.price)}</h3>
               </div>
             </div>
-            <span className={`text-sm font-semibold ${selectedCoin.change >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"}`}>
+            <span className={`text-sm font-semibold ${selectedCoin.change >= 0 ? "text-[#15803D]" : "text-[#dc2626]"}`}>
               {selectedCoin.change >= 0 ? "+" : ""}
               {selectedCoin.change.toFixed(2)}%
             </span>
@@ -180,8 +167,8 @@ export function HomeTradeSection({ locale }: { locale: Locale }) {
           <div className="mb-3 flex flex-wrap gap-2">
             {["1D", "7D", "30D", "1Y", "All"].map((item, index) => (
               <button
-                className={`h-8 rounded-full px-3.5 text-sm font-medium transition ${
-                  index === 0 ? "bg-[#16a34a] text-white" : "bg-[#f1f5f2] text-[#5f6b63] hover:bg-[#dcfce7] hover:text-[#07110c]"
+                className={`h-8 rounded-lg px-3.5 text-sm font-medium transition ${
+                  index === 0 ? "bg-[#C8A227] text-[#0F1115]" : "bg-[#FAFAF7] text-[#4B5563] hover:bg-[#F5E7B3] hover:text-[#111827]"
                 }`}
                 key={item}
                 type="button"
@@ -190,22 +177,39 @@ export function HomeTradeSection({ locale }: { locale: Locale }) {
               </button>
             ))}
           </div>
-          <iframe
-            className="h-[22rem] w-full rounded-lg border border-[#d7e7dc] bg-white md:h-[27rem]"
-            loading="lazy"
-            src={buildTradingViewSrc(selectedCoin.pair)}
-            title={`${selectedCoin.symbol} TradingView chart`}
-          />
+          <div className="relative overflow-hidden rounded-lg">
+            <TradingViewChart heightClass="h-[22rem] md:h-[27rem]" symbol={`BINANCE:${selectedCoin.pair}`} />
+            <div className="pointer-events-none absolute inset-0 p-4">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5E7B3]/80">
+                <span>Live preview</span>
+                <span>{selectedCoin.symbol}/USDT</span>
+              </div>
+              <svg aria-hidden="true" className="mt-7 h-[70%] w-full opacity-60" preserveAspectRatio="none" viewBox="0 0 640 260">
+                <defs>
+                  <linearGradient id="home-trading-preview-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#C8A227" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#C8A227" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <g stroke="#F5E7B3" strokeOpacity="0.12" strokeWidth="1">
+                  {[52, 104, 156, 208].map((y) => <line key={y} x1="0" x2="640" y1={y} y2={y} />)}
+                  {[80, 160, 240, 320, 400, 480, 560].map((x) => <line key={x} x1={x} x2={x} y1="0" y2="260" />)}
+                </g>
+                <path d="M0 218 C52 198 88 226 138 174 C188 118 232 142 284 108 C350 66 408 92 468 54 C536 12 590 34 640 22 L640 260 L0 260 Z" fill="url(#home-trading-preview-fill)" />
+                <path d="M0 218 C52 198 88 226 138 174 C188 118 232 142 284 108 C350 66 408 92 468 54 C536 12 590 34 640 22" fill="none" stroke="#C8A227" strokeLinecap="round" strokeWidth="4" />
+              </svg>
+            </div>
+          </div>
         </article>
 
-        <aside className="rounded-lg border border-[#d7e7dc] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
-          <label className="text-sm font-medium text-[#07110c]" htmlFor="home-coin-search">
+        <aside className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
+          <label className="text-sm font-medium text-[#111827]" htmlFor="home-coin-search">
             Chọn coin
           </label>
           <div className="relative mt-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5f6b63]" size={17} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#4B5563]" size={17} />
             <input
-              className="h-11 w-full rounded-lg border border-[#d7e7dc] bg-white pl-10 pr-3 text-sm outline-none transition placeholder:text-[#5f6b63]/70 focus:border-[#16a34a] focus:ring-4 focus:ring-[#22c55e]/10"
+              className="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white pl-10 pr-3 text-sm outline-none transition placeholder:text-[#4B5563]/70 focus:border-[#C8A227] focus:ring-4 focus:ring-[#C8A227]/15"
               id="home-coin-search"
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Tìm coin..."
@@ -219,20 +223,20 @@ export function HomeTradeSection({ locale }: { locale: Locale }) {
               return (
                 <button
                   className={`grid w-full grid-cols-[1.8rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-3 py-2 text-left transition ${
-                    active ? "bg-[#e8f8ee]" : "hover:bg-[#f4fbf6]"
+                    active ? "bg-[#F5E7B3]/45" : "hover:bg-[#FAFAF7]"
                   }`}
                   key={coin.symbol}
                   onClick={() => setSelectedSymbol(coin.symbol)}
                   role="listitem"
                   type="button"
                 >
-                  <span className="text-sm font-semibold text-[#5f6b63]">{index + 1}</span>
+                  <span className="text-sm font-semibold text-[#4B5563]">{index + 1}</span>
                   <CoinLogo symbol={coin.symbol} />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-[#07110c]">{coin.name}</span>
-                    <span className="block text-xs text-[#5f6b63]">{coin.symbol}</span>
+                    <span className="block truncate text-sm font-medium text-[#111827]">{coin.name}</span>
+                    <span className="block text-xs text-[#4B5563]">{coin.symbol}</span>
                   </span>
-                  <span className={`text-xs font-semibold ${coin.change >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"}`}>
+                  <span className={`text-xs font-semibold ${coin.change >= 0 ? "text-[#15803D]" : "text-[#dc2626]"}`}>
                     {coin.change >= 0 ? "+" : ""}
                     {coin.change.toFixed(2)}%
                   </span>

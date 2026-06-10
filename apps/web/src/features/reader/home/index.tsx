@@ -30,19 +30,19 @@ const knowledgeStories = [
     title: "Bitcoin Halving tác động đến nguồn cung BTC và giá Bitcoin như thế nào?",
     excerpt: "Giải thích chu kỳ Halving, cơ chế giảm phát hành và cách nhà đầu tư Việt theo dõi các giai đoạn trước, trong và sau sự kiện.",
     motif: "HALVING",
-    tone: "from-[#03130b] via-[#0f3a23] to-[#16a34a]"
+    tone: "from-[#0F1115] via-[#2B2413] to-[#C8A227]"
   },
   {
     title: "Tổng quan về Bitcoin: kiến thức nền tảng trước khi đọc biểu đồ",
     excerpt: "Nắm cách mạng lưới vận hành, vai trò miner và những yếu tố thường ảnh hưởng đến dòng tiền.",
     motif: "BTC",
-    tone: "from-[#07110c] via-[#123522] to-[#0ea55a]"
+    tone: "from-[#111827] via-[#2B2413] to-[#C8A227]"
   },
   {
     title: "Whitepaper Crypto là gì? Cách đọc trước khi đánh giá dự án",
     excerpt: "Nhìn nhanh tokenomics, roadmap, đội ngũ và những tín hiệu cần kiểm chứng.",
     motif: "DOC",
-    tone: "from-[#0b1a12] via-[#064e3b] to-[#22c55e]"
+    tone: "from-[#111827] via-[#2B2413] to-[#C8A227]"
   }
 ];
 
@@ -140,10 +140,10 @@ function mapHotPosts(articles: ReaderArticle[]): SidebarPost[] {
 
 function FeatureSpotlight({ article }: { article: FeatureArticle }) {
   return (
-    <article className="overflow-hidden rounded-lg border border-[#d7e7dc] bg-white shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
-      <div className="relative overflow-hidden bg-[#03130b] px-6 py-7 text-white md:px-8 md:py-9">
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-2/5 bg-[radial-gradient(circle_at_60%_35%,rgba(34,197,94,0.22),transparent_48%)]" />
-        <span className="relative inline-flex rounded-full border border-[#86efac]/70 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-[#86efac]">
+    <article className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
+      <div className="relative overflow-hidden bg-[#0F1115] px-6 py-7 text-white md:px-8 md:py-9">
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-2/5 bg-[radial-gradient(circle_at_60%_35%,rgba(200,162,39,0.24),transparent_48%)]" />
+        <span className="relative inline-flex rounded-lg border border-[#F5E7B3]/70 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.18em] text-[#F5E7B3]">
           Tiêu điểm
         </span>
         <p className="relative mt-7 text-sm font-normal text-white/62">Thị trường · Phân tích</p>
@@ -163,9 +163,9 @@ function FeatureSpotlight({ article }: { article: FeatureArticle }) {
         </div>
       </div>
       <div className="grid gap-5 px-6 py-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <p className="text-sm leading-7 text-[#5f6b63] md:text-base">{article.excerpt}</p>
+        <p className="text-sm leading-7 text-[#4B5563] md:text-base">{article.excerpt}</p>
         <Link
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#16a34a] px-6 text-sm font-medium text-white transition hover:bg-[#03130b]"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#C8A227] px-6 text-sm font-bold text-[#0F1115] transition hover:bg-[#0F1115] hover:text-white"
           href={article.href}
         >
           Đọc đầy đủ <ArrowRight size={17} />
@@ -177,28 +177,28 @@ function FeatureSpotlight({ article }: { article: FeatureArticle }) {
 
 function HotNewsPanel({ posts, locale }: { posts: SidebarPost[]; locale: Locale }) {
   return (
-    <aside className="overflow-hidden rounded-lg border border-[#d7e7dc] bg-white shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
-      <div className="flex items-center justify-between border-b border-[#d7e7dc] px-5 py-4">
-        <h2 className="flex items-center gap-2 text-lg font-medium text-[#07110c]">
-          <Flame className="text-[#16a34a]" size={20} />
+    <aside className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
+      <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+        <h2 className="flex items-center gap-2 text-lg font-medium text-[#111827]">
+          <Flame className="text-[#C8A227]" size={20} />
           Tin tức nổi bật
         </h2>
-        <Link className="text-sm font-medium text-[#047857] transition hover:text-[#07110c]" href={href(locale, "/articles")}>
+        <Link className="text-sm font-medium text-[#A88412] transition hover:text-[#111827]" href={href(locale, "/articles")}>
           Tất cả
         </Link>
       </div>
       <div role="list">
         {posts.map((post, index) => (
           <Link
-            className="grid grid-cols-[2.6rem_minmax(0,1fr)] gap-3 border-b border-[#d7e7dc] px-5 py-4 transition last:border-b-0 hover:bg-[#f4fbf6]"
+            className="grid grid-cols-[2.6rem_minmax(0,1fr)] gap-3 border-b border-[#E5E7EB] px-5 py-4 transition last:border-b-0 hover:bg-[#FAFAF7]"
             href={href(locale, "/articles")}
             key={post.title}
             role="listitem"
           >
-            <span className="pt-1 text-2xl font-semibold leading-none text-[#16a34a]">{String(index + 1).padStart(2, "0")}</span>
+            <span className="pt-1 text-2xl font-semibold leading-none text-[#C8A227]">{String(index + 1).padStart(2, "0")}</span>
             <span>
-              <span className="line-clamp-2 text-sm font-medium leading-6 text-[#07110c] md:text-base">{post.title}</span>
-              <span className="mt-2 block text-sm text-[#5f6b63]">{post.meta}</span>
+              <span className="line-clamp-2 text-sm font-medium leading-6 text-[#111827] md:text-base">{post.title}</span>
+              <span className="mt-2 block text-sm text-[#4B5563]">{post.meta}</span>
             </span>
           </Link>
         ))}
@@ -220,31 +220,31 @@ function KnowledgeCategory({ locale }: { locale: Locale }) {
   return (
     <section className="mx-auto max-w-7xl px-5">
       <div className="mb-5">
-        <p className="text-sm font-black uppercase tracking-[0.16em] text-[#008b4a]">Kiến thức</p>
-        <h2 className="mt-2 max-w-4xl text-2xl font-semibold leading-tight tracking-normal text-[#07110c] md:text-3xl">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-[#A88412]">Kiến thức</p>
+        <h2 className="mt-2 max-w-4xl text-2xl font-semibold leading-tight tracking-normal text-[#111827] md:text-3xl">
           Góc nhìn thị trường, xu hướng và chiến lược đầu tư Bitcoin
         </h2>
-        <p className="mt-3 max-w-5xl text-sm leading-7 text-[#5f6b63] md:text-base">
+        <p className="mt-3 max-w-5xl text-sm leading-7 text-[#4B5563] md:text-base">
           Theo dõi các case study, phân tích ETF, miner, regulation và biến động thị trường crypto theo góc nhìn dễ hiểu cho nhà đầu tư cá nhân.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <Link
-          className="group overflow-hidden rounded-lg border border-[#d7e7dc] bg-white shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#16a34a]"
+          className="group overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#C8A227]"
           href={href(locale, "/knowledge")}
         >
           <div className={`relative min-h-64 overflow-hidden bg-gradient-to-br ${knowledgeStories[0].tone} p-6 text-white`}>
             <div className="absolute -right-12 -top-12 size-44 rounded-full border border-white/20 bg-white/10" />
             <div className="absolute bottom-6 left-6 text-5xl font-black tracking-tight text-white/18">{knowledgeStories[0].motif}</div>
-            <div className="absolute right-8 top-8 flex size-24 items-center justify-center rounded-full border border-[#bbf7d0]/45 bg-[#22c55e]/18 text-4xl font-black text-[#bbf7d0]">
+            <div className="absolute right-8 top-8 flex size-24 items-center justify-center rounded-full border border-[#F5E7B3]/45 bg-[#C8A227]/18 text-4xl font-black text-[#F5E7B3]">
               ₿
             </div>
           </div>
           <div className="p-5">
-            <h3 className="text-xl font-semibold leading-7 text-[#07110c]">{knowledgeStories[0].title}</h3>
-            <p className="mt-3 text-sm leading-7 text-[#5f6b63]">{knowledgeStories[0].excerpt}</p>
-            <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#047857]">
+            <h3 className="text-xl font-semibold leading-7 text-[#111827]">{knowledgeStories[0].title}</h3>
+            <p className="mt-3 text-sm leading-7 text-[#4B5563]">{knowledgeStories[0].excerpt}</p>
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#A88412]">
               Đọc kiến thức <ArrowRight className="transition group-hover:translate-x-0.5" size={16} />
             </span>
           </div>
@@ -253,7 +253,7 @@ function KnowledgeCategory({ locale }: { locale: Locale }) {
         <div className="grid gap-4">
           {knowledgeStories.slice(1).map((story) => (
             <Link
-              className={`group relative min-h-48 overflow-hidden rounded-lg border border-[#d7e7dc] bg-gradient-to-br ${story.tone} p-5 text-white shadow-[0_14px_34px_rgba(17,24,39,0.08)] transition hover:-translate-y-0.5`}
+              className={`group relative min-h-48 overflow-hidden rounded-lg border border-[#E5E7EB] bg-gradient-to-br ${story.tone} p-5 text-white shadow-[0_14px_34px_rgba(17,24,39,0.08)] transition hover:-translate-y-0.5`}
               href={href(locale, "/knowledge")}
               key={story.title}
             >
@@ -262,7 +262,7 @@ function KnowledgeCategory({ locale }: { locale: Locale }) {
               <div className="relative">
                 <h3 className="max-w-xl text-xl font-semibold leading-7">{story.title}</h3>
                 <p className="mt-3 max-w-lg text-sm leading-6 text-white/78">{story.excerpt}</p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#bbf7d0]">
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#F5E7B3]">
                   Xem thêm <ArrowRight className="transition group-hover:translate-x-0.5" size={15} />
                 </span>
               </div>
@@ -277,14 +277,14 @@ function KnowledgeCategory({ locale }: { locale: Locale }) {
 function MarketCategory({ locale }: { locale: Locale }) {
   return (
     <section className="mx-auto max-w-7xl px-5">
-      <div className="grid gap-5 rounded-lg border border-[#d7e7dc] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)] lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-5 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)] lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-[#008b4a]">Thị trường</p>
-          <h2 className="mt-2 text-2xl font-semibold leading-tight text-[#07110c] md:text-3xl">Nhịp giá, dòng tiền và tín hiệu</h2>
-          <p className="mt-3 text-sm leading-7 text-[#5f6b63]">
+          <p className="text-sm font-black uppercase tracking-[0.16em] text-[#A88412]">Thị trường</p>
+          <h2 className="mt-2 text-2xl font-semibold leading-tight text-[#111827] md:text-3xl">Nhịp giá, dòng tiền và tín hiệu</h2>
+          <p className="mt-3 text-sm leading-7 text-[#4B5563]">
             Một khu theo dõi nhanh để bạn nhìn thấy nhóm tài sản nổi bật, thay đổi đáng chú ý và các mốc cần mở biểu đồ sâu hơn.
           </p>
-          <Link className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#047857]" href={href(locale, "/markets")}>
+          <Link className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#A88412]" href={href(locale, "/markets")}>
             Vào thị trường <ArrowRight size={16} />
           </Link>
         </div>
@@ -293,14 +293,14 @@ function MarketCategory({ locale }: { locale: Locale }) {
           {marketStories.map((item, index) => (
             <Link
               className={`rounded-lg border p-4 transition hover:-translate-y-0.5 ${
-                index === 0 ? "border-[#16a34a] bg-[#ecfdf5]" : "border-[#d7e7dc] bg-[#f7fbf8]"
+                index === 0 ? "border-[#C8A227] bg-[#FAFAF7]" : "border-[#E5E7EB] bg-[#F5F5F2]"
               }`}
               href={href(locale, "/markets")}
               key={item.title}
             >
-              <span className="text-2xl font-semibold text-[#008b4a]">{item.metric}</span>
-              <h3 className="mt-3 text-sm font-medium leading-6 text-[#07110c]">{item.title}</h3>
-              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#5f6b63]">{item.note}</p>
+              <span className="text-2xl font-semibold text-[#A88412]">{item.metric}</span>
+              <h3 className="mt-3 text-sm font-medium leading-6 text-[#111827]">{item.title}</h3>
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-[#4B5563]">{item.note}</p>
             </Link>
           ))}
         </div>
@@ -333,10 +333,10 @@ function AnalysisCategory({ locale }: { locale: Locale }) {
     <section className="mx-auto max-w-7xl px-5">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#008b4a]">Phân tích</p>
-          <h2 className="mt-2 max-w-3xl text-2xl font-medium leading-tight text-[#07110c] md:text-3xl">Theo dõi nhanh dữ liệu và bối cảnh thị trường</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#A88412]">Phân tích</p>
+          <h2 className="mt-2 max-w-3xl text-2xl font-medium leading-tight text-[#111827] md:text-3xl">Theo dõi nhanh dữ liệu và bối cảnh thị trường</h2>
         </div>
-        <Link className="inline-flex items-center gap-2 text-sm font-medium text-[#047857]" href={href(locale, "/analysis")}>
+        <Link className="inline-flex items-center gap-2 text-sm font-medium text-[#A88412]" href={href(locale, "/analysis")}>
           Xem phân tích <ArrowRight size={16} />
         </Link>
       </div>
@@ -345,13 +345,13 @@ function AnalysisCategory({ locale }: { locale: Locale }) {
         <div className="grid gap-4 sm:grid-cols-2">
           {cards.map((card) => (
             <Link
-              className="group rounded-2xl border border-[#d7e7dc] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#16a34a] hover:bg-[#f7fff9]"
+              className="group rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#C8A227] hover:bg-[#FAFAF7]"
               href={href(locale, "/analysis")}
               key={card.title}
             >
-              <h3 className="text-base font-medium leading-6 text-[#008b4a] md:text-lg">{card.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-[#5f6b63]">{card.text}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#047857]">
+              <h3 className="text-base font-medium leading-6 text-[#A88412] md:text-lg">{card.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#4B5563]">{card.text}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#A88412]">
                 Đọc thêm <ArrowRight className="transition group-hover:translate-x-0.5" size={16} />
               </span>
             </Link>
@@ -377,17 +377,17 @@ function CategoryShowcaseSection({ locale }: { locale: Locale }) {
 
             return (
               <Link
-                className="group rounded-lg border border-[#d7e7dc] bg-white p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#16a34a]"
+                className="group rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition hover:-translate-y-0.5 hover:border-[#C8A227]"
                 href={href(locale, item.href)}
                 key={item.label}
               >
-                <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-[#03130b] text-[#22c55e]">
+                <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-[#0F1115] text-[#F5E7B3]">
                   <Icon size={19} />
                 </span>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#008b4a]">{item.label}</p>
-                <h3 className="mt-2 text-lg font-semibold text-[#07110c]">{item.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-[#5f6b63]">{item.text}</p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#047857]">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#A88412]">{item.label}</p>
+                <h3 className="mt-2 text-lg font-semibold text-[#111827]">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-[#4B5563]">{item.text}</p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#A88412]">
                   Đi tới trang <ArrowRight className="transition group-hover:translate-x-0.5" size={16} />
                 </span>
               </Link>
@@ -411,7 +411,7 @@ export async function ReaderHomeFeature({ locale }: { locale: Locale }) {
   const featuredPosts = mapHotPosts(articles);
 
   return (
-    <main className="bg-[#f7fbf8] font-sans text-[#07110c]">
+    <main className="bg-[#F5F5F2] font-sans text-[#111827]">
       <HomeIntroSection />
       <div className="space-y-8 py-8">
         <ArticleFocusSection article={featuredArticle} locale={locale} posts={featuredPosts} />

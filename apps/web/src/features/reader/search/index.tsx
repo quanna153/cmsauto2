@@ -43,69 +43,68 @@ export async function SearchFeature({ locale, query = "" }: SearchFeatureProps) 
   const hasResults = results.length > 0;
 
   return (
-    <main className="mx-auto max-w-6xl px-5 py-10">
-      {/* ── Header ── */}
-      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#a88412]">
-        {nav.search} · {locale}
-      </p>
-      <h1 className="mt-3 font-serif text-4xl font-bold">
-        {trimmed ? c.resultsFor(trimmed) : c.idleTitle}
-      </h1>
+    <main className="bg-[#F5F5F2] px-5 py-10 text-[#111827]">
+      <section className="mx-auto max-w-6xl">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A88412]">
+          {nav.search} · {locale}
+        </p>
+        <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">
+          {trimmed ? c.resultsFor(trimmed) : c.idleTitle}
+        </h1>
 
-      {/* ── Search Form ── */}
-      <form
-        action={`/${locale}/search`}
-        className="mt-6 flex max-w-xl gap-2"
-        method="get"
-      >
-        <div className="relative flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#687386]"
-            size={18}
-          />
-          <input
-            aria-label={c.placeholder}
-            className="w-full rounded-xl border bg-white py-3 pl-10 pr-4 text-sm shadow-sm outline-none ring-[#a88412] transition placeholder:text-[#b0bac7] focus:ring-2"
-            defaultValue={trimmed}
-            id="search-input"
-            name="q"
-            placeholder={c.placeholder}
-            type="search"
-          />
-        </div>
-        <button
-          className="rounded-xl bg-[#172033] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1e2d48]"
-          type="submit"
+        <form
+          action={`/${locale}/search`}
+          className="mt-6 flex max-w-2xl flex-col gap-2 sm:flex-row"
+          method="get"
         >
-          {c.button}
-        </button>
-      </form>
-
-      {/* ── Results ── */}
-      {!trimmed && (
-        <p className="mt-8 max-w-2xl leading-7 text-[#687386]">{c.idleDesc}</p>
-      )}
-
-      {trimmed && !hasResults && (
-        <div className="mt-10 rounded-2xl border bg-white px-8 py-12 text-center">
-          <Search className="mx-auto text-[#b0bac7]" size={40} />
-          <h2 className="mt-4 text-xl font-bold">{c.emptyTitle}</h2>
-          <p className="mt-2 text-sm text-[#687386]">{c.emptyDesc(trimmed)}</p>
-        </div>
-      )}
-
-      {hasResults && (
-        <section className="mt-8">
-          <p className="mb-4 text-sm text-[#687386]">
-            {results.length} bài viết
-          </p>
-          <div className="grid gap-4 md:grid-cols-3">
-            {results.map((article) => (
-              <ArticleCard article={article} key={article.id} />
-            ))}
+          <div className="relative flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#4B5563]"
+              size={18}
+            />
+            <input
+              aria-label={c.placeholder}
+              className="h-12 w-full rounded-lg border border-[#E5E7EB] bg-white pl-10 pr-4 text-sm shadow-sm outline-none ring-[#C8A227] transition placeholder:text-[#9CA3AF] focus:ring-2"
+              defaultValue={trimmed}
+              id="search-input"
+              name="q"
+              placeholder={c.placeholder}
+              type="search"
+            />
           </div>
-        </section>
-      )}
+          <button
+            className="h-12 rounded-lg bg-[#0F1115] px-5 text-sm font-semibold text-white transition hover:bg-[#C8A227] hover:text-[#0F1115]"
+            type="submit"
+          >
+            {c.button}
+          </button>
+        </form>
+
+        {!trimmed && (
+          <p className="mt-8 max-w-2xl leading-7 text-[#4B5563]">{c.idleDesc}</p>
+        )}
+
+        {trimmed && !hasResults && (
+          <div className="mt-10 rounded-lg border border-[#E5E7EB] bg-white px-8 py-12 text-center shadow-sm">
+            <Search className="mx-auto text-[#C8A227]" size={40} />
+            <h2 className="mt-4 text-xl font-bold">{c.emptyTitle}</h2>
+            <p className="mt-2 text-sm text-[#4B5563]">{c.emptyDesc(trimmed)}</p>
+          </div>
+        )}
+
+        {hasResults && (
+          <section className="mt-8">
+            <p className="mb-4 text-sm text-[#4B5563]">
+              {results.length} bài viết
+            </p>
+            <div className="grid gap-4 md:grid-cols-3">
+              {results.map((article) => (
+                <ArticleCard article={article} key={article.id} />
+              ))}
+            </div>
+          </section>
+        )}
+      </section>
     </main>
   );
 }

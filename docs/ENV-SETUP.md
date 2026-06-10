@@ -142,6 +142,50 @@ GEMINI_MODEL=gemini-2.5-flash
 
 Không đưa key này lên GitHub.
 
+## Có Cần Key Tạo Ảnh Không?
+
+Không bắt buộc cho task UI/mock.
+
+Mặc định `apps/api/.env.example` dùng:
+
+```text
+IMAGE_GENERATION_PROVIDER=mock
+```
+
+Chế độ `mock` không gọi provider thật. Nó chỉ tạo `image plan` gồm prompt, alt text và metadata để team test UI, lưu tạm bài và mở lại bài đang làm dở.
+
+Chỉ cần key/proxy khi task là core article image generation thật. Các biến liên quan:
+
+```text
+IMAGE_GENERATION_PROVIDER=mock
+IMAGE_GENERATION_MODEL=
+IMAGE_GENERATION_API_KEY=
+IMAGE_GENERATION_PROXY_TOKEN=
+IMAGE_GENERATION_BASE_URL=
+IMAGE_GENERATION_TIMEOUT_MS=90000
+```
+
+Provider dự kiến:
+
+```text
+mock, openai, gemini, stability, replicate, fal, custom-proxy
+```
+
+Nếu dùng proxy/cookie token tương tự Semrush, đặt:
+
+```text
+IMAGE_GENERATION_PROVIDER=custom-proxy
+IMAGE_GENERATION_BASE_URL=<proxy-url>
+IMAGE_GENERATION_PROXY_TOKEN=<proxy-token>
+```
+
+Chi tiết cho dev nối provider thật nằm ở:
+
+```text
+docs/09-article-image-generation.md
+docs/tasks/core-article-image-generation.md
+```
+
 ## Có Cần Key Search Volume Không?
 
 Không bắt buộc cho task UI/mock.
@@ -151,17 +195,16 @@ Chỉ cần khi task là core keyword volume thật.
 Các biến liên quan:
 
 ```text
-KEYWORD_VOLUME_PROVIDER_ORDER=dataforseo,ahrefs,keywordtool
+KEYWORD_VOLUME_PROVIDER_ORDER=semrush,ahrefs,keywordtool
 KEYWORD_VOLUME_CACHE_TTL_DAYS=30
 KEYWORD_VOLUME_COUNTRY=VN
 KEYWORD_VOLUME_METRICS_LANGUAGE=vi
 ```
 
-Provider DataForSEO:
+Provider Semrush:
 
 ```text
-DATAFORSEO_LOGIN=<login-that>
-DATAFORSEO_PASSWORD
+SEMRUSH_PROXY_TOKEN=<proxy-token>
 ```
 
 Provider Ahrefs:

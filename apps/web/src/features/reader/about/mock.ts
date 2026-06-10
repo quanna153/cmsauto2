@@ -4,10 +4,10 @@ import type { AboutPageContent } from "./model";
 export const aboutPages: Record<Locale, AboutPageContent> = {
   "vi-vn": {
     eyebrow: "Về chúng tôi",
-    heroBadge: "COINVIEW",
-    title: "Về CMS Auto",
+    heroBadge: "COINRADAR",
+    title: "Về CoinRadar",
     lead:
-      "CoinView biến dòng dữ liệu thị trường, kiến thức và phân tích thành những bản tin dễ đọc, có ngữ cảnh và hữu ích cho quyết định mỗi ngày.",
+      "CoinRadar biến dòng dữ liệu thị trường, kiến thức và phân tích thành những bản tin dễ đọc, có ngữ cảnh và hữu ích cho quyết định mỗi ngày.",
     summary:
       "Chúng tôi xây dựng một phòng tin tức gọn, minh bạch và có kỷ luật: ưu tiên số liệu, tách bạch nhận định với sự kiện, và luôn đặt rủi ro của người đọc lên trước.",
     meta: ["Cập nhật mỗi ngày", "Song ngữ", "Tập trung thị trường Việt"],
@@ -18,7 +18,7 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
     ],
     pillarsHeading: "Chúng tôi tập trung vào điều gì",
     pillarsDescription:
-      "Trang giới thiệu cần cho thấy CoinView không chỉ là một trang tin, mà là một bộ lọc thông tin cho người theo dõi tài sản số.",
+      "Trang giới thiệu cần cho thấy CoinRadar không chỉ là một trang tin, mà là một bộ lọc thông tin cho người theo dõi tài sản số.",
     pillars: [
       {
         eyebrow: "Thị trường",
@@ -48,7 +48,7 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
         eyebrow: "Cộng đồng",
         title: "Tôn trọng người đọc mới",
         description:
-          "CoinView viết cho cả người mới bắt đầu lẫn người đọc đã theo dõi thị trường, nên mỗi bài cần có điểm vào rõ ràng.",
+          "CoinRadar viết cho cả người mới bắt đầu lẫn người đọc đã theo dõi thị trường, nên mỗi bài cần có điểm vào rõ ràng.",
         tone: "violet",
         marker: "04",
       },
@@ -101,7 +101,7 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
       },
       {
         title: "Không bán tín hiệu mua bán",
-        description: "CoinView cung cấp thông tin và phân tích; quyết định đầu tư luôn thuộc về người đọc.",
+        description: "CoinRadar cung cấp thông tin và phân tích; quyết định đầu tư luôn thuộc về người đọc.",
       },
       {
         title: "Mở rộng có kỷ luật",
@@ -115,10 +115,10 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
   },
   "en-us": {
     eyebrow: "About us",
-    heroBadge: "COINVIEW",
-    title: "Về CMS Auto",
+    heroBadge: "COINRADAR",
+    title: "Về CoinRadar",
     lead:
-      "CoinView turns market data, education and analysis into concise stories that help readers understand what matters before they act.",
+      "CoinRadar turns market data, education and analysis into concise stories that help readers understand what matters before they act.",
     summary:
       "We are building a disciplined newsroom for digital assets: data first, clear separation between facts and interpretation, and risk awareness in every story.",
     meta: ["Daily updates", "Bilingual coverage", "Vietnam-focused context"],
@@ -129,7 +129,7 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
     ],
     pillarsHeading: "What we focus on",
     pillarsDescription:
-      "The about page should make CoinView feel like a thoughtful information filter, not just another crypto news feed.",
+      "The about page should make CoinRadar feel like a thoughtful information filter, not just another crypto news feed.",
     pillars: [
       {
         eyebrow: "Markets",
@@ -211,7 +211,7 @@ export const aboutPages: Record<Locale, AboutPageContent> = {
       },
       {
         title: "No buy or sell signals",
-        description: "CoinView provides information and analysis; investment decisions remain with readers.",
+        description: "CoinRadar provides information and analysis; investment decisions remain with readers.",
       },
       {
         title: "Disciplined expansion",

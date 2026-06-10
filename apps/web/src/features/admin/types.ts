@@ -16,6 +16,27 @@ export type AdminUser = {
 
 export type ReviewStatus = "editor_ready" | "needs_fix" | "scheduled" | "publishing" | "published" | "failed";
 export type ArticleSection = "knowledge" | "articles" | "markets" | "analysis";
+export type ArticleImageKind = "hero" | "inline" | "thumbnail";
+export type ArticleImageAspectRatio = "16:9" | "4:3" | "1:1" | "3:4";
+
+export type GeneratedArticleImage = {
+  id: string;
+  kind: ArticleImageKind;
+  provider: string;
+  model: string;
+  status: "planned" | "generated" | "failed";
+  prompt: string;
+  revisedPrompt?: string;
+  url?: string;
+  base64?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  aspectRatio: ArticleImageAspectRatio;
+  altText: string;
+  caption?: string;
+  createdAt: string;
+};
 
 export type ArticleSession = {
   id: string;
@@ -37,9 +58,40 @@ export type ArticleSession = {
   }>;
   primaryKeywordId: string | null;
   secondaryKeywordIds: string[];
-  brief: { searchIntent: string; angle: string; semanticTopics: string[]; candidateFaqs: string[]; competitorPages?: Array<{ keyword: string; url: string; title: string; snippet: string; }> } | null;
-  outline: { title: string; introDirection: string; sections: Array<{ heading: string; bullets: string[] }> } | null;
-  draft: { title: string; slug: string; excerpt: string; metaTitle: string; metaDescription: string; markdown: string } | null;
+  brief: {
+    searchIntent: string;
+    angle: string;
+    semanticTopics: string[];
+    candidateFaqs: string[];
+    competitorPages?: Array<{ keyword: string; url: string; title: string; snippet: string; rawContent?: string; }>;
+    competitorInsights?: Array<{
+      rank: number;
+      keyword: string;
+      url: string;
+      title: string;
+      contentSummary: string;
+      seoIntent: string;
+      outlinePattern: string;
+      strengths: string[];
+      gaps: string[];
+      recommendedTakeaway: string;
+    }>;
+  } | null;
+  outline: {
+    title: string;
+    introDirection: string;
+    sections: Array<{ heading: string; bullets: string[] }>;
+    keywordCoverage?: Array<{ keyword: string; monthlyVolume: number | null; intent: string; placement: string; }>;
+  } | null;
+  draft: {
+    title: string;
+    slug: string;
+    excerpt: string;
+    metaTitle: string;
+    metaDescription: string;
+    markdown: string;
+    generatedImages?: GeneratedArticleImage[];
+  } | null;
   linkSuggestions: InternalLinkSuggestion[];
   finalMarkdown: string;
   reviewStatus: ReviewStatus;

@@ -2,19 +2,19 @@ import type { AnchorHTMLAttributes, ComponentPropsWithoutRef, ReactNode } from "
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-export function ArticleBody({ markdown }: { markdown: string }) {
+export function ArticleBody({ markdown, showToc = true }: { markdown: string; showToc?: boolean }) {
   const headings = extractHeadings(markdown);
   const tocHeadings = numberTocHeadings(headings);
   const headingIds = [...headings];
   const dashListStartLines = getDashListStartLines(markdown);
 
   return <>
-    {tocHeadings.length > 0 ? <nav aria-label="Table of Contents" className="mb-8 rounded-lg border bg-white p-4 font-sans text-base leading-6">
-      <h2 className="m-0 text-lg font-bold text-[#172033]">Table of Contents</h2>
+    {showToc && tocHeadings.length > 0 ? <nav aria-label="Table of Contents" className="mb-8 rounded-lg border border-[#E5E7EB] bg-white p-4 font-sans text-base leading-6 shadow-sm">
+      <h2 className="m-0 text-lg font-bold text-[#111827]">Table of Contents</h2>
       <ol className="mt-3 grid gap-2 p-0">
         {tocHeadings.map((heading) =>
           <li className="list-none" key={heading.id} style={{ paddingLeft: `${(heading.level - 1) * 0.9}rem` }}>
-            <a className="text-[#80640b] no-underline hover:underline" href={`#${heading.id}`}>{heading.label}</a>
+            <a className="text-[#A88412] no-underline hover:underline" href={`#${heading.id}`}>{heading.label}</a>
           </li>
         )}
       </ol>

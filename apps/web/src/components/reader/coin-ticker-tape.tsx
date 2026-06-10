@@ -47,8 +47,8 @@ function FallbackMarquee({ variant }: { variant: "header" | "hero" }) {
   return (
     <div className={`flex h-full animate-[coin-marquee_80s_linear_infinite] items-center whitespace-nowrap ${variant === "hero" ? "gap-10 text-base" : "gap-8 text-sm"} font-semibold`}>
       {[...fallbackItems, ...fallbackItems].map((item, index) => (
-        <span className="inline-flex items-center gap-2 text-[#07110c]" key={`${item.symbol}-${index}`}>
-          <span className="font-black text-[#008b4a]">{item.symbol}</span>
+        <span className="inline-flex items-center gap-2 text-[#111827]" key={`${item.symbol}-${index}`}>
+          <span className="font-black text-[#A88412]">{item.symbol}</span>
           <span>{item.label}</span>
         </span>
       ))}
@@ -65,8 +65,6 @@ export function CoinTickerTape({ variant = "header" }: { variant?: "header" | "h
     const container = containerRef.current;
     if (!container) return;
 
-    let renderTimeout: number | undefined;
-    let observer: MutationObserver | undefined;
     container.innerHTML = "";
     setFailed(false);
     setReady(false);
@@ -94,16 +92,16 @@ export function CoinTickerTape({ variant = "header" }: { variant?: "header" | "h
       locale: "vi"
     });
 
-    observer = new MutationObserver(() => {
+    const widgetObserver = new MutationObserver(() => {
       if (container.querySelector("iframe")) {
         writeTickerStatus("ready");
         setReady(true);
-        if (renderTimeout) window.clearTimeout(renderTimeout);
+        if (widgetRenderTimeout) window.clearTimeout(widgetRenderTimeout);
       }
     });
-    observer.observe(container, { childList: true, subtree: true });
+    widgetObserver.observe(container, { childList: true, subtree: true });
 
-    renderTimeout = window.setTimeout(() => {
+    const widgetRenderTimeout = window.setTimeout(() => {
       if (!container.querySelector("iframe")) {
         writeTickerStatus("fallback");
         setFailed(true);
@@ -118,8 +116,8 @@ export function CoinTickerTape({ variant = "header" }: { variant?: "header" | "h
     container.append(widget, copyright, script);
 
     return () => {
-      if (renderTimeout) window.clearTimeout(renderTimeout);
-      observer?.disconnect();
+      window.clearTimeout(widgetRenderTimeout);
+      widgetObserver.disconnect();
       container.innerHTML = "";
     };
   }, []);
@@ -127,7 +125,7 @@ export function CoinTickerTape({ variant = "header" }: { variant?: "header" | "h
   const frameClass =
     variant === "hero"
       ? "relative h-12 overflow-hidden bg-transparent"
-      : "relative h-10 overflow-hidden border-b bg-white";
+      : "relative h-10 overflow-hidden border-b border-[#E5E7EB] bg-white";
   const widgetClass = variant === "hero" ? "tradingview-widget-container h-12" : "tradingview-widget-container h-10";
 
   return (

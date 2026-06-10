@@ -15,9 +15,9 @@ export function InfoCards({ coin }: { coin: Coin }) {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((item) => (
-        <article className="rounded-xl border bg-white p-4" key={item.label}>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#a88412]">{item.label}</p>
-          <p className="mt-2 font-semibold text-[#273247]">{item.value}</p>
+        <article className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-sm" key={item.label}>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#A88412]">{item.label}</p>
+          <p className="mt-2 font-semibold text-[#111827]">{item.value}</p>
         </article>
       ))}
     </section>

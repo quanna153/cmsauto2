@@ -59,6 +59,15 @@ describe("ArticleBody", () => {
     expect(html).toContain('id="tong-quan-2"');
   });
 
+  it("can suppress the table of contents when a page-level TOC already exists", () => {
+    const html = renderToStaticMarkup(
+      <ArticleBody markdown={"## Tổng quan\n\nNội dung."} showToc={false} />
+    );
+
+    expect(html).not.toContain("Table of Contents");
+    expect(html).toContain('id="tong-quan"');
+  });
+
   it("preserves dash and dot unordered list styles", () => {
     const html = renderToStaticMarkup(
       <ArticleBody markdown={"- Dash item\n\n* Dot item"} />

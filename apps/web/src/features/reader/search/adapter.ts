@@ -23,7 +23,8 @@ function matchesQuery(article: ReaderArticle, query: string): boolean {
 }
 
 /**
- * Fetch published articles from the real API and filter by query.
+ * Fetch published search results from the real API and keep a defensive
+ * client-side filter for older local API instances.
  * Falls back to mock data when the API call fails (e.g. dev without API).
  *
  * NOTE: This intentionally reuses the existing GET /public/articles
@@ -41,7 +42,7 @@ export async function searchArticles(
   let articles: ReaderArticle[];
   try {
     const url = publicApiUrl(
-      `/public/articles?locale=${locale}&page=1&pageSize=${MAX_PAGE_SIZE}`
+      `/public/articles/search?locale=${locale}&q=${encodeURIComponent(trimmed)}&page=1&pageSize=${MAX_PAGE_SIZE}`
     );
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

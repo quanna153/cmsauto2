@@ -93,6 +93,65 @@ describe("SQLite foundation", () => {
     expect((await readPublishedArticles("en-us")).find((item) => item.articleId === en.id)?.livePath).toBe("/en-us/what-is-bitcoin");
   });
 
+  it("accepts primary keyword wording when AI inserts an acronym inside the phrase", async () => {
+    const now = new Date().toISOString();
+    const id = `publish-keyword-normalized-en-${crypto.randomUUID()}`;
+    const markdown = [
+      "# Proof of Stake (PoS) Explained: A Practical Guide",
+      "",
+      "Proof of Stake (PoS) Explained gives readers a clear view of blockchain consensus, staking, validator incentives, and network security.",
+      "Validators lock collateral, propose blocks, and earn rewards when they follow the protocol rules.",
+      "This guide compares proof of stake with proof of work and explains where smart contract platforms use staking today.",
+      "",
+      "Read more about [blockchain consensus](/en-us/blockchain-consensus).",
+      "",
+      "Proof of Stake (PoS) Explained helps teams evaluate energy use, finality, slashing, governance, and decentralization tradeoffs. ".repeat(35)
+    ].join("\n");
+    const article: ArticleSessionSnapshot = {
+      id,
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+      inputs: { language: "en", seedKeyword: "proof of stake explained" },
+      activeStep: "ready",
+      keywordIdeas: [
+        { id: "primary", keyword: "proof of stake explained", intent: "informational", cluster: "seed", monthlyVolume: 100, provider: "test", checkedAt: now, status: "verified" },
+        { id: "secondary", keyword: "blockchain consensus", intent: "informational", cluster: "definition", monthlyVolume: 50, provider: "test", checkedAt: now, status: "verified" }
+      ],
+      primaryKeywordId: "primary",
+      secondaryKeywordIds: ["secondary"],
+      brief: { searchIntent: "Learn proof of stake", angle: "Explain PoS clearly", semanticTopics: ["staking"], candidateFaqs: ["How does proof of stake work?"] },
+      outline: { title: "Proof of Stake Explained", introDirection: "Practical intro", sections: [{ heading: "What is PoS", bullets: ["Definition"] }] },
+      draft: {
+        title: "Proof of Stake (PoS) Explained: A Practical Guide",
+        slug: `proof-of-stake-pos-explained-${id}`,
+        excerpt: "Proof of Stake (PoS) Explained for readers comparing consensus mechanisms.",
+        metaTitle: "Proof of Stake (PoS) Explained",
+        metaDescription: "Proof of Stake (PoS) Explained with validator incentives, risks, and blockchain consensus context.",
+        markdown
+      },
+      linkSuggestions: [{
+        id: "link-1",
+        sourceContext: "Read more about blockchain consensus.",
+        anchor: "blockchain consensus",
+        targetTitle: "Blockchain Consensus",
+        targetUrl: "/en-us/blockchain-consensus",
+        matchedKeyword: "blockchain consensus",
+        matchStatus: "matched",
+        reason: "Adds context for consensus mechanisms.",
+        confidence: 94,
+        status: "accepted"
+      }],
+      finalMarkdown: markdown
+    };
+
+    await createArticleSession(article, actor);
+    const reviewed = await reviewGateArticle(id, actor, new Date(Date.now() - 1000).toISOString());
+    expect(reviewed.article.reviewStatus).toBe("scheduled");
+    await runDuePublishJobs();
+    expect((await readPublishedArticles("en-us")).find((item) => item.articleId === id)?.livePath).toBe(`/en-us/proof-of-stake-pos-explained-${id}`);
+  });
+
   it("imports default English article library URLs without an /en-us/ prefix", async () => {
     const url = `/what-is-proof-of-stake-${crypto.randomUUID()}`;
     const result = await importArticleLibraryItems([{

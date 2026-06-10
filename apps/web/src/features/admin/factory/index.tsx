@@ -6,6 +6,7 @@ import {
   Circle,
   FileCheck2,
   FileText,
+  ImagePlus,
   Link2,
   ListTree,
   RotateCcw,
@@ -24,8 +25,8 @@ import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states"
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ArticleSession, InternalLinkSuggestion } from "@/features/admin/types";
-import { getJson, postJson } from "@/lib/api";
+import type { ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
+import { getJson, patchJson, postJson } from "@/lib/api";
 
 type Keyword = ArticleSession["keywordIdeas"][number];
 type Brief = NonNullable<ArticleSession["brief"]>;
@@ -70,6 +71,10 @@ export function FactoryFeature() {
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [geminiModel, setGeminiModel] = useState("");
   const [tavilyApiKey, setTavilyApiKey] = useState("");
+  const [imageProvider, setImageProvider] = useState("");
+  const [imageModel, setImageModel] = useState("");
+  const [imageApiKey, setImageApiKey] = useState("");
+  const [imageProxyToken, setImageProxyToken] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -84,6 +89,18 @@ export function FactoryFeature() {
 
     const savedTavilyKey = localStorage.getItem("cmsauto_tavily_api_key");
     if (savedTavilyKey) setTavilyApiKey(savedTavilyKey);
+
+    const savedImageProvider = localStorage.getItem("cmsauto_image_generation_provider");
+    if (savedImageProvider) setImageProvider(savedImageProvider);
+
+    const savedImageModel = localStorage.getItem("cmsauto_image_generation_model");
+    if (savedImageModel) setImageModel(savedImageModel);
+
+    const savedImageApiKey = localStorage.getItem("cmsauto_image_generation_api_key");
+    if (savedImageApiKey) setImageApiKey(savedImageApiKey);
+
+    const savedImageProxyToken = localStorage.getItem("cmsauto_image_generation_proxy_token");
+    if (savedImageProxyToken) setImageProxyToken(savedImageProxyToken);
   }, []);
 
   function handleConfigChange(key: string, value: string, setter: (val: string) => void) {
@@ -101,7 +118,11 @@ export function FactoryFeature() {
   const [promptsHydrated, setPromptsHydrated] = useState(false);
   const [selectedStep, setSelectedStep] = useState<Step>("keywords");
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [savedArticleId, setSavedArticleId] = useState<string | null>(null);
+  const [savedRevision, setSavedRevision] = useState<number | null>(null);
   const promptQuery = useQuery({
     queryKey: ["prompts"],
     queryFn: () => getJson<{ prompts: PromptTemplates; defaults: PromptTemplates; records: PromptRecord[] }>("/prompts")
@@ -125,8 +146,40 @@ export function FactoryFeature() {
     ready: false
   };
   const selectedAiStep = selectedStep === "ready" ? null : selectedStep;
-  async function run(action: () => Promise<void>) {
+  useEffect(() => {
+    const articleId = new URLSearchParams(window.location.search).get("articleId");
+    if (!articleId) return;
+
+    let cancelled = false;
     setBusy(true);
+    setBusyLabel("Đang nạp bài đang làm dở...");
+    getJson<{ articles: ArticleSession[] }>("/articles")
+      .then(({ articles }) => {
+        if (cancelled) return;
+        const article = articles.find((item) => item.id === articleId);
+        if (!article) {
+          setError("Không tìm thấy bài đang làm dở.");
+          return;
+        }
+        hydrateFromArticle(article);
+        setSaveMessage(`Đã nạp bài lưu tạm, revision ${article.revision}.`);
+      })
+      .catch((restoreError) => setError(restoreError instanceof Error ? restoreError.message : "Không nạp được bài đang làm dở."))
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(false);
+          setBusyLabel("");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function run(action: () => Promise<void>, label = "Đang xử lý...") {
+    setBusy(true);
+    setBusyLabel(label);
     setError(null);
     try {
       await action();
@@ -134,6 +187,7 @@ export function FactoryFeature() {
       setError(runError instanceof Error ? runError.message : "Không chạy được bước này.");
     } finally {
       setBusy(false);
+      setBusyLabel("");
     }
   }
 
@@ -142,6 +196,10 @@ export function FactoryFeature() {
     if (geminiApiKey) headers["x-gemini-api-key"] = geminiApiKey;
     if (geminiModel) headers["x-gemini-model"] = geminiModel;
     if (tavilyApiKey) headers["x-tavily-api-key"] = tavilyApiKey;
+    if (imageProvider) headers["x-image-generation-provider"] = imageProvider;
+    if (imageModel) headers["x-image-generation-model"] = imageModel;
+    if (imageApiKey) headers["x-image-generation-api-key"] = imageApiKey;
+    if (imageProxyToken) headers["x-image-generation-proxy-token"] = imageProxyToken;
     return postJson<T>(path, body, { headers });
   }
 
@@ -154,7 +212,7 @@ export function FactoryFeature() {
     });
     setKeywords(result.keywordIdeas);
     setPrimaryKeywordId(result.keywordIdeas[0]?.id ?? null);
-    setSecondaryKeywordIds(result.keywordIdeas.slice(1, 4).map((item) => item.id));
+    setSecondaryKeywordIds(result.keywordIdeas.slice(1).map((item) => item.id));
     resetFrom("brief");
     setSelectedStep("keywords");
   }
@@ -178,7 +236,8 @@ export function FactoryFeature() {
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.outline,
-      brief
+      brief,
+      keywordIdeas: [primary, ...secondary]
     });
     setOutline(result.outline);
     resetFrom("draft");
@@ -197,6 +256,26 @@ export function FactoryFeature() {
     resetFrom("links");
   }
 
+  async function generateArticleImage() {
+    if (!primary || !draft) return;
+    const result = await apiPost<{ image: GeneratedArticleImage }>("/article-images/generate", {
+      primaryKeyword: primary.keyword,
+      secondaryKeywords: secondary.map((item) => item.keyword),
+      language,
+      title: draft.title,
+      excerpt: draft.excerpt,
+      outline: outline ?? undefined,
+      draft,
+      kind: "hero",
+      aspectRatio: "16:9",
+      stylePreset: "CoinRadar editorial crypto finance, black gold white palette, clean high-trust newsroom style"
+    });
+    setDraft({
+      ...draft,
+      generatedImages: [result.image, ...(draft.generatedImages ?? [])].slice(0, 4)
+    });
+  }
+
   async function generateLinks() {
     if (!primary || !draft) return;
     const result = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
@@ -209,18 +288,82 @@ export function FactoryFeature() {
     setLinks(result.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" : "pending" })));
   }
 
+  function hydrateFromArticle(article: ArticleSession) {
+    setLanguage(article.inputs.language);
+    setSeedKeyword(article.inputs.seedKeyword);
+    setKeywords(article.keywordIdeas);
+    setPrimaryKeywordId(article.primaryKeywordId);
+    setSecondaryKeywordIds(article.secondaryKeywordIds);
+    setBrief(article.brief);
+    setOutline(article.outline);
+    setDraft(article.draft);
+    setLinks(article.linkSuggestions);
+    setSavedArticleId(article.id);
+    setSavedRevision(article.revision);
+    setSelectedStep(article.activeStep);
+  }
+
+  function buildArticleSnapshot(stepToSave: Step, finalMarkdown: string) {
+    const now = new Date().toISOString();
+    return {
+      id: savedArticleId ?? crypto.randomUUID(), revision: savedRevision ?? 1, createdAt: now, updatedAt: now,
+      inputs: { language, seedKeyword }, activeStep: stepToSave, keywordIdeas: keywords,
+      primaryKeywordId, secondaryKeywordIds, brief, outline, draft, linkSuggestions: links,
+      finalMarkdown, reviewStatus: stepToSave === "ready" ? "editor_ready" : "needs_fix", reviewNote: stepToSave === "ready" ? "" : "Bài đang làm dở trong Article Factory.",
+      publishAt: null, publishedAt: null, livePath: null, lastPublishError: null
+    } satisfies ArticleSession;
+  }
+
+  function buildSessionChanges(stepToSave: Step, finalMarkdown: string) {
+    return {
+      inputs: { language, seedKeyword },
+      activeStep: stepToSave,
+      keywordIdeas: keywords,
+      primaryKeywordId,
+      secondaryKeywordIds,
+      brief,
+      outline,
+      draft,
+      linkSuggestions: links,
+      finalMarkdown,
+      reviewNote: stepToSave === "ready" ? "" : "Bài đang làm dở trong Article Factory."
+    };
+  }
+
+  async function saveFactorySession({ ready = false }: { ready?: boolean } = {}) {
+    const stepToSave = ready ? "ready" : activeStep;
+    const markdownToSave = ready && draft
+      ? (await apiPost<{ markdown: string }>("/links/apply", { markdown: draft.markdown, suggestions: links })).markdown
+      : draft?.markdown ?? "";
+
+    if (savedArticleId && savedRevision !== null) {
+      const result = await patchJson<{ article: ArticleSession }>(`/articles/${savedArticleId}`, {
+        expectedRevision: savedRevision,
+        changes: buildSessionChanges(stepToSave, markdownToSave)
+      });
+      setSavedRevision(result.article.revision);
+      setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
+      return result.article;
+    }
+
+    const result = await postJson<{ article: ArticleSession }>("/articles", { article: buildArticleSnapshot(stepToSave, markdownToSave) });
+    setSavedArticleId(result.article.id);
+    setSavedRevision(result.article.revision);
+    setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
+    return result.article;
+  }
+
+  async function saveProgress() {
+    if (!seedKeyword.trim() && keywords.length === 0) {
+      setSaveMessage("Nhập hoặc sinh keyword trước khi lưu tạm.");
+      return;
+    }
+    await saveFactorySession();
+  }
+
   async function finish() {
     if (!draft) return;
-    const applied = await apiPost<{ markdown: string }>("/links/apply", { markdown: draft.markdown, suggestions: links });
-    const now = new Date().toISOString();
-    const article: ArticleSession = {
-      id: crypto.randomUUID(), revision: 1, createdAt: now, updatedAt: now,
-      inputs: { language, seedKeyword }, activeStep: "ready", keywordIdeas: keywords,
-      primaryKeywordId, secondaryKeywordIds, brief, outline, draft, linkSuggestions: links,
-      finalMarkdown: applied.markdown, reviewStatus: "editor_ready", reviewNote: "",
-      publishAt: null, publishedAt: null, livePath: null, lastPublishError: null
-    };
-    await postJson("/articles", { article });
+    await saveFactorySession({ ready: true });
     router.push("/admin/articles");
   }
 
@@ -243,7 +386,11 @@ export function FactoryFeature() {
     setDraft(null);
     setLinks([]);
     setSelectedStep("keywords");
+    setSavedArticleId(null);
+    setSavedRevision(null);
+    setSaveMessage("");
     setError(null);
+    window.history.replaceState(null, "", "/admin/factory");
   }
 
   function selectPrimaryKeyword(id: string) {
@@ -301,12 +448,32 @@ export function FactoryFeature() {
                 <label className="mb-1 block text-xs text-[#687386]">Tavily API Key</label>
                 <Input type="password" className="w-full text-xs" value={tavilyApiKey} onChange={(e) => handleConfigChange("cmsauto_tavily_api_key", e.target.value, setTavilyApiKey)} placeholder="Dùng .env mặc định" />
               </div>
+              <div className="border-t pt-3">
+                <label className="mb-1 block text-xs text-[#687386]">Image Provider</label>
+                <Input className="w-full text-xs" value={imageProvider} onChange={(e) => handleConfigChange("cmsauto_image_generation_provider", e.target.value, setImageProvider)} placeholder="mock / openai / gemini / custom-proxy" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Image Model</label>
+                <Input className="w-full text-xs" value={imageModel} onChange={(e) => handleConfigChange("cmsauto_image_generation_model", e.target.value, setImageModel)} placeholder="Dùng .env hoặc default provider" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Image API Key</label>
+                <Input type="password" className="w-full text-xs" value={imageApiKey} onChange={(e) => handleConfigChange("cmsauto_image_generation_api_key", e.target.value, setImageApiKey)} placeholder="Dùng .env mặc định" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#687386]">Image Proxy Token</label>
+                <Input type="password" className="w-full text-xs" value={imageProxyToken} onChange={(e) => handleConfigChange("cmsauto_image_generation_proxy_token", e.target.value, setImageProxyToken)} placeholder="Nếu provider dùng cookie/proxy" />
+              </div>
             </div>
           </div>
         )}
+        <Button disabled={busy || (!seedKeyword.trim() && keywords.length === 0)} onClick={() => void run(saveProgress, "Đang lưu tạm bài vào Quản lý bài viết...")} size="sm" variant="secondary">
+          <Save size={15} />Lưu tạm
+        </Button>
         <Button onClick={resetSession} size="sm" variant="secondary"><RotateCcw size={15} />Tạo bài mới</Button>
       </div>
     </header>
+    {saveMessage ? <div className="mb-4 rounded-lg border bg-white p-3 text-sm font-medium text-[#80640b]">{saveMessage}</div> : null}
 
     <WorkflowStepper
       activeStep={activeStep}
@@ -326,12 +493,14 @@ export function FactoryFeature() {
           keywords={keywords}
           language={language}
           links={links}
-          onFinish={() => void run(finish)}
-          onGenerateBrief={() => void run(generateBrief)}
-          onGenerateDraft={() => void run(generateDraft)}
-          onGenerateKeywords={() => void run(generateKeywords)}
-          onGenerateLinks={() => void run(generateLinks)}
-          onGenerateOutline={() => void run(generateOutline)}
+          busyLabel={busyLabel}
+          onFinish={() => void run(finish, "Đang áp dụng link và lưu bài để duyệt...")}
+          onGenerateBrief={() => void run(generateBrief, "Đang đọc top 10 kết quả và rút insight đối thủ...")}
+          onGenerateDraft={() => void run(generateDraft, "Đang viết bản nháp bằng Gemini...")}
+          onGenerateImage={() => void run(generateArticleImage, "Đang tạo kế hoạch ảnh hoặc gọi provider ảnh...")}
+          onGenerateKeywords={() => void run(generateKeywords, "Đang lấy keyword và volume từ Semrush...")}
+          onGenerateLinks={() => void run(generateLinks, "Đang phân tích bản nháp và so khớp kho internal links, bước này có thể mất 1-2 phút...")}
+          onGenerateOutline={() => void run(generateOutline, "Đang ghép keyword, volume và insight để sinh outline...")}
           onLanguageChange={setLanguage}
           onKeywordSelectionConfirm={() => setSelectedStep("brief")}
           onPrimaryChange={selectPrimaryKeyword}
@@ -411,6 +580,7 @@ function WorkflowStepper({
 function WorkflowWorkspace(props: {
   brief: Brief | null;
   busy: boolean;
+  busyLabel: string;
   draft: Draft | null;
   keywords: Keyword[];
   language: "vi" | "en";
@@ -418,6 +588,7 @@ function WorkflowWorkspace(props: {
   onFinish: () => void;
   onGenerateBrief: () => void;
   onGenerateDraft: () => void;
+  onGenerateImage: () => void;
   onGenerateKeywords: () => void;
   onGenerateLinks: () => void;
   onGenerateOutline: () => void;
@@ -443,11 +614,11 @@ function WorkflowWorkspace(props: {
       <p className="mt-1 text-sm text-[#687386]">{stage.description}</p>
     </div>
     {props.selectedStep === "keywords" ? <KeywordsWorkspace {...props} /> : null}
-    {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} onConfirm={() => props.onSelect("outline")} onGenerate={props.onGenerateBrief} /> : null}
-    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
-    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} draft={props.draft} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} /> : null}
+    {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("outline")} onGenerate={props.onGenerateBrief} /> : null}
+    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
+    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} busyLabel={props.busyLabel} draft={props.draft} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} onGenerateImage={props.onGenerateImage} /> : null}
     {props.selectedStep === "links"
-      ? <LinksWorkspace busy={props.busy} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
+      ? <LinksWorkspace busy={props.busy} busyLabel={props.busyLabel} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
       : null}
     {props.selectedStep === "ready"
       ? <ReadyWorkspace brief={props.brief} busy={props.busy} draft={props.draft} links={props.links} onFinish={props.onFinish} outline={props.outline} />
@@ -501,6 +672,7 @@ function KeywordsWorkspace({
         </Button>
         <p className="self-center text-xs text-[#687386]">Volume được refresh trong cùng lần gọi nếu provider đã cấu hình.</p>
       </div>
+      {busy ? <div className="mt-3"><LoadingSkeleton label="Đang lấy keyword và volume từ Semrush..." /></div> : null}
     </section>
     <section className="rounded-xl border bg-white p-4">
       <h3 className="font-semibold">Danh sách từ khóa</h3>
@@ -547,10 +719,11 @@ function KeywordsWorkspace({
   </div>;
 }
 
-function BriefWorkspace({ brief, busy, onGenerate, onConfirm }: { brief: Brief | null; busy: boolean; onGenerate: () => void; onConfirm: () => void }) {
+function BriefWorkspace({ brief, busy, busyLabel, onGenerate, onConfirm }: { brief: Brief | null; busy: boolean; busyLabel: string; onGenerate: () => void; onConfirm: () => void }) {
   return <ResultWorkspace
     actionLabel={brief ? "Sinh lại brief" : "Sinh brief"}
     busy={busy}
+    busyLabel={busyLabel}
     emptyDescription="Chốt bộ từ khóa ở bước trước rồi sinh brief."
     emptyTitle="Chưa có định hướng bài"
     onGenerate={onGenerate}
@@ -560,6 +733,19 @@ function BriefWorkspace({ brief, busy, onGenerate, onConfirm }: { brief: Brief |
       <ResultCard label="Góc triển khai"><p>{brief.angle}</p></ResultCard>
       <ResultCard label="Semantic topics"><TagList items={brief.semanticTopics} /></ResultCard>
       <ResultCard label="FAQ đề xuất"><List items={brief.candidateFaqs} /></ResultCard>
+      {brief.competitorInsights && brief.competitorInsights.length > 0 ? (
+        <ResultCard label="Insight đối thủ">
+          <div className="grid gap-3">
+            {brief.competitorInsights.slice(0, 10).map((insight) => (
+              <article className="rounded-lg border p-3" key={`${insight.rank}-${insight.url}`}>
+                <p className="text-xs font-semibold text-[#80640b]">#{insight.rank} · {insight.title}</p>
+                <p className="mt-2 text-sm text-[#273247]">{insight.contentSummary}</p>
+                <p className="mt-2 text-xs text-[#687386]">{insight.outlinePattern}</p>
+              </article>
+            ))}
+          </div>
+        </ResultCard>
+      ) : null}
       {brief.competitorPages && brief.competitorPages.length > 0 ? (
         <ResultCard label="Top đối thủ (Tham khảo)">
           <div className="grid gap-3">
@@ -580,16 +766,30 @@ function BriefWorkspace({ brief, busy, onGenerate, onConfirm }: { brief: Brief |
   </ResultWorkspace>;
 }
 
-function OutlineWorkspace({ busy, onGenerate, onConfirm, outline }: { busy: boolean; onGenerate: () => void; onConfirm: () => void; outline: Outline | null }) {
+function OutlineWorkspace({ busy, busyLabel, onGenerate, onConfirm, outline }: { busy: boolean; busyLabel: string; onGenerate: () => void; onConfirm: () => void; outline: Outline | null }) {
   return <ResultWorkspace
     actionLabel={outline ? "Sinh lại outline" : "Sinh outline"}
     busy={busy}
+    busyLabel={busyLabel}
     emptyDescription="Sinh brief trước khi tạo dàn ý."
     emptyTitle="Chưa có dàn ý"
     onGenerate={onGenerate}
   >
     {outline ? <div className="grid gap-3">
       <ResultCard label="Tiêu đề dự kiến"><h3 className="font-bold break-words">{outline.title}</h3><p className="mt-2 text-sm text-[#687386] break-words">{outline.introDirection}</p></ResultCard>
+      {outline.keywordCoverage && outline.keywordCoverage.length > 0 ? (
+        <ResultCard label="Keyword coverage">
+          <div className="grid gap-2">
+            {outline.keywordCoverage.map((item) => (
+              <div className="rounded-lg border p-3" key={`${item.keyword}-${item.placement}`}>
+                <p className="text-sm font-semibold text-[#273247]">{item.keyword}</p>
+                <p className="mt-1 text-xs text-[#687386]">Volume {item.monthlyVolume ?? "missing"} · {item.intent}</p>
+                <p className="mt-1 text-xs text-[#80640b]">{item.placement}</p>
+              </div>
+            ))}
+          </div>
+        </ResultCard>
+      ) : null}
       {outline.sections.map((section, index) =>
         <ResultCard key={`${section.heading}-${index}`} label={`${index + 1}. ${section.heading}`}><List items={section.bullets} /></ResultCard>
       )}
@@ -600,10 +800,25 @@ function OutlineWorkspace({ busy, onGenerate, onConfirm, outline }: { busy: bool
   </ResultWorkspace>;
 }
 
-function DraftWorkspace({ busy, draft, onGenerate, onConfirm }: { busy: boolean; draft: Draft | null; onGenerate: () => void; onConfirm: () => void }) {
+function DraftWorkspace({
+  busy,
+  busyLabel,
+  draft,
+  onGenerate,
+  onGenerateImage,
+  onConfirm
+}: {
+  busy: boolean;
+  busyLabel: string;
+  draft: Draft | null;
+  onGenerate: () => void;
+  onGenerateImage: () => void;
+  onConfirm: () => void;
+}) {
   return <ResultWorkspace
     actionLabel={draft ? "Sinh lại draft" : "Sinh draft"}
     busy={busy}
+    busyLabel={busyLabel}
     emptyDescription="Sinh outline trước khi viết nội dung."
     emptyTitle="Chưa có bản nháp"
     onGenerate={onGenerate}
@@ -615,6 +830,7 @@ function DraftWorkspace({ busy, draft, onGenerate, onConfirm }: { busy: boolean;
         <p className="mt-3 text-sm">{draft.excerpt}</p>
         <p className="mt-3 text-xs text-[#687386]">{draft.metaTitle} · {draft.metaDescription}</p>
       </ResultCard>
+      <ArticleImagesPanel busy={busy} images={draft.generatedImages ?? []} onGenerate={onGenerateImage} />
       <ResultCard label="Markdown">
         <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap text-xs leading-6">{draft.markdown}</pre>
       </ResultCard>
@@ -625,14 +841,58 @@ function DraftWorkspace({ busy, draft, onGenerate, onConfirm }: { busy: boolean;
   </ResultWorkspace>;
 }
 
+function ArticleImagesPanel({
+  busy,
+  images,
+  onGenerate
+}: {
+  busy: boolean;
+  images: GeneratedArticleImage[];
+  onGenerate: () => void;
+}) {
+  return <ResultCard label="Ảnh bài viết">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-semibold text-[#273247]">Hero image tự động</p>
+        <p className="mt-1 text-xs text-[#687386]">Mặc định trả image plan ở provider mock; khi nối provider thật sẽ có URL/base64 để preview.</p>
+      </div>
+      <Button disabled={busy} onClick={onGenerate} size="sm" variant="secondary">
+        <ImagePlus size={15} />Tạo ảnh hero
+      </Button>
+    </div>
+    {images.length ? <div className="mt-4 grid gap-3">
+      {images.map((image) => {
+        const src = image.url || (image.base64 ? `data:${image.mimeType ?? "image/png"};base64,${image.base64}` : "");
+        return <article className="grid gap-3 rounded-lg border p-3 md:grid-cols-[220px_minmax(0,1fr)]" key={image.id}>
+          <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-[#f7f7f4] text-center text-xs font-semibold text-[#687386]">
+            {src ? <img alt={image.altText} className="h-full w-full object-cover" src={src} /> : "Image plan"}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap gap-2">
+              <Badge>{image.provider}</Badge>
+              <Badge>{image.status}</Badge>
+              <Badge>{image.aspectRatio}</Badge>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-[#273247]">{image.altText}</p>
+            {image.caption ? <p className="mt-1 text-xs text-[#687386]">{image.caption}</p> : null}
+            <pre className="mt-3 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg bg-[#f7f7f4] p-3 text-xs leading-5 text-[#566174]">{image.prompt}</pre>
+          </div>
+        </article>;
+      })}
+    </div> : <p className="mt-4 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#687386]">Chưa có ảnh. Dev core có thể nối provider thật ở `apps/api/src/article-images.ts`.</p>}
+  </ResultCard>;
+}
+
 function LinksWorkspace({
   busy,
+  busyLabel,
   links,
   onGenerate,
   onSetStatus,
   onConfirm
 }: {
   busy: boolean;
+  busyLabel: string;
   links: InternalLinkSuggestion[];
   onGenerate: () => void;
   onSetStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
@@ -641,6 +901,7 @@ function LinksWorkspace({
   return <ResultWorkspace
     actionLabel={links.length ? "Gợi ý lại link" : "Gợi ý link"}
     busy={busy}
+    busyLabel={busyLabel}
     emptyDescription="Sinh draft trước khi gắn internal links."
     emptyTitle="Chưa có gợi ý link"
     onGenerate={onGenerate}
@@ -712,6 +973,7 @@ function ReadyWorkspace({
 function ResultWorkspace({
   actionLabel,
   busy,
+  busyLabel,
   children,
   emptyDescription,
   emptyTitle,
@@ -719,6 +981,7 @@ function ResultWorkspace({
 }: {
   actionLabel: string;
   busy: boolean;
+  busyLabel: string;
   children: React.ReactNode;
   emptyDescription: string;
   emptyTitle: string;
@@ -726,7 +989,10 @@ function ResultWorkspace({
 }) {
   return <section>
     <Button disabled={busy} onClick={onGenerate}><Wand2 size={16} />{actionLabel}</Button>
-    <div className="mt-4">{children || <EmptyState description={emptyDescription} title={emptyTitle} />}</div>
+    <div className="mt-4 grid gap-4">
+      {busy ? <LoadingSkeleton label={busyLabel || "Đang xử lý..."} /> : null}
+      {children || (busy ? null : <EmptyState description={emptyDescription} title={emptyTitle} />)}
+    </div>
   </section>;
 }
 

@@ -3,6 +3,8 @@
 import { BarChart3, ChartNoAxesCombined } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { publicApiUrl } from "@/lib/api";
+
 type QuickCoin = {
   symbol: "BTC" | "ETH" | "SOL";
   pair: string;
@@ -10,10 +12,10 @@ type QuickCoin = {
   change: number;
 };
 
-type BinanceTicker = {
-  symbol: string;
-  lastPrice: string;
-  priceChangePercent: string;
+type MarketTicker = {
+  pair: string;
+  price: number;
+  changePercent: number;
 };
 
 const fallbackCoins: QuickCoin[] = [
@@ -34,8 +36,8 @@ function MiniSparkline({ leadPrice }: { leadPrice: number }) {
     <svg aria-hidden="true" className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 420 150">
       <defs>
         <linearGradient id="quick-watch-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="#C8A227" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#C8A227" stopOpacity="0.02" />
         </linearGradient>
       </defs>
       <g stroke="#dbe9e1" strokeWidth="1">
@@ -47,13 +49,13 @@ function MiniSparkline({ leadPrice }: { leadPrice: number }) {
         ))}
       </g>
       <path d="M0 132 C42 120 58 137 98 105 C142 68 166 88 210 72 C254 56 284 66 326 36 C362 8 390 6 420 24 L420 150 L0 150 Z" fill="url(#quick-watch-fill)" />
-      <path d="M0 132 C42 120 58 137 98 105 C142 68 166 88 210 72 C254 56 284 66 326 36 C362 8 390 6 420 24" fill="none" stroke="#22c55e" strokeLinecap="round" strokeWidth="3" />
+      <path d="M0 132 C42 120 58 137 98 105 C142 68 166 88 210 72 C254 56 284 66 326 36 C362 8 390 6 420 24" fill="none" stroke="#C8A227" strokeLinecap="round" strokeWidth="3" />
       <g transform="translate(0 34)">
-        <rect fill="#ffffff" height="18" rx="4" stroke="#16a34a" width="72" x="0" y="-9" />
-        <text fill="#008b4a" fontSize="10" fontWeight="600" x="7" y="4">
+        <rect fill="#ffffff" height="18" rx="4" stroke="#C8A227" width="72" x="0" y="-9" />
+        <text fill="#A88412" fontSize="10" fontWeight="600" x="7" y="4">
           {formatPrice(leadPrice)}
         </text>
-        <circle cx="82" cy="0" fill="#22c55e" r="4" stroke="#07110c" strokeWidth="2" />
+        <circle cx="82" cy="0" fill="#C8A227" r="4" stroke="#111827" strokeWidth="2" />
       </g>
     </svg>
   );
@@ -67,28 +69,28 @@ export function QuickMarketWatch() {
 
     async function loadPrices() {
       try {
-        const symbols = encodeURIComponent(JSON.stringify(fallbackCoins.map((coin) => coin.pair)));
-        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${symbols}`);
+        const pairs = fallbackCoins.map((coin) => coin.pair).join(",");
+        const response = await fetch(publicApiUrl(`/public/markets/tickers?pairs=${encodeURIComponent(pairs)}`));
         if (!response.ok) {
           return;
         }
 
-        const payload = (await response.json()) as BinanceTicker[];
+        const payload = (await response.json()) as { tickers: MarketTicker[] };
         if (cancelled) {
           return;
         }
 
         setCoins((current) =>
           current.map((coin) => {
-            const live = payload.find((item) => item.symbol === coin.pair);
+            const live = payload.tickers.find((item) => item.pair === coin.pair);
             if (!live) {
               return coin;
             }
 
             return {
               ...coin,
-              change: Number(live.priceChangePercent),
-              price: Number(live.lastPrice)
+              change: live.changePercent,
+              price: live.price
             };
           })
         );
@@ -113,23 +115,23 @@ export function QuickMarketWatch() {
   }, [coins]);
 
   return (
-    <article className="rounded-2xl border border-[#d7e7dc] bg-[#f8fbf9] p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
-      <div className="mb-4 flex items-center gap-2 text-[#07110c]">
+    <article className="rounded-lg border border-[#E5E7EB] bg-[#FAFAF7] p-4 shadow-[0_18px_44px_rgba(17,24,39,0.06)]">
+      <div className="mb-4 flex items-center gap-2 text-[#111827]">
         <ChartNoAxesCombined size={19} strokeWidth={2} />
         <h3 className="text-lg font-medium">Theo dõi nhanh</h3>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-[#d7e7dc] bg-white">
+      <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
         <div className="grid grid-cols-3 gap-2 px-4 py-4 text-center">
           {coins.map((coin) => (
             <div className="flex items-center justify-center gap-2" key={coin.symbol}>
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#03130b] text-sm font-semibold text-[#22c55e]">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0F1115] text-sm font-semibold text-[#F5E7B3]">
                 {coin.symbol.slice(0, 1)}
               </span>
               <span className="text-left">
-                <span className="block text-sm font-medium text-[#07110c]">{coin.symbol}</span>
-                <span className="block text-sm text-[#5f6b63]">${formatPrice(coin.price)}</span>
-                <span className="block text-sm text-[#009f4d]">
+                <span className="block text-sm font-medium text-[#111827]">{coin.symbol}</span>
+                <span className="block text-sm text-[#4B5563]">${formatPrice(coin.price)}</span>
+                <span className="block text-sm text-[#15803D]">
                   {coin.change >= 0 ? "+" : ""}
                   {coin.change.toFixed(2)}%
                 </span>
@@ -142,8 +144,8 @@ export function QuickMarketWatch() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4 rounded-2xl border border-[#d7e7dc] bg-white p-4 text-[#5f6b63]">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[#bbf7d0] bg-[#dcfce7] text-[#03130b]">
+      <div className="mt-4 flex items-center gap-4 rounded-lg border border-[#E5E7EB] bg-white p-4 text-[#4B5563]">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-[#F5E7B3] bg-[#F5E7B3]/55 text-[#0F1115]">
           <BarChart3 size={21} />
         </span>
         <p className="text-sm leading-6">

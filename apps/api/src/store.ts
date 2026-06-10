@@ -123,6 +123,47 @@ function normalizeReviewText(value: string) {
     .trim();
 }
 
+function containsPrimaryKeyword(scope: string, keyword: string) {
+  const normalizedScope = normalizeReviewText(scope);
+  const normalizedKeyword = normalizeReviewText(keyword);
+
+  if (!normalizedKeyword) {
+    return true;
+  }
+
+  if (normalizedScope.includes(normalizedKeyword)) {
+    return true;
+  }
+
+  const scopeTokens = normalizedScope.split(" ").filter(Boolean);
+  const keywordTokens = normalizedKeyword.split(" ").filter(Boolean);
+  if (keywordTokens.length <= 1) {
+    return scopeTokens.includes(keywordTokens[0] ?? "");
+  }
+
+  const maxWindow = keywordTokens.length + 4;
+  for (let start = 0; start < scopeTokens.length; start += 1) {
+    if (scopeTokens[start] !== keywordTokens[0]) {
+      continue;
+    }
+
+    let keywordIndex = 1;
+    let end = start + 1;
+    while (end < scopeTokens.length && end - start < maxWindow && keywordIndex < keywordTokens.length) {
+      if (scopeTokens[end] === keywordTokens[keywordIndex]) {
+        keywordIndex += 1;
+      }
+      end += 1;
+    }
+
+    if (keywordIndex === keywordTokens.length) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isSuperAdmin(actor: OwnerContext) {
   return actor.role === "super_admin";
 }
@@ -194,12 +235,12 @@ function normalizeKeywordIdeaProvider(keywordIdea: KeywordIdea): KeywordIdea {
     return { ...keywordIdea, provider: "Chưa có nguồn dữ liệu" };
   }
 
-  if (normalized.includes("dataforseo")) {
-    return { ...keywordIdea, provider: "DataForSEO" };
-  }
-
   if (normalized.includes("ahrefs")) {
     return { ...keywordIdea, provider: "Ahrefs" };
+  }
+
+  if (normalized.includes("semrush")) {
+    return { ...keywordIdea, provider: "Semrush" };
   }
 
   if (normalized.includes("keywordtool") || normalized.includes("keyword tool")) {
@@ -538,7 +579,7 @@ function validateArticleForReview(article: ArticleSessionSnapshot) {
   if (!isManualArticle && markdown.trim().length < 2400) {
     issues.push("Nội dung bài còn quá ngắn để giao tự động.");
   }
-  if (!isManualArticle && primaryKeyword && !normalizeReviewText(keywordScope).includes(normalizeReviewText(primaryKeyword.keyword))) {
+  if (!isManualArticle && primaryKeyword && !containsPrimaryKeyword(keywordScope, primaryKeyword.keyword)) {
     issues.push("Nội dung chưa chứa rõ từ khóa chính.");
   }
   if (!isManualArticle && acceptedLinksReady.length === 0) {

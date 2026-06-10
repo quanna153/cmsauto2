@@ -113,7 +113,13 @@ function getFallbackChartUrl(symbol: string) {
   return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
 }
 
-export function TradingViewChart({ symbol }: { symbol: string }) {
+export function TradingViewChart({
+  symbol,
+  heightClass = "h-[420px] md:h-[520px] lg:h-[600px]"
+}: {
+  symbol: string;
+  heightClass?: string;
+}) {
   const reactId = useId();
   const containerId = useMemo(() => `tradingview-${reactId.replace(/:/g, "")}`, [reactId]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -188,8 +194,8 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
   }, [containerId, symbol]);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border bg-[#101827]">
-      <div className="h-[420px] md:h-[520px] lg:h-[600px]" id={containerId} ref={containerRef} />
+    <div className="relative overflow-hidden rounded-lg border border-[#2B313D] bg-[#0F1115]">
+      <div className={heightClass} id={containerId} ref={containerRef} />
       {useFallback ? (
         <iframe
           className="absolute inset-0 h-full w-full border-0"

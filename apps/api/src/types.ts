@@ -6,6 +6,17 @@ export type DataStatus = "verified" | "missing" | "failed";
 export type PromptKey = "keywords" | "brief" | "outline" | "draft" | "links";
 export type PromptTemplates = Record<PromptKey, string>;
 export type FactoryStep = "keywords" | "brief" | "outline" | "draft" | "links" | "ready";
+export type ArticleImageKind = "hero" | "inline" | "thumbnail";
+export type ArticleImageAspectRatio = "16:9" | "4:3" | "1:1" | "3:4";
+export type ArticleImageGenerationStatus = "planned" | "generated" | "failed";
+export type ArticleImageProviderName =
+  | "mock"
+  | "openai"
+  | "gemini"
+  | "stability"
+  | "replicate"
+  | "fal"
+  | "custom-proxy";
 export type ReviewStatus =
   | "editor_ready"
   | "needs_fix"
@@ -38,6 +49,19 @@ export type Brief = {
     url: string;
     title: string;
     snippet: string;
+    rawContent?: string;
+  }>;
+  competitorInsights?: Array<{
+    rank: number;
+    keyword: string;
+    url: string;
+    title: string;
+    contentSummary: string;
+    seoIntent: string;
+    outlinePattern: string;
+    strengths: string[];
+    gaps: string[];
+    recommendedTakeaway: string;
   }>;
 };
 
@@ -50,6 +74,12 @@ export type Outline = {
   title: string;
   introDirection: string;
   sections: OutlineSection[];
+  keywordCoverage?: Array<{
+    keyword: string;
+    monthlyVolume: number | null;
+    intent: Intent;
+    placement: string;
+  }>;
 };
 
 export type Draft = {
@@ -59,6 +89,26 @@ export type Draft = {
   metaTitle: string;
   metaDescription: string;
   markdown: string;
+  generatedImages?: GeneratedArticleImage[];
+};
+
+export type GeneratedArticleImage = {
+  id: string;
+  kind: ArticleImageKind;
+  provider: ArticleImageProviderName | string;
+  model: string;
+  status: ArticleImageGenerationStatus;
+  prompt: string;
+  revisedPrompt?: string;
+  url?: string;
+  base64?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  aspectRatio: ArticleImageAspectRatio;
+  altText: string;
+  caption?: string;
+  createdAt: string;
 };
 
 export type ArticleLibraryItem = {
@@ -115,6 +165,7 @@ export type HistoryStep =
   | "brief"
   | "outline"
   | "draft"
+  | "image"
   | "links"
   | "apply-links";
 

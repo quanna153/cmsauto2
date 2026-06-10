@@ -3,6 +3,8 @@
 import { Activity, Newspaper } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { publicApiUrl } from "@/lib/api";
+
 type MarketCoin = {
   symbol: "BTC" | "ETH" | "SOL";
   pair: string;
@@ -10,10 +12,10 @@ type MarketCoin = {
   change: number;
 };
 
-type BinanceTicker = {
-  symbol: string;
-  lastPrice: string;
-  priceChangePercent: string;
+type MarketTicker = {
+  pair: string;
+  price: number;
+  changePercent: number;
 };
 
 const fallbackCoins: MarketCoin[] = [
@@ -38,11 +40,11 @@ function MiniMarketChart({ coins }: { coins: MarketCoin[] }) {
     <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 420 180" aria-hidden="true">
       <defs>
         <linearGradient id="home-radar-chart-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+          <stop offset="0%" stopColor="#C8A227" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#C8A227" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <g stroke="#d7e7dc" strokeWidth="1">
+      <g stroke="#E5E7EB" strokeWidth="1">
         {[36, 72, 108, 144].map((y) => (
           <line key={y} x1="0" x2="420" y1={y} y2={y} />
         ))}
@@ -51,13 +53,13 @@ function MiniMarketChart({ coins }: { coins: MarketCoin[] }) {
         ))}
       </g>
       <path d={`${curve} L420 180 L0 180 Z`} fill="url(#home-radar-chart-fill)" />
-      <path d={curve} fill="none" stroke="#16a34a" strokeLinecap="round" strokeWidth="3" />
+      <path d={curve} fill="none" stroke="#C8A227" strokeLinecap="round" strokeWidth="3" />
       <g transform={`translate(420 ${20 - boost})`}>
-        <rect fill="#03130b" height="24" rx="6" width="76" x="-86" y="-12" />
+        <rect fill="#0F1115" height="24" rx="6" width="76" x="-86" y="-12" />
         <text fill="#ffffff" fontSize="11" fontWeight="700" textAnchor="middle" x="-48" y="4">
           {formatPrice(coins[0]?.price ?? fallbackCoins[0].price)}
         </text>
-        <circle cx="0" cy="0" fill="#22c55e" r="5" stroke="#ffffff" strokeWidth="2" />
+        <circle cx="0" cy="0" fill="#C8A227" r="5" stroke="#ffffff" strokeWidth="2" />
       </g>
     </svg>
   );
@@ -70,19 +72,19 @@ function ClockCard({ now }: { now: Date | null }) {
   const hours = (visibleTime.getHours() % 12) + minutes / 60;
 
   return (
-    <div className="rounded-lg border border-[#d7e7dc] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
-      <div className="relative mx-auto size-24 rounded-full border border-[#d7e7dc] bg-white shadow-inner">
-        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#03130b]" />
+    <div className="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
+      <div className="relative mx-auto size-24 rounded-full border border-[#E5E7EB] bg-white shadow-inner">
+        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0F1115]" />
         <span
-          className="absolute left-1/2 top-1/2 h-1 w-8 origin-left -translate-y-1/2 rounded-full bg-[#16a34a]"
+          className="absolute left-1/2 top-1/2 h-1 w-8 origin-left -translate-y-1/2 rounded-full bg-[#C8A227]"
           style={{ transform: `rotate(${minutes * 6 - 90}deg)` }}
         />
         <span
-          className="absolute left-1/2 top-1/2 h-1 w-7 origin-left -translate-y-1/2 rounded-full bg-[#03130b]"
+          className="absolute left-1/2 top-1/2 h-1 w-7 origin-left -translate-y-1/2 rounded-full bg-[#0F1115]"
           style={{ transform: `rotate(${hours * 30 - 90}deg)` }}
         />
         <span
-          className="absolute left-1/2 top-1/2 h-0.5 w-10 origin-left -translate-y-1/2 rounded-full bg-[#03130b]/70"
+          className="absolute left-1/2 top-1/2 h-0.5 w-10 origin-left -translate-y-1/2 rounded-full bg-[#0F1115]/70"
           style={{ transform: `rotate(${seconds * 6 - 90}deg)` }}
         />
       </div>
@@ -95,14 +97,14 @@ function SentimentCard({ value }: { value: number }) {
   const cautious = 100 - optimistic;
 
   return (
-    <div className="rounded-lg border border-[#d7e7dc] bg-white p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
+    <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
       <div className="mb-3 flex items-center justify-between text-sm font-semibold">
-        <span className="text-[#16a34a]">Lạc quan {optimistic}%</span>
-        <span className="text-[#07110c]/55">Thận trọng {cautious}%</span>
+        <span className="text-[#C8A227]">Lạc quan {optimistic}%</span>
+        <span className="text-[#111827]/55">Thận trọng {cautious}%</span>
       </div>
-      <div className="flex h-3 overflow-hidden rounded-full bg-[#07110c]/12">
-        <span className="bg-[#22c55e] transition-all" style={{ width: `${optimistic}%` }} />
-        <span className="flex-1 bg-[#07110c]/45" />
+      <div className="flex h-3 overflow-hidden rounded-full bg-[#111827]/12">
+        <span className="bg-[#C8A227] transition-all" style={{ width: `${optimistic}%` }} />
+        <span className="flex-1 bg-[#111827]/45" />
       </div>
     </div>
   );
@@ -123,28 +125,28 @@ export function HomeMarketRadar() {
 
     async function loadMarket() {
       try {
-        const symbols = encodeURIComponent(JSON.stringify(fallbackCoins.map((coin) => coin.pair)));
-        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${symbols}`);
+        const pairs = fallbackCoins.map((coin) => coin.pair).join(",");
+        const response = await fetch(publicApiUrl(`/public/markets/tickers?pairs=${encodeURIComponent(pairs)}`));
         if (!response.ok) {
           return;
         }
 
-        const payload = (await response.json()) as BinanceTicker[];
+        const payload = (await response.json()) as { tickers: MarketTicker[] };
         if (cancelled) {
           return;
         }
 
         setCoins((current) =>
           current.map((coin) => {
-            const live = payload.find((item) => item.symbol === coin.pair);
+            const live = payload.tickers.find((item) => item.pair === coin.pair);
             if (!live) {
               return coin;
             }
 
             return {
               ...coin,
-              change: Number(live.priceChangePercent),
-              price: Number(live.lastPrice)
+              change: live.changePercent,
+              price: live.price
             };
           })
         );
@@ -197,11 +199,11 @@ export function HomeMarketRadar() {
     <div className="grid gap-4 lg:grid-cols-[0.8fr_1.1fr_0.8fr]">
       <div className="flex flex-col justify-center gap-4">
         <div>
-          <p className="mb-2.5 text-sm font-bold text-[#047857]">Bảng thuật ngữ</p>
-          <div className="rounded-lg border border-[#d7e7dc] bg-white p-2.5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
+          <p className="mb-2.5 text-sm font-bold text-[#A88412]">Bảng thuật ngữ</p>
+          <div className="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
             <div className="flex flex-wrap gap-2">
               {glossary.map((item) => (
-                <span className="flex size-10 items-center justify-center rounded-full border border-[#d7e7dc] bg-[#f6fbf7] text-xs font-black text-[#07110c]" key={item}>
+                <span className="flex size-10 items-center justify-center rounded-full border border-[#E5E7EB] bg-[#FAFAF7] text-xs font-black text-[#111827]" key={item}>
                   {item}
                 </span>
               ))}
@@ -209,13 +211,13 @@ export function HomeMarketRadar() {
           </div>
         </div>
         <div>
-          <p className="mb-2.5 text-sm font-bold text-[#047857]">Tin nhanh</p>
-          <div className="rounded-lg border border-[#d7e7dc] bg-white p-3.5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
+          <p className="mb-2.5 text-sm font-bold text-[#A88412]">Tin nhanh</p>
+          <div className="rounded-lg border border-[#E5E7EB] bg-white p-3.5 shadow-[0_14px_34px_rgba(17,24,39,0.05)]">
             <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#03130b] text-[#22c55e]">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0F1115] text-[#C8A227]">
                 <Newspaper size={16} />
               </span>
-              <p className="text-sm font-bold leading-5 text-[#07110c]">
+              <p className="text-sm font-bold leading-5 text-[#111827]">
                 {strongestCoin.symbol} đang dẫn nhịp radar với biến động {strongestCoin.change >= 0 ? "+" : ""}
                 {strongestCoin.change.toFixed(2)}% trong 24 giờ.
               </p>
@@ -224,19 +226,19 @@ export function HomeMarketRadar() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#d7e7dc] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.08)]">
-        <div className="mb-4 flex items-center gap-2 text-[#07110c]">
-          <Activity className="text-[#16a34a]" size={17} />
+      <div className="rounded-lg border border-[#E5E7EB] bg-white p-4 shadow-[0_18px_44px_rgba(17,24,39,0.08)]">
+        <div className="mb-4 flex items-center gap-2 text-[#111827]">
+          <Activity className="text-[#C8A227]" size={17} />
           <p className="text-base font-black">Radar thị trường</p>
         </div>
         <div className="grid gap-2.5 sm:grid-cols-3">
           {coins.map((coin) => (
-            <div className="flex items-center gap-2.5 rounded-lg border border-[#d7e7dc] bg-[#f6fbf7] p-2.5" key={coin.symbol}>
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#03130b] text-xs font-black text-[#22c55e]">{coin.symbol.slice(0, 1)}</span>
+            <div className="flex items-center gap-2.5 rounded-lg border border-[#E5E7EB] bg-[#FAFAF7] p-2.5" key={coin.symbol}>
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0F1115] text-xs font-black text-[#C8A227]">{coin.symbol.slice(0, 1)}</span>
               <span>
-                <strong className="block text-sm text-[#07110c]">{coin.symbol}</strong>
-                <span className="block text-xs text-[#5f6b63]">${formatPrice(coin.price)}</span>
-                <span className={`block text-xs font-bold ${coin.change >= 0 ? "text-[#16a34a]" : "text-[#dc2626]"}`}>
+                <strong className="block text-sm text-[#111827]">{coin.symbol}</strong>
+                <span className="block text-xs text-[#4B5563]">${formatPrice(coin.price)}</span>
+                <span className={`block text-xs font-bold ${coin.change >= 0 ? "text-[#C8A227]" : "text-[#dc2626]"}`}>
                   {coin.change >= 0 ? "+" : ""}
                   {coin.change.toFixed(2)}%
                 </span>
@@ -244,21 +246,21 @@ export function HomeMarketRadar() {
             </div>
           ))}
         </div>
-        <div className="mt-4 h-36 overflow-hidden rounded-lg border border-[#d7e7dc] bg-white p-3 md:h-40">
+        <div className="mt-4 h-36 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white p-3 md:h-40">
           <MiniMarketChart coins={coins} />
         </div>
-        <div className="mt-3 rounded-lg border border-[#d7e7dc] bg-[#f6fbf7] p-3.5 text-sm leading-6 text-[#5f6b63]">
-          Dữ liệu giá lấy từ Binance API, cập nhật định kỳ để radar không bị đứng khi thị trường đổi nhịp.
+        <div className="mt-3 rounded-lg border border-[#E5E7EB] bg-[#FAFAF7] p-3.5 text-sm leading-6 text-[#4B5563]">
+          Dữ liệu giá đi qua backend market proxy, có cache và fallback để radar không bị đứng khi thị trường đổi nhịp.
         </div>
       </div>
 
       <div className="flex flex-col justify-center gap-4">
         <div>
-          <p className="mb-2.5 text-sm font-bold text-[#047857]">Nhịp cập nhật</p>
+          <p className="mb-2.5 text-sm font-bold text-[#A88412]">Nhịp cập nhật</p>
           <ClockCard now={now} />
         </div>
         <div>
-          <p className="mb-2.5 text-sm font-bold text-[#047857]">Tâm lý cộng đồng</p>
+          <p className="mb-2.5 text-sm font-bold text-[#A88412]">Tâm lý cộng đồng</p>
           <SentimentCard value={sentiment} />
         </div>
       </div>

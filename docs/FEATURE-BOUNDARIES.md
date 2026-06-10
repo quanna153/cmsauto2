@@ -18,6 +18,7 @@
 | Database, migrations | `apps/api/src/database.ts` | Core owner |
 | Core content store | `apps/api/src/store.ts` | Core owner |
 | Keyword volume providers | `apps/api/src/keyword-volume.ts` | Ticket core riêng |
+| Article image generation providers | `apps/api/src/article-images.ts` | Ticket core riêng |
 | Internal link matching | `apps/api/src/factory.ts` | Ticket core riêng |
 | API composition | `apps/api/src/index.ts` | Core owner hoặc ticket ghi rõ |
 

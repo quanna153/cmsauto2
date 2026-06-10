@@ -1,8 +1,7 @@
-import type { ResearchRow } from "./model";
+import type { KeywordResearchRow } from "./model";
 
-export const researchRows: ResearchRow[] = [
-  { keyword: "bitcoin là gì", intent: "Thông tin", volume: "12.100", source: "Google Suggest" },
-  { keyword: "giá bitcoin hôm nay", intent: "Theo dõi", volume: "8.900", source: "Mock volume" },
-  { keyword: "cách mua bitcoin", intent: "Hướng dẫn", volume: "4.400", source: "Google Suggest" }
+export const researchRows: KeywordResearchRow[] = [
+  { id: "bitcoin-la-gi", keyword: "bitcoin là gì", intent: "informational", cluster: "bitcoin", monthlyVolume: 12100, provider: "Google Suggest", checkedAt: null, status: "verified" },
+  { id: "gia-bitcoin-hom-nay", keyword: "giá bitcoin hôm nay", intent: "commercial", cluster: "bitcoin", monthlyVolume: 8900, provider: "Mock volume", checkedAt: null, status: "verified" },
+  { id: "cach-mua-bitcoin", keyword: "cách mua bitcoin", intent: "transactional", cluster: "bitcoin", monthlyVolume: 4400, provider: "Google Suggest", checkedAt: null, status: "verified" }
 ];
-
