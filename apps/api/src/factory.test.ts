@@ -7,6 +7,8 @@ import {
   findAnchorTextCandidates,
   selectInternalLinkCandidatesForAnchorCandidates,
   mapAnchorCandidatesToInternalLinks,
+  mapSelectedInternalLinkTargetsToSuggestions,
+  retrieveInternalLinkArticles,
   selectInternalLinkCandidates
 } from "./factory.js";
 import type { ArticleLibraryItem, Draft } from "./types.js";
@@ -76,9 +78,9 @@ describe("internal link matching", () => {
       anchorText: "Solana",
       reason: expect.objectContaining({
         standaloneTopic: true,
-        informationGap: false,
-        learningValue: false,
-        semanticClarity: false
+        informationGap: true,
+        learningValue: true,
+        semanticClarity: true
       })
     }));
   });
@@ -212,6 +214,98 @@ describe("internal link matching", () => {
     });
   });
 
+  it("retrieves a small BM25 candidate set from title-only library records before ranking", () => {
+    const library = Array.from({ length: 40 }, (_, index) =>
+      libraryItem({
+        id: `noise-${index}`,
+        title: `General market update ${index}`,
+        url: `/market-update-${index}`,
+        keywords: []
+      })
+    );
+    const target = libraryItem({
+      id: "pos",
+      title: "Proof of Stake",
+      url: "/proof-of-stake",
+      keywords: []
+    });
+    const retrieved = retrieveInternalLinkArticles(
+      "proof-of-stake system",
+      "The proof-of-stake system changes validator incentives.",
+      "en",
+      [...library, target],
+      10
+    );
+
+    expect(retrieved.length).toBeLessThanOrEqual(10);
+    expect(retrieved.length).toBeGreaterThan(0);
+    expect(retrieved[0]).toMatchObject({
+      id: "pos",
+      url: "/proof-of-stake"
+    });
+  });
+
+  it("keeps retrieval language-scoped and supports Vietnamese diacritic-insensitive matching", () => {
+    const retrieved = retrieveInternalLinkArticles(
+      "phi giao dich gas",
+      "Phí giao dịch gas tăng khi mạng lưới đông người dùng.",
+      "vi",
+      [
+        libraryItem({
+          id: "en-gas",
+          language: "en",
+          title: "Gas Fees",
+          url: "/gas-fees",
+          keywords: ["gas fees"]
+        }),
+        libraryItem({
+          id: "vi-gas",
+          language: "vi",
+          title: "Phí gas",
+          url: "/vi-vn/phi-gas",
+          keywords: []
+        })
+      ],
+      10
+    );
+
+    expect(retrieved).toHaveLength(1);
+    expect(retrieved[0]).toMatchObject({
+      id: "vi-gas",
+      url: "/vi-vn/phi-gas"
+    });
+  });
+
+  it("widens retrieval with semantic context when the title is not a direct lexical anchor match", () => {
+    const retrieved = retrieveInternalLinkArticles(
+      "đầu cơ",
+      "Nhà đầu tư cần đọc tín hiệu mùa altcoin, phân bổ vốn và quản lý rủi ro trước khi đầu cơ.",
+      "vi",
+      [
+        libraryItem({
+          id: "noise",
+          language: "vi",
+          title: "Lịch kinh tế tuần này",
+          url: "/vi-vn/lich-kinh-te",
+          keywords: []
+        }),
+        libraryItem({
+          id: "altcoin-season",
+          language: "vi",
+          title: "Mùa Altcoin là gì? Dấu hiệu Altcoin Season và cơ hội đầu tư",
+          url: "/vi-vn/mua-altcoin-la-gi-dau-hieu-va-co-hoi-dau-tu.html",
+          keywords: []
+        })
+      ],
+      10
+    );
+
+    expect(retrieved[0]).toMatchObject({
+      id: "altcoin-season",
+      url: "/vi-vn/mua-altcoin-la-gi-dau-hieu-va-co-hoi-dau-tu.html"
+    });
+  });
+
   it("uses article titles as optional link knowledge when keywords are empty", () => {
     const viDraft: Draft = {
       ...draft,
@@ -241,6 +335,80 @@ describe("internal link matching", () => {
       targetUrl: "https://coinminutes.com/vi-vn/dau-hieu-altcoin-tang-gia.html",
       matchStatus: "matched"
     });
+  });
+
+  it("does not select heading text as internal link anchors", () => {
+    const headingOnlyDraft: Draft = {
+      ...draft,
+      title: "Consensus",
+      markdown: [
+        "## Proof of Stake",
+        "",
+        "This section explains how validators secure the chain."
+      ].join("\n")
+    };
+    const candidates = findAnchorTextCandidates(headingOnlyDraft.title, headingOnlyDraft.markdown, "en");
+    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(
+      headingOnlyDraft,
+      "consensus",
+      [],
+      "en",
+      [
+        libraryItem({
+          id: "pos",
+          title: "Proof of Stake",
+          url: "/proof-of-stake",
+          keywords: ["proof of stake"]
+        })
+      ]
+    );
+
+    expect(candidates.map((candidate) => candidate.anchorText)).not.toContain("Proof of Stake");
+    expect(suggestions).toHaveLength(0);
+  });
+
+  it("keeps a larger anchor candidate pool for matcher filtering", () => {
+    const content = [
+      "Proof of Stake creates validator incentives.",
+      "Validator Rewards affect staking economics.",
+      "Blockchain Scalability changes transaction throughput.",
+      "Cross-chain Interoperability depends on bridges.",
+      "Smart Contract Security lowers exploit risk.",
+      "Tokenomics helps readers evaluate supply design.",
+      "Governance lets communities change protocol rules.",
+      "Rollups improve layer two scaling.",
+      "Subnets support application-specific networks.",
+      "Bridge Security protects transferred assets.",
+      "Consensus Mechanisms explain finality tradeoffs.",
+      "Validator Staking changes operator incentives."
+    ].join("\n\n");
+    const candidates = findAnchorTextCandidates("Crypto concepts", content, "en");
+
+    expect(candidates.length).toBeGreaterThan(8);
+    expect(candidates.length).toBeLessThanOrEqual(14);
+  });
+
+  it("does not apply accepted internal links inside headings or append heading-only anchors", () => {
+    const markdown = applyInternalLinks([
+      "# Blockchain Scalability",
+      "",
+      "This paragraph discusses throughput and fees."
+    ].join("\n"), [{
+      id: "scale",
+      sourceContext: "Blockchain Scalability",
+      anchor: "Blockchain Scalability",
+      targetTitle: "Blockchain Scalability",
+      targetUrl: "/blockchain-scalability",
+      matchedKeyword: "Blockchain Scalability",
+      matchStatus: "matched",
+      reason: "Relevant",
+      confidence: 95,
+      status: "accepted"
+    }]);
+
+    expect(markdown).toContain("# Blockchain Scalability");
+    expect(markdown).not.toContain("](/blockchain-scalability)");
+    expect(markdown).not.toContain("Xem");
   });
 
   it("caps and distributes internal links across paragraphs without repeating destination URLs", () => {
@@ -283,6 +451,144 @@ describe("internal link matching", () => {
       "Blockchain scalability",
       "Cross-chain interoperability"
     ]);
+  });
+
+  it("can return six suitable links for medium-length drafts after matcher filtering", () => {
+    const mediumDraft: Draft = {
+      ...draft,
+      title: "Crypto education guide",
+      markdown: [
+        "Proof of Stake explains validator incentives.",
+        "",
+        "Blockchain scalability affects transaction throughput.",
+        "",
+        "Cross-chain interoperability depends on bridge design.",
+        "",
+        "Smart contract security reduces exploit risk.",
+        "",
+        "Tokenomics helps readers evaluate supply design.",
+        "",
+        "Governance lets communities change protocol rules.",
+        "",
+        Array.from({ length: 820 }, () => "context").join(" ")
+      ].join("\n")
+    };
+    const suggestions = mapAnchorCandidatesToInternalLinks(
+      mediumDraft,
+      "en",
+      [
+        libraryItem({ id: "pos", title: "Proof of Stake", url: "/proof-of-stake", keywords: ["proof of stake"] }),
+        libraryItem({ id: "scale", title: "Blockchain Scalability", url: "/blockchain-scalability", keywords: ["blockchain scalability"] }),
+        libraryItem({ id: "bridge", title: "Cross-chain Interoperability", url: "/cross-chain-interoperability", keywords: ["cross-chain interoperability"] }),
+        libraryItem({ id: "security", title: "Smart Contract Security", url: "/smart-contract-security", keywords: ["smart contract security"] }),
+        libraryItem({ id: "tokenomics", title: "Tokenomics", url: "/tokenomics", keywords: ["tokenomics"] }),
+        libraryItem({ id: "governance", title: "Governance", url: "/governance", keywords: ["governance"] })
+      ],
+      [
+        { anchor: "Proof of Stake", sourceContext: "Proof of Stake explains validator incentives.", confidence: 95 },
+        { anchor: "Blockchain scalability", sourceContext: "Blockchain scalability affects transaction throughput.", confidence: 94 },
+        { anchor: "Cross-chain interoperability", sourceContext: "Cross-chain interoperability depends on bridge design.", confidence: 93 },
+        { anchor: "Smart contract security", sourceContext: "Smart contract security reduces exploit risk.", confidence: 92 },
+        { anchor: "Tokenomics", sourceContext: "Tokenomics helps readers evaluate supply design.", confidence: 91 },
+        { anchor: "Governance", sourceContext: "Governance lets communities change protocol rules.", confidence: 90 }
+      ]
+    );
+
+    expect(suggestions).toHaveLength(6);
+    expect(new Set(suggestions.map((suggestion) => suggestion.targetUrl)).size).toBe(6);
+  });
+
+  it("avoids previously rejected URLs for the same anchor when regenerating links", () => {
+    const suggestions = mapAnchorCandidatesToInternalLinks(
+      {
+        ...draft,
+        title: "Blockchain guide",
+        markdown: "Blockchain helps readers understand verifiable transactions."
+      },
+      "en",
+      [
+        libraryItem({
+          id: "rejected",
+          title: "Blockchain Basics",
+          url: "/blockchain-basics",
+          keywords: ["blockchain"]
+        }),
+        libraryItem({
+          id: "alternative",
+          title: "Blockchain Guide",
+          url: "/blockchain-guide",
+          keywords: ["blockchain guide"]
+        })
+      ],
+      [{
+        anchor: "Blockchain",
+        sourceContext: "Blockchain helps readers understand verifiable transactions.",
+        confidence: 95
+      }],
+      [{
+        id: "rejected-blockchain",
+        sourceContext: "Blockchain helps readers understand verifiable transactions.",
+        anchor: "Blockchain",
+        targetArticleId: "rejected",
+        targetTitle: "Blockchain Basics",
+        targetUrl: "/blockchain-basics",
+        matchedKeyword: "Blockchain",
+        matchStatus: "matched",
+        reason: "Rejected by editor.",
+        confidence: 95,
+        matchScore: 0.95,
+        relevanceScore: 0.95,
+        intentScore: 0.95,
+        expectationScore: 0.95,
+        status: "rejected"
+      }]
+    );
+
+    expect(suggestions[0]).toMatchObject({
+      anchor: "Blockchain",
+      targetArticleId: "alternative",
+      targetUrl: "/blockchain-guide"
+    });
+  });
+
+  it("maps AI-selected internal link targets only when target URL is in the prefiltered candidate set", () => {
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      {
+        ...draft,
+        title: "Consensus guide",
+        markdown: "Proof of Stake helps readers understand validator incentives."
+      },
+      "en",
+      [
+        libraryItem({
+          id: "pos",
+          title: "Proof of Stake",
+          url: "/proof-of-stake",
+          keywords: ["proof of stake"]
+        })
+      ],
+      [
+        {
+          anchor: "Proof of Stake",
+          targetUrl: "/proof-of-stake",
+          confidence: 0.95,
+          reason: "Best candidate for the concept."
+        },
+        {
+          anchor: "validator incentives",
+          targetUrl: "/not-in-candidate-list",
+          confidence: 0.9,
+          reason: "Invalid target should be ignored."
+        }
+      ]
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      anchor: "Proof of Stake",
+      targetArticleId: "pos",
+      targetUrl: "/proof-of-stake"
+    });
   });
 
   it("exports a CSV audit mapping for matched suggestions", () => {
@@ -395,5 +701,44 @@ describe("internal link matching", () => {
 
     expect(markdown.match(/\]\(\/en-us\/blockchain\)/g)).toHaveLength(1);
     expect(markdown).not.toContain("/en-us/risk");
+  });
+
+  it("does not insert internal links inside another word", () => {
+    const markdown = applyInternalLinks([
+      "Việc nắm bắt giá coin hôm nay rất quan trọng.",
+      "",
+      "Biến động 24h cho thấy sức khỏe thị trường."
+    ].join("\n"), [
+      {
+        id: "coin-h",
+        sourceContext: "giá coin hôm nay",
+        anchor: "Coin H",
+        targetTitle: "Entry trong coin",
+        targetUrl: "/vi-vn/entry-trong-coin.html",
+        matchedKeyword: "Coin H",
+        matchStatus: "matched",
+        reason: "Bad partial anchor.",
+        confidence: 99,
+        status: "accepted"
+      },
+      {
+        id: "bi",
+        sourceContext: "Biến động 24h",
+        anchor: "Bi",
+        targetTitle: "Bí kíp",
+        targetUrl: "/vi-vn/bi-kip.html",
+        matchedKeyword: "Bi",
+        matchStatus: "matched",
+        reason: "Bad partial anchor.",
+        confidence: 99,
+        status: "accepted"
+      }
+    ]);
+
+    expect(markdown).toBe([
+      "Việc nắm bắt giá coin hôm nay rất quan trọng.",
+      "",
+      "Biến động 24h cho thấy sức khỏe thị trường."
+    ].join("\n"));
   });
 });

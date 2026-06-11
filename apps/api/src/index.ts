@@ -32,12 +32,11 @@ import {
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildOutline,
   findInternalLinkAnchorCandidates,
-  mapAnchorCandidatesToInternalLinks,
-  mapAnchorTextCandidatesToInternalLinkCandidates,
+  mapSelectedInternalLinkTargetsToSuggestions,
+  retrieveInternalLinkArticles,
   selectInternalLinkCandidatesForAnchorCandidates,
   slugify
 } from "./factory.js";
-import type { AnchorTextCandidate } from "./factory.js";
 import { generateStructuredJson, hasGeminiConfig } from "./gemini.js";
 import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-volume.js";
 import {
@@ -248,18 +247,12 @@ const geminiKeywordResultSchema = z.object({
 const geminiBriefSchema = z.object({ brief: briefSchema });
 const geminiOutlineSchema = z.object({ outline: outlineSchema });
 const geminiDraftSchema = z.object({ draft: draftSchema });
-const geminiLinkAnchorsSchema = z.object({
-  anchorCandidates: z.array(z.object({
+const geminiInternalLinkSelectionSchema = z.object({
+  internalLinks: z.array(z.object({
     anchorText: z.string().min(1),
-    startOffset: z.number().int().min(0),
-    endOffset: z.number().int().min(1),
+    targetUrl: z.string().min(1),
     confidence: z.number().min(0).max(1),
-    reason: z.object({
-      standaloneTopic: z.boolean(),
-      informationGap: z.boolean(),
-      learningValue: z.boolean(),
-      semanticClarity: z.boolean()
-    })
+    reason: z.string().min(1)
   })).max(8)
 });
 const keywordIdeaResponseJsonSchema = {
@@ -430,38 +423,27 @@ const draftResponseJsonSchema = {
   },
   required: ["draft"]
 } as const;
-const linkAnchorCandidatesResponseJsonSchema = {
+const internalLinkSelectionResponseJsonSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    anchorCandidates: {
+    internalLinks: {
       type: "array",
       maxItems: 8,
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
-          anchorText: { type: "string", description: "Exact phrase from articleContent that can become an anchor." },
-          startOffset: { type: "integer", minimum: 0, description: "Start offset in articleContent." },
-          endOffset: { type: "integer", minimum: 1, description: "End offset in articleContent." },
+          anchorText: { type: "string", description: "Exact phrase from draft_markdown that should become an internal link anchor." },
+          targetUrl: { type: "string", description: "URL copied exactly from candidate_articles." },
           confidence: { type: "number", minimum: 0, maximum: 1 },
-          reason: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              standaloneTopic: { type: "boolean" },
-              informationGap: { type: "boolean" },
-              learningValue: { type: "boolean" },
-              semanticClarity: { type: "boolean" }
-            },
-            required: ["standaloneTopic", "informationGap", "learningValue", "semanticClarity"]
-          }
+          reason: { type: "string", description: "Short reason why this candidate article is the best destination." }
         },
-        required: ["anchorText", "startOffset", "endOffset", "confidence", "reason"]
+        required: ["anchorText", "targetUrl", "confidence", "reason"]
       }
     }
   },
-  required: ["anchorCandidates"]
+  required: ["internalLinks"]
 } as const;
 const keywordRequestSchema = z.object({
   seedKeyword: z.string().min(1),
@@ -487,6 +469,18 @@ const keywordIdeasRefreshSchema = z.object({
 function trimForPrompt(value: string | undefined, maxLength = 4000) {
   const text = value?.trim() ?? "";
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function formatInternalLinkCandidateArticlesForPrompt(articles: ArticleLibraryItem[]) {
+  return articles
+    .map((article, index) => [
+      `${index + 1}. id: ${article.id}`,
+      `   title: ${article.title}`,
+      `   url: ${article.url}`,
+      article.keywords.length ? `   keywords: ${article.keywords.join(", ")}` : null,
+      article.summary.trim() ? `   summary: ${trimForPrompt(article.summary, 220)}` : null
+    ].filter(Boolean).join("\n"))
+    .join("\n\n");
 }
 
 function formatCompetitorPagesForPrompt(pages: Array<z.infer<typeof competitorPageSchema>>) {
@@ -677,7 +671,8 @@ const linksRequestSchema = z.object({
   secondaryKeywords: z.array(z.string()).min(1),
   language: languageSchema,
   prompt: z.string().min(1),
-  draft: draftSchema
+  draft: draftSchema,
+  rejectedSuggestions: z.array(suggestionSchema).optional()
 });
 const applyLinksRequestSchema = z.object({
   markdown: z.string().min(1),
@@ -1719,81 +1714,99 @@ app.post("/api/links/suggest", async (request, response, next) => {
     }
 
     const localAnchorCandidates = findInternalLinkAnchorCandidates(payload.draft, payload.language, articleLibrary);
-    let candidateLibraryCount = selectInternalLinkCandidatesForAnchorCandidates(
+    let candidateLibrary = selectInternalLinkCandidatesForAnchorCandidates(
       payload.draft,
       payload.language,
       articleLibrary,
-      localAnchorCandidates
-    ).length;
+      localAnchorCandidates,
+      20
+    );
+    if (candidateLibrary.length === 0) {
+      candidateLibrary = retrieveInternalLinkArticles(
+        payload.draft.title,
+        [
+          payload.draft.excerpt,
+          payload.primaryKeyword,
+          payload.secondaryKeywords.join(", "),
+          payload.draft.markdown.slice(0, 1600)
+        ].filter(Boolean).join("\n"),
+        payload.language,
+        articleLibrary,
+        20
+      );
+    }
+    if (candidateLibrary.length === 0) {
+      candidateLibrary = articleLibrary.slice(0, 20);
+    }
+    let candidateLibraryCount = candidateLibrary.length;
     let suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(
       payload.draft,
       payload.primaryKeyword,
       payload.secondaryKeywords,
       payload.language,
-      articleLibrary
+      candidateLibrary,
+      payload.rejectedSuggestions ?? []
     );
 
     if (hasGeminiConfig(customConfig)) {
+      const candidateArticles = formatInternalLinkCandidateArticlesForPrompt(candidateLibrary);
       const aiResult = await generateStructuredJson({
         prompt: payload.prompt,
         variables: {
+          keyword: payload.primaryKeyword,
+          primary_keyword: payload.primaryKeyword,
+          secondary_keywords: payload.secondaryKeywords.join(", "),
+          language: payload.language,
+          draft_title: payload.draft.title,
+          draft_markdown: payload.draft.markdown,
+          candidate_articles: candidateArticles,
           articleTitle: payload.draft.title,
-          articleContent: payload.draft.markdown,
-          language: payload.language
+          articleContent: payload.draft.markdown
         },
         contextLines: [
-          `articleTitle: ${payload.draft.title}`,
-          `language: ${payload.language}`,
-          `articleContent:\n${payload.draft.markdown}`
+          `Từ khóa chính: ${payload.primaryKeyword}`,
+          `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
+          `Ngôn ngữ: ${payload.language}`,
+          `Tiêu đề bản nháp: ${payload.draft.title}`,
+          `Candidate articles đã lọc trước (${candidateLibrary.length}/${articleLibrary.length}):\n${candidateArticles}`,
+          `Toàn bộ bản nháp:\n${payload.draft.markdown}`
         ],
         jsonShapeHint: JSON.stringify({
-          anchorCandidates: [
+          internalLinks: [
             {
               anchorText: "Proof of Stake",
-              startOffset: 145,
-              endOffset: 159,
+              targetUrl: "https://example.com/proof-of-stake",
               confidence: 0.95,
-              reason: {
-                standaloneTopic: true,
-                informationGap: true,
-                learningValue: true,
-                semanticClarity: true
-              }
+              reason: "This destination best explains the standalone concept implied by the anchor."
             }
           ]
         }, null, 2),
-        responseJsonSchema: linkAnchorCandidatesResponseJsonSchema,
-        validator: geminiLinkAnchorsSchema,
-        temperature: 0.3
+        responseJsonSchema: internalLinkSelectionResponseJsonSchema,
+        validator: geminiInternalLinkSelectionSchema,
+        temperature: 0.3,
+        customConfig
       });
 
-      const aiAnchorCandidates: AnchorTextCandidate[] = aiResult.anchorCandidates.filter((candidate) =>
-        candidate.reason.standaloneTopic
-        || candidate.reason.informationGap
-        || candidate.reason.learningValue
-        || candidate.reason.semanticClarity
-      );
-      const aiCandidateLibrary = selectInternalLinkCandidatesForAnchorCandidates(
+      const selectedSuggestions = mapSelectedInternalLinkTargetsToSuggestions(
         payload.draft,
         payload.language,
-        articleLibrary,
-        aiAnchorCandidates
-      );
-      candidateLibraryCount = aiCandidateLibrary.length;
-      const aiMatchedSuggestions = mapAnchorCandidatesToInternalLinks(
-        payload.draft,
-        payload.language,
-        aiCandidateLibrary,
-        mapAnchorTextCandidatesToInternalLinkCandidates(payload.draft.markdown, payload.language, aiAnchorCandidates)
+        candidateLibrary,
+        aiResult.internalLinks.map((link) => ({
+          anchor: link.anchorText,
+          targetUrl: link.targetUrl,
+          confidence: link.confidence,
+          reason: link.reason
+        })),
+        payload.rejectedSuggestions ?? []
       );
 
-      if (aiMatchedSuggestions.length > 0) {
-        suggestions = aiMatchedSuggestions;
+      if (selectedSuggestions.length > 0) {
+        suggestions = selectedSuggestions;
       }
     }
 
     const record = await appendHistory("links", payload, {
-      mode: hasGeminiConfig() ? "anchor-ai + library-match" : "local-anchor + library-match",
+      mode: hasGeminiConfig(customConfig) ? "prefiltered-library + ai-target-selection" : "local-anchor + prefiltered-library-match",
       articleLibraryCount: articleLibrary.length,
       candidateLibraryCount,
       suggestions

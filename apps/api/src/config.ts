@@ -8,7 +8,7 @@ const integerString = z.string().regex(/^\d+$/);
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).optional(),
   PORT: integerString.optional(),
-  CORS_ORIGIN: z.string().url().optional(),
+  CORS_ORIGIN: z.string().min(1).optional(),
   DATABASE_PATH: z.string().min(1).optional(),
   SESSION_COOKIE_NAME: z.string().min(1).optional(),
   SESSION_TTL_SECONDS: integerString.optional(),

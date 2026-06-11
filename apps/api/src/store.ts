@@ -872,25 +872,41 @@ async function bootstrapArticleLibraryIfNeeded(db: SqlDatabase) {
 }
 
 async function bootstrapPromptsIfNeeded(db: SqlDatabase) {
-  const count = Number(dbFirst<{ count: number }>(db, "SELECT COUNT(*) AS count FROM prompt_templates")?.count ?? 0);
-  if (count > 0) {
-    return;
-  }
-
   const bootstrap = await readJsonBootstrap<PromptDb>(dataFilePaths.promptsFile, {
     prompts: defaultPromptTemplates
   });
   const now = nowIso();
 
   for (const [key, value] of Object.entries({ ...defaultPromptTemplates, ...bootstrap.prompts })) {
-    db.run(`
-      INSERT INTO prompt_templates (key, value, updated_at)
-      VALUES ($key, $value, $updatedAt)
-    `, {
-      $key: key,
-      $value: value,
-      $updatedAt: now
-    } as never);
+    const current = dbFirst<{ key: string; value: string; revision: number }>(
+      db,
+      "SELECT key, value, revision FROM prompt_templates WHERE key = $key",
+      { $key: key }
+    );
+
+    if (!current) {
+      db.run(`
+        INSERT INTO prompt_templates (key, value, updated_at)
+        VALUES ($key, $value, $updatedAt)
+      `, {
+        $key: key,
+        $value: value,
+        $updatedAt: now
+      } as never);
+      continue;
+    }
+
+    if (Number(current.revision) === 1 && current.value !== value) {
+      db.run(`
+        UPDATE prompt_templates
+        SET value = $value, updated_at = $updatedAt
+        WHERE key = $key
+      `, {
+        $key: key,
+        $value: value,
+        $updatedAt: now
+      } as never);
+    }
   }
 }
 

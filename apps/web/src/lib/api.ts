@@ -1,4 +1,4 @@
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8787/api").replace(/\/$/, "");
+const configuredApiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8787/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -19,7 +19,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit) {
-  return readJsonResponse<T>(await fetch(`${apiBaseUrl}${path}`, {
+  return readJsonResponse<T>(await fetch(`${getApiBaseUrl()}${path}`, {
     credentials: "include",
     ...init,
     headers: init?.body
@@ -45,6 +45,26 @@ export function deleteJson<T>(path: string) {
 }
 
 export function publicApiUrl(path: string) {
-  return `${apiBaseUrl}${path}`;
+  return `${getApiBaseUrl()}${path}`;
 }
 
+function getApiBaseUrl() {
+  if (typeof window === "undefined") {
+    return configuredApiBaseUrl;
+  }
+
+  try {
+    const url = new URL(configuredApiBaseUrl);
+    const localApiHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const localWebHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+    if (localApiHost && localWebHost) {
+      url.hostname = window.location.hostname;
+      return url.toString().replace(/\/$/, "");
+    }
+  } catch {
+    return configuredApiBaseUrl;
+  }
+
+  return configuredApiBaseUrl;
+}

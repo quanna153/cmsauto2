@@ -37,6 +37,19 @@ type AiStep = Exclude<Step, "ready">;
 type PromptTemplates = Record<AiStep, string>;
 type PromptRecord = { key: AiStep; value: string; revision: number; updatedAt: string };
 type CompletedSteps = Record<Step, boolean>;
+type FactorySessionValues = {
+  language: "vi" | "en";
+  seedKeyword: string;
+  activeStep: Step;
+  keywordIdeas: Keyword[];
+  primaryKeywordId: string | null;
+  secondaryKeywordIds: string[];
+  brief: Brief | null;
+  outline: Outline | null;
+  draft: Draft | null;
+  linkSuggestions: InternalLinkSuggestion[];
+  finalMarkdown: string;
+};
 
 const fallbackPrompts: PromptTemplates = {
   keywords: "Đề xuất keyword cluster rõ ràng cho {{keyword}}.",
@@ -283,9 +296,127 @@ export function FactoryFeature() {
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.links,
-      draft
+      draft,
+      rejectedSuggestions: links.filter((link) => link.status === "rejected")
     });
     setLinks(result.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" : "pending" })));
+  }
+
+  async function runAutoArticle() {
+    const nextSeedKeyword = seedKeyword.trim();
+    if (!nextSeedKeyword) {
+      setError("Nhập từ khóa cần viết trước khi chạy tự động.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setSaveMessage("");
+    setSeedKeyword(nextSeedKeyword);
+
+    try {
+      setSelectedStep("keywords");
+      setBusyLabel("01/06 Đang lấy keyword và volume từ Semrush...");
+      const keywordResult = await apiPost<{ keywordIdeas: Keyword[] }>("/keywords/suggest", {
+        seedKeyword: nextSeedKeyword,
+        language,
+        prompt: promptTemplates.keywords,
+        semrushToken
+      });
+      const nextKeywords = keywordResult.keywordIdeas;
+      const nextPrimary = nextKeywords[0];
+      const nextSecondary = nextKeywords.slice(1);
+      if (!nextPrimary || nextSecondary.length === 0) {
+        throw new Error("Không đủ keyword để chạy tự động. Cần ít nhất 1 từ khóa chính và 1 từ khóa phụ.");
+      }
+
+      setKeywords(nextKeywords);
+      setPrimaryKeywordId(nextPrimary.id);
+      setSecondaryKeywordIds(nextSecondary.map((item) => item.id));
+      setBrief(null);
+      setOutline(null);
+      setDraft(null);
+      setLinks([]);
+
+      setSelectedStep("brief");
+      setBusyLabel("02/06 Đang đọc top 10 kết quả và rút insight đối thủ...");
+      const briefResult = await apiPost<{ brief: Brief }>("/brief/generate", {
+        primaryKeyword: nextPrimary.keyword,
+        secondaryKeywords: nextSecondary.map((item) => item.keyword),
+        language,
+        prompt: promptTemplates.brief
+      });
+      const nextBrief = briefResult.brief;
+      setBrief(nextBrief);
+
+      setSelectedStep("outline");
+      setBusyLabel("03/06 Đang ghép keyword, volume và insight để sinh outline...");
+      const outlineResult = await apiPost<{ outline: Outline }>("/outline/generate", {
+        primaryKeyword: nextPrimary.keyword,
+        secondaryKeywords: nextSecondary.map((item) => item.keyword),
+        language,
+        prompt: promptTemplates.outline,
+        brief: nextBrief,
+        keywordIdeas: [nextPrimary, ...nextSecondary]
+      });
+      const nextOutline = outlineResult.outline;
+      setOutline(nextOutline);
+
+      setSelectedStep("draft");
+      setBusyLabel("04/06 Đang viết bản nháp bằng Gemini...");
+      const draftResult = await apiPost<{ draft: Draft }>("/draft/generate", {
+        primaryKeyword: nextPrimary.keyword,
+        secondaryKeywords: nextSecondary.map((item) => item.keyword),
+        language,
+        prompt: promptTemplates.draft,
+        outline: nextOutline
+      });
+      const nextDraft = draftResult.draft;
+      setDraft(nextDraft);
+
+      setSelectedStep("links");
+      setBusyLabel("05/06 Đang phân tích bản nháp và so khớp kho internal links...");
+      const linksResult = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
+        primaryKeyword: nextPrimary.keyword,
+        secondaryKeywords: nextSecondary.map((item) => item.keyword),
+        language,
+        prompt: promptTemplates.links,
+        draft: nextDraft
+      });
+      const nextLinks = linksResult.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" as const : "pending" as const }));
+      setLinks(nextLinks);
+
+      setSelectedStep("ready");
+      setBusyLabel("06/06 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
+      const applied = await apiPost<{ markdown: string }>("/links/apply", {
+        markdown: nextDraft.markdown,
+        suggestions: nextLinks
+      });
+      const savedArticle = await persistFactorySession({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "ready",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: nextOutline,
+        draft: nextDraft,
+        linkSuggestions: nextLinks,
+        finalMarkdown: applied.markdown
+      }, { ready: true });
+
+      setSaveMessage(
+        nextLinks.length > 0
+          ? `Đã tạo tự động và lưu bài vào Quản lý bài viết, revision ${savedArticle.revision}.`
+          : `Đã tạo tự động và lưu bài vào Quản lý bài viết, nhưng chưa match được internal link nào. Revision ${savedArticle.revision}.`
+      );
+    } catch (autoError) {
+      setError(autoError instanceof Error ? autoError.message : "Không chạy được luồng tạo bài tự động.");
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
+    }
   }
 
   function hydrateFromArticle(article: ArticleSession) {
@@ -303,20 +434,10 @@ export function FactoryFeature() {
     setSelectedStep(article.activeStep);
   }
 
-  function buildArticleSnapshot(stepToSave: Step, finalMarkdown: string) {
-    const now = new Date().toISOString();
+  function buildCurrentFactorySessionValues(stepToSave: Step, finalMarkdown: string): FactorySessionValues {
     return {
-      id: savedArticleId ?? crypto.randomUUID(), revision: savedRevision ?? 1, createdAt: now, updatedAt: now,
-      inputs: { language, seedKeyword }, activeStep: stepToSave, keywordIdeas: keywords,
-      primaryKeywordId, secondaryKeywordIds, brief, outline, draft, linkSuggestions: links,
-      finalMarkdown, reviewStatus: stepToSave === "ready" ? "editor_ready" : "needs_fix", reviewNote: stepToSave === "ready" ? "" : "Bài đang làm dở trong Article Factory.",
-      publishAt: null, publishedAt: null, livePath: null, lastPublishError: null
-    } satisfies ArticleSession;
-  }
-
-  function buildSessionChanges(stepToSave: Step, finalMarkdown: string) {
-    return {
-      inputs: { language, seedKeyword },
+      language,
+      seedKeyword,
       activeStep: stepToSave,
       keywordIdeas: keywords,
       primaryKeywordId,
@@ -325,9 +446,53 @@ export function FactoryFeature() {
       outline,
       draft,
       linkSuggestions: links,
-      finalMarkdown,
-      reviewNote: stepToSave === "ready" ? "" : "Bài đang làm dở trong Article Factory."
+      finalMarkdown
     };
+  }
+
+  function buildArticleSnapshot(values: FactorySessionValues) {
+    const now = new Date().toISOString();
+    return {
+      id: savedArticleId ?? crypto.randomUUID(), revision: savedRevision ?? 1, createdAt: now, updatedAt: now,
+      inputs: { language: values.language, seedKeyword: values.seedKeyword }, activeStep: values.activeStep, keywordIdeas: values.keywordIdeas,
+      primaryKeywordId: values.primaryKeywordId, secondaryKeywordIds: values.secondaryKeywordIds, brief: values.brief, outline: values.outline, draft: values.draft, linkSuggestions: values.linkSuggestions,
+      finalMarkdown: values.finalMarkdown, reviewStatus: values.activeStep === "ready" ? "editor_ready" : "needs_fix", reviewNote: values.activeStep === "ready" ? "" : "Bài đang làm dở trong Article Factory.",
+      publishAt: null, publishedAt: null, livePath: null, lastPublishError: null
+    } satisfies ArticleSession;
+  }
+
+  function buildSessionChanges(values: FactorySessionValues) {
+    return {
+      inputs: { language: values.language, seedKeyword: values.seedKeyword },
+      activeStep: values.activeStep,
+      keywordIdeas: values.keywordIdeas,
+      primaryKeywordId: values.primaryKeywordId,
+      secondaryKeywordIds: values.secondaryKeywordIds,
+      brief: values.brief,
+      outline: values.outline,
+      draft: values.draft,
+      linkSuggestions: values.linkSuggestions,
+      finalMarkdown: values.finalMarkdown,
+      reviewNote: values.activeStep === "ready" ? "" : "Bài đang làm dở trong Article Factory."
+    };
+  }
+
+  async function persistFactorySession(values: FactorySessionValues, { ready = false }: { ready?: boolean } = {}) {
+    if (savedArticleId && savedRevision !== null) {
+      const result = await patchJson<{ article: ArticleSession }>(`/articles/${savedArticleId}`, {
+        expectedRevision: savedRevision,
+        changes: buildSessionChanges(values)
+      });
+      setSavedRevision(result.article.revision);
+      setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
+      return result.article;
+    }
+
+    const result = await postJson<{ article: ArticleSession }>("/articles", { article: buildArticleSnapshot(values) });
+    setSavedArticleId(result.article.id);
+    setSavedRevision(result.article.revision);
+    setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
+    return result.article;
   }
 
   async function saveFactorySession({ ready = false }: { ready?: boolean } = {}) {
@@ -335,22 +500,7 @@ export function FactoryFeature() {
     const markdownToSave = ready && draft
       ? (await apiPost<{ markdown: string }>("/links/apply", { markdown: draft.markdown, suggestions: links })).markdown
       : draft?.markdown ?? "";
-
-    if (savedArticleId && savedRevision !== null) {
-      const result = await patchJson<{ article: ArticleSession }>(`/articles/${savedArticleId}`, {
-        expectedRevision: savedRevision,
-        changes: buildSessionChanges(stepToSave, markdownToSave)
-      });
-      setSavedRevision(result.article.revision);
-      setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
-      return result.article;
-    }
-
-    const result = await postJson<{ article: ArticleSession }>("/articles", { article: buildArticleSnapshot(stepToSave, markdownToSave) });
-    setSavedArticleId(result.article.id);
-    setSavedRevision(result.article.revision);
-    setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
-    return result.article;
+    return persistFactorySession(buildCurrentFactorySessionValues(stepToSave, markdownToSave), { ready });
   }
 
   async function saveProgress() {
@@ -467,6 +617,9 @@ export function FactoryFeature() {
             </div>
           </div>
         )}
+        <Button disabled={busy || !seedKeyword.trim()} onClick={() => void runAutoArticle()} size="sm">
+          <Wand2 size={15} />Tạo tự động
+        </Button>
         <Button disabled={busy || (!seedKeyword.trim() && keywords.length === 0)} onClick={() => void run(saveProgress, "Đang lưu tạm bài vào Quản lý bài viết...")} size="sm" variant="secondary">
           <Save size={15} />Lưu tạm
         </Button>

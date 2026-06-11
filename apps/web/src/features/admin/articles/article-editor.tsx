@@ -78,6 +78,11 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   }
 
   async function reviewGate() {
+    if (save.isPending) {
+      setScheduleMessage("Đang lưu nội dung và internal link, vui lòng chờ trước khi cập nhật lịch đăng.");
+      return;
+    }
+
     const publishAt = new Date(publishAtLocal);
     if (!publishAtLocal || Number.isNaN(publishAt.getTime())) {
       setScheduleMessage("Chọn ngày và giờ đăng hợp lệ trước khi duyệt bài.");
@@ -111,19 +116,23 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   if (query.error) return <ErrorState message={query.error.message} />;
   if (!article) return <ErrorState message="Không tìm thấy bài viết." />;
 
-  const actionLabel = article.reviewStatus === "scheduled"
+  const hasUnsavedChanges = hasLocalChanges(article, markdown, linkSuggestions);
+  const baseActionLabel = article.reviewStatus === "scheduled"
     ? "Cập nhật lịch đăng"
     : article.reviewStatus === "published"
       ? "Đăng lại thay đổi"
       : "Duyệt & lên lịch";
+  const actionLabel = hasUnsavedChanges
+    ? `Lưu & ${baseActionLabel.toLocaleLowerCase("vi-VN")}`
+    : baseActionLabel;
 
   return <>
     <PageHeader
       actions={<div className="flex flex-wrap gap-2">
-        <Button disabled={save.isPending || !hasLocalChanges(article, markdown, linkSuggestions)} onClick={() => save.mutate()} variant="secondary">
+        <Button disabled={save.isPending || !hasUnsavedChanges} onClick={() => save.mutate()} variant="secondary">
           <Save size={16} />{save.isPending ? "Đang lưu..." : "Lưu thay đổi"}
         </Button>
-        <Button disabled={reviewBusy || !publishAtLocal} onClick={() => void reviewGate()}>
+        <Button disabled={save.isPending || reviewBusy || !publishAtLocal} onClick={() => void reviewGate()}>
           <CalendarClock size={16} />{reviewBusy ? "Đang cập nhật..." : actionLabel}
         </Button>
       </div>}
@@ -215,18 +224,22 @@ function syncMarkdownLink(markdown: string, previous: InternalLinkSuggestion, ne
   }
 
   const lines = markdown.split("\n");
-  const anchorMatcher = new RegExp(escapeRegExp(next.anchor), "i");
+  const anchorMatcher = anchorBoundaryMatcher(next.anchor);
   const lineIndex = lines.findIndex((line) => line.trim() && !line.trim().startsWith("#") && !line.includes("](") && anchorMatcher.test(line));
   if (lineIndex >= 0) {
     lines[lineIndex] = lines[lineIndex].replace(anchorMatcher, (matched) => `[${matched}](${next.targetUrl})`);
     return lines.join("\n");
   }
 
-  return `${markdown}\n\nXem thêm: ${nextMarkup}`;
+  return markdown;
 }
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function anchorBoundaryMatcher(anchor: string) {
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(anchor)}(?![\\p{L}\\p{N}])`, "iu");
 }
 
 function defaultPublishAt() {
