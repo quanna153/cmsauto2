@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Lock, LogOut, MoreHorizontal, Plus, Search, Shield, Trash2, Unlock, UserCheck, X } from "lucide-react";
+import { KeyRound, Lock, LogOut, MoreHorizontal, Pencil, Plus, Search, Shield, Trash2, Unlock, UserCheck, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states"
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import type { AdminUser, UserRole } from "@/features/admin/types";
 import { deleteJson, getJson, patchJson, postJson } from "@/lib/api";
 import { buildCreateUserPayload, countUsersByRole, filterUsers, isValidOptionalEmail, type RoleFilter, type StatusFilter } from "./model";
@@ -30,6 +31,8 @@ export function UsersFeature() {
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [authorTitle, setAuthorTitle] = useState("");
+  const [authorBio, setAuthorBio] = useState("");
   const [createFormTouched, setCreateFormTouched] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [search, setSearch] = useState("");
@@ -38,6 +41,7 @@ export function UsersFeature() {
   const [bulkAction, setBulkAction] = useState<BulkAction>("none");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [actionMenuUserId, setActionMenuUserId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [resetPasswordByUserId, setResetPasswordByUserId] = useState<Record<string, string>>({});
 
   const roleCounts = useMemo(() => countUsersByRole(users), [users]);
@@ -54,11 +58,13 @@ export function UsersFeature() {
   };
 
   const create = useMutation({
-    mutationFn: () => postJson("/users", buildCreateUserPayload({ username, fullName, email, temporaryPassword })),
+    mutationFn: () => postJson("/users", buildCreateUserPayload({ username, fullName, email, authorTitle, authorBio, temporaryPassword })),
     onSuccess: async () => {
       setUsername("");
       setFullName("");
       setEmail("");
+      setAuthorTitle("");
+      setAuthorBio("");
       setTemporaryPassword("");
       setCreateFormTouched(false);
       setCreateOpen(false);
@@ -68,8 +74,24 @@ export function UsersFeature() {
 
   const updateStatus = useMutation({
     mutationFn: ({ user, isActive }: { user: AdminUser; isActive: boolean }) =>
-      patchJson(`/users/${user.id}`, { fullName: user.fullName, email: user.email, isActive }),
+      patchJson(`/users/${user.id}`, { fullName: user.fullName, email: user.email, authorTitle: user.authorTitle, authorBio: user.authorBio, isActive }),
     onSuccess: async () => {
+      setActionMenuUserId(null);
+      await invalidateUsers();
+    }
+  });
+
+  const updateProfile = useMutation({
+    mutationFn: ({ user, fullName, email, authorTitle, authorBio }: { user: AdminUser; fullName: string; email: string; authorTitle: string; authorBio: string }) =>
+      patchJson(`/users/${user.id}`, {
+        fullName,
+        email: email.trim() || null,
+        authorTitle,
+        authorBio,
+        isActive: user.isActive
+      }),
+    onSuccess: async () => {
+      setEditingUser(null);
       setActionMenuUserId(null);
       await invalidateUsers();
     }
@@ -105,7 +127,7 @@ export function UsersFeature() {
   const bulkStatus = useMutation({
     mutationFn: async (isActive: boolean) => {
       await Promise.all(selectedManageableUsers.map((user) =>
-        patchJson(`/users/${user.id}`, { fullName: user.fullName, email: user.email, isActive })
+        patchJson(`/users/${user.id}`, { fullName: user.fullName, email: user.email, authorTitle: user.authorTitle, authorBio: user.authorBio, isActive })
       ));
     },
     onSuccess: async () => {
@@ -115,8 +137,8 @@ export function UsersFeature() {
     }
   });
 
-  const busy = create.isPending || updateStatus.isPending || deleteUser.isPending || resetPassword.isPending || revokeSessions.isPending || bulkStatus.isPending;
-  const mutationError = create.error || updateStatus.error || deleteUser.error || resetPassword.error || revokeSessions.error || bulkStatus.error;
+  const busy = create.isPending || updateStatus.isPending || updateProfile.isPending || deleteUser.isPending || resetPassword.isPending || revokeSessions.isPending || bulkStatus.isPending;
+  const mutationError = create.error || updateStatus.error || updateProfile.error || deleteUser.error || resetPassword.error || revokeSessions.error || bulkStatus.error;
 
   function toggleSelected(userId: string) {
     setSelectedIds((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]);
@@ -228,6 +250,7 @@ export function UsersFeature() {
             busy={busy}
             key={user.id}
             onDelete={() => deleteUser.mutate(user)}
+            onEditProfile={() => setEditingUser(user)}
             onMenuToggle={() => setActionMenuUserId((current) => current === user.id ? null : user.id)}
             onResetPassword={(password) => resetPassword.mutate({ user, temporaryPassword: password })}
             onRevokeSessions={() => revokeSessions.mutate(user)}
@@ -247,6 +270,7 @@ export function UsersFeature() {
           busy={busy}
           key={user.id}
           onDelete={() => deleteUser.mutate(user)}
+          onEditProfile={() => setEditingUser(user)}
           onMenuToggle={() => setActionMenuUserId((current) => current === user.id ? null : user.id)}
           onResetPassword={(password) => resetPassword.mutate({ user, temporaryPassword: password })}
           onRevokeSessions={() => revokeSessions.mutate(user)}
@@ -265,15 +289,25 @@ export function UsersFeature() {
       createDisabled={createDisabled}
       email={email}
       emailError={emailError}
+      authorBio={authorBio}
+      authorTitle={authorTitle}
       fullName={fullName}
       onClose={closeCreateModal}
       onCreate={submitCreateUser}
+      setAuthorBio={setAuthorBio}
+      setAuthorTitle={setAuthorTitle}
       setEmail={setEmail}
       setFullName={setFullName}
       setTemporaryPassword={setTemporaryPassword}
       setUsername={setUsername}
       temporaryPassword={temporaryPassword}
       username={username}
+    /> : null}
+    {editingUser ? <EditUserModal
+      busy={busy}
+      onClose={() => setEditingUser(null)}
+      onSave={(values) => updateProfile.mutate({ user: editingUser, ...values })}
+      user={editingUser}
     /> : null}
   </>;
 }
@@ -296,7 +330,7 @@ function canManageUser(user: AdminUser) {
 }
 
 function UserTableRow(props: UserRowProps) {
-  const { user, selected, busy, resetPassword, setResetPassword, actionMenuOpen, onMenuToggle, onToggleSelected, onToggleStatus, onResetPassword, onRevokeSessions, onDelete } = props;
+  const { user, selected, busy, resetPassword, setResetPassword, actionMenuOpen, onMenuToggle, onToggleSelected, onToggleStatus, onResetPassword, onRevokeSessions, onDelete, onEditProfile } = props;
   const manageable = canManageUser(user);
 
   return <tr className="group h-[88px] odd:bg-white even:bg-[#fcfbf7] hover:!bg-[#f5f2e8]">
@@ -307,6 +341,7 @@ function UserTableRow(props: UserRowProps) {
         <div className="min-w-0">
           <strong className="block truncate text-[#172033]">{user.fullName || user.username}</strong>
           <p className="truncate text-xs font-medium text-[#687386]">@{user.username}</p>
+          <p className="mt-1 truncate text-xs font-semibold text-[#80640b]">{user.authorTitle || "Chưa có vai trò tác giả"}</p>
         </div>
       </div>
     </TableCell>
@@ -323,6 +358,7 @@ function UserTableRow(props: UserRowProps) {
         busy={busy}
         manageable={manageable}
         onDelete={onDelete}
+        onEditProfile={onEditProfile}
         onResetPassword={onResetPassword}
         onRevokeSessions={onRevokeSessions}
         onToggleStatus={onToggleStatus}
@@ -335,13 +371,13 @@ function UserTableRow(props: UserRowProps) {
 }
 
 function UserCard(props: UserRowProps) {
-  const { user, selected, busy, resetPassword, setResetPassword, actionMenuOpen, onMenuToggle, onToggleSelected, onToggleStatus, onResetPassword, onRevokeSessions, onDelete } = props;
+  const { user, selected, busy, resetPassword, setResetPassword, actionMenuOpen, onMenuToggle, onToggleSelected, onToggleStatus, onResetPassword, onRevokeSessions, onDelete, onEditProfile } = props;
   const manageable = canManageUser(user);
 
   return <article className="grid gap-3 rounded-xl border bg-white p-4">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <div className="flex items-center gap-3"><Avatar user={user} /><div className="min-w-0"><strong className="block truncate text-[#172033]">{user.fullName || user.username}</strong><p className="truncate text-sm font-medium text-[#687386]">@{user.username}</p></div></div>
+        <div className="flex items-center gap-3"><Avatar user={user} /><div className="min-w-0"><strong className="block truncate text-[#172033]">{user.fullName || user.username}</strong><p className="truncate text-sm font-medium text-[#687386]">@{user.username}</p><p className="mt-1 truncate text-xs font-semibold text-[#80640b]">{user.authorTitle || "Chưa có vai trò tác giả"}</p></div></div>
       </div>
       <input aria-label={`Chọn ${user.username}`} checked={selected} disabled={!manageable} onChange={onToggleSelected} type="checkbox" />
     </div>
@@ -358,6 +394,7 @@ function UserCard(props: UserRowProps) {
         busy={busy}
         manageable={manageable}
         onDelete={onDelete}
+        onEditProfile={onEditProfile}
         onResetPassword={onResetPassword}
         onRevokeSessions={onRevokeSessions}
         onToggleStatus={onToggleStatus}
@@ -382,6 +419,7 @@ type UserRowProps = {
   onResetPassword: (password: string) => void;
   onRevokeSessions: () => void;
   onDelete: () => void;
+  onEditProfile: () => void;
 };
 
 function UserActionMenu(props: {
@@ -394,9 +432,11 @@ function UserActionMenu(props: {
   onResetPassword: (password: string) => void;
   onRevokeSessions: () => void;
   onDelete: () => void;
+  onEditProfile: () => void;
 }) {
-  const { user, busy, manageable, resetPassword, setResetPassword, onToggleStatus, onResetPassword, onRevokeSessions, onDelete } = props;
+  const { user, busy, manageable, resetPassword, setResetPassword, onToggleStatus, onResetPassword, onRevokeSessions, onDelete, onEditProfile } = props;
   return <div className="absolute right-0 top-10 z-20 grid w-72 gap-2 rounded-lg border bg-white p-3 text-left shadow-lg">
+    <button className="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-[#273247] hover:bg-[#f7f7f4] disabled:cursor-not-allowed disabled:opacity-50" disabled={busy} onClick={onEditProfile} type="button"><Pencil size={15} />Sửa hồ sơ tác giả</button>
     <button className="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-semibold text-[#273247] hover:bg-[#f7f7f4] disabled:cursor-not-allowed disabled:opacity-50" disabled={busy || !manageable} onClick={onToggleStatus} type="button">
       {user.isActive ? <Lock size={15} /> : <Unlock size={15} />}{user.isActive ? "Khóa tài khoản" : "Mở khóa tài khoản"}
     </button>
@@ -414,21 +454,25 @@ function CreateUserModal(props: {
   fullName: string;
   email: string;
   emailError: string;
+  authorTitle: string;
+  authorBio: string;
   temporaryPassword: string;
   busy: boolean;
   createDisabled: boolean;
   setUsername: (value: string) => void;
   setFullName: (value: string) => void;
   setEmail: (value: string) => void;
+  setAuthorTitle: (value: string) => void;
+  setAuthorBio: (value: string) => void;
   setTemporaryPassword: (value: string) => void;
   onCreate: () => void;
   onClose: () => void;
 }) {
-  const { username, fullName, email, emailError, temporaryPassword, busy, createDisabled, setUsername, setFullName, setEmail, setTemporaryPassword, onCreate, onClose } = props;
+  const { username, fullName, email, emailError, authorTitle, authorBio, temporaryPassword, busy, createDisabled, setUsername, setFullName, setEmail, setAuthorTitle, setAuthorBio, setTemporaryPassword, onCreate, onClose } = props;
   return <div className="fixed inset-0 z-40 grid place-items-center bg-[#172033]/40 p-4">
-    <section className="grid w-full max-w-xl gap-4 rounded-xl border bg-white p-5 shadow-xl">
+    <section className="grid w-full max-w-2xl gap-4 rounded-xl border bg-white p-5 shadow-xl">
       <div className="flex items-start justify-between gap-3">
-        <div><h2 className="text-lg font-bold text-[#172033]">Thêm tài khoản admin</h2><p className="mt-1 text-sm text-[#687386]">Tài khoản mới sẽ phải đổi mật khẩu ở lần đăng nhập đầu.</p></div>
+        <div><h2 className="text-lg font-bold text-[#172033]">Thêm tài khoản admin</h2><p className="mt-1 text-sm text-[#687386]">Tài khoản mới sẽ phải đổi mật khẩu ở lần đăng nhập đầu. Hồ sơ tác giả dùng để hiển thị trên reader.</p></div>
         <button aria-label="Đóng" className="rounded-md p-1 text-[#687386] hover:bg-[#f7f7f4]" onClick={onClose} type="button"><X size={18} /></button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -439,6 +483,11 @@ function CreateUserModal(props: {
           {emailError ? <span className="text-xs font-medium text-red-600">{emailError}</span> : null}
         </label>
         <Input aria-label="Mật khẩu tạm" onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="Mật khẩu tạm, tối thiểu 8 ký tự" type="password" value={temporaryPassword} />
+        <Input aria-label="Vai trò tác giả" onChange={(event) => setAuthorTitle(event.target.value)} placeholder="Vai trò hiển thị, ví dụ: Biên tập viên thị trường" value={authorTitle} />
+        <label className="grid gap-1 sm:col-span-2">
+          <span className="text-xs font-semibold text-[#566174]">Giới thiệu công việc / tác giả</span>
+          <Textarea className="min-h-24" onChange={(event) => setAuthorBio(event.target.value)} placeholder="Mô tả ngắn chuyên môn, phạm vi phụ trách hoặc phong cách biên tập." value={authorBio} />
+        </label>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <Button disabled={busy} onClick={onClose} type="button" variant="secondary">Hủy</Button>
@@ -446,6 +495,50 @@ function CreateUserModal(props: {
       </div>
     </section>
   </div>;
+}
+
+function EditUserModal(props: {
+  user: AdminUser;
+  busy: boolean;
+  onSave: (values: { fullName: string; email: string; authorTitle: string; authorBio: string }) => void;
+  onClose: () => void;
+}) {
+  const { user, busy, onSave, onClose } = props;
+  const [fullName, setFullName] = useState(user.fullName);
+  const [email, setEmail] = useState(user.email ?? "");
+  const [authorTitle, setAuthorTitle] = useState(user.authorTitle);
+  const [authorBio, setAuthorBio] = useState(user.authorBio);
+  const emailValid = isValidOptionalEmail(email);
+  const disabled = !fullName.trim() || !emailValid;
+
+  return <div className="fixed inset-0 z-40 grid place-items-center bg-[#172033]/40 p-4">
+    <section className="grid w-full max-w-2xl gap-4 rounded-xl border bg-white p-5 shadow-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div><h2 className="text-lg font-bold text-[#172033]">Sửa hồ sơ tác giả</h2><p className="mt-1 text-sm text-[#687386]">@{user.username} sẽ được dùng làm tác giả cho bài đã tạo bằng tài khoản này.</p></div>
+        <button aria-label="Đóng" className="rounded-md p-1 text-[#687386] hover:bg-[#f7f7f4]" onClick={onClose} type="button"><X size={18} /></button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input aria-label="Họ tên" onChange={(event) => setFullName(event.target.value)} placeholder="Họ tên" value={fullName} />
+        <label className="grid gap-1">
+          <Input aria-invalid={!emailValid} aria-label="Email" onChange={(event) => setEmail(event.target.value)} placeholder="Email (tuỳ chọn)" type="email" value={email} />
+          {!emailValid ? <span className="text-xs font-medium text-red-600">Nhập email đúng định dạng hoặc để trống.</span> : null}
+        </label>
+        <Input aria-label="Vai trò tác giả" onChange={(event) => setAuthorTitle(event.target.value)} placeholder="Vai trò hiển thị" value={authorTitle} />
+        <label className="grid gap-1 sm:col-span-2">
+          <span className="text-xs font-semibold text-[#566174]">Giới thiệu công việc / tác giả</span>
+          <Textarea className="min-h-28" onChange={(event) => setAuthorBio(event.target.value)} placeholder="Mô tả ngắn chuyên môn, phạm vi phụ trách hoặc phong cách biên tập." value={authorBio} />
+        </label>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button disabled={busy} onClick={onClose} type="button" variant="secondary">Hủy</Button>
+        <Button disabled={busy || disabled} onClick={() => onSave({ fullName: fullName.trim(), email: email.trim(), authorTitle: authorTitle.trim(), authorBio: authorBio.trim() })} type="button"><SaveIcon />Lưu hồ sơ</Button>
+      </div>
+    </section>
+  </div>;
+}
+
+function SaveIcon() {
+  return <Pencil size={16} />;
 }
 
 function Avatar({ user }: { user: AdminUser }) {

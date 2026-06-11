@@ -211,6 +211,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   full_name TEXT NOT NULL,
   email TEXT,
+  author_title TEXT NOT NULL DEFAULT '',
+  author_bio TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
   must_change_password INTEGER NOT NULL DEFAULT 1,
@@ -313,6 +315,13 @@ function migrate(nativeDatabase: Database.Database) {
     nativeDatabase.exec("ALTER TABLE article_library ADD COLUMN created_at TEXT");
     nativeDatabase.prepare("UPDATE article_library SET created_at = ? WHERE created_at IS NULL OR created_at = ''")
       .run(new Date().toISOString());
+  }
+  const userColumns = nativeDatabase.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userColumns.some((column) => column.name === "author_title")) {
+    nativeDatabase.exec("ALTER TABLE users ADD COLUMN author_title TEXT NOT NULL DEFAULT ''");
+  }
+  if (!userColumns.some((column) => column.name === "author_bio")) {
+    nativeDatabase.exec("ALTER TABLE users ADD COLUMN author_bio TEXT NOT NULL DEFAULT ''");
   }
   nativeDatabase.prepare(`
     INSERT OR IGNORE INTO schema_migrations (version, applied_at)

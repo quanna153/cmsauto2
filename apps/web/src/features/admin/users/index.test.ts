@@ -9,6 +9,8 @@ const users: AdminUser[] = [
     username: "superadmin",
     fullName: "Super Admin",
     email: null,
+    authorTitle: "",
+    authorBio: "",
     role: "super_admin",
     isActive: true,
     mustChangePassword: false,
@@ -21,6 +23,8 @@ const users: AdminUser[] = [
     username: "editor",
     fullName: "Content Editor",
     email: "editor@example.com",
+    authorTitle: "Market editor",
+    authorBio: "Writes market explainers.",
     role: "admin",
     isActive: true,
     mustChangePassword: true,
@@ -33,6 +37,8 @@ const users: AdminUser[] = [
     username: "locked",
     fullName: "Locked User",
     email: "locked@example.com",
+    authorTitle: "",
+    authorBio: "",
     role: "admin",
     isActive: false,
     mustChangePassword: false,
@@ -65,10 +71,14 @@ describe("filterUsers", () => {
       username: " editor ",
       fullName: " Content Editor ",
       email: "",
+      authorTitle: " Market editor ",
+      authorBio: " Writes explainers. ",
       temporaryPassword: " Password123 "
     })).toEqual({
       username: "editor",
       fullName: "Content Editor",
+      authorTitle: "Market editor",
+      authorBio: "Writes explainers.",
       temporaryPassword: "Password123"
     });
 
@@ -76,6 +86,8 @@ describe("filterUsers", () => {
       username: "editor",
       fullName: "Content Editor",
       email: " editor@example.com ",
+      authorTitle: "",
+      authorBio: "",
       temporaryPassword: "Password123"
     }).email).toBe("editor@example.com");
   });

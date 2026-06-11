@@ -277,6 +277,9 @@ export type PublishedArticle = {
   internalLinks: InternalLinkSuggestion[];
   primaryKeyword: string;
   secondaryKeywords: string[];
+  authorName?: string;
+  authorTitle?: string;
+  authorBio?: string;
 };
 
 export type AuthUser = {
@@ -284,6 +287,8 @@ export type AuthUser = {
   username: string;
   fullName: string;
   email: string | null;
+  authorTitle: string;
+  authorBio: string;
   role: UserRole;
   isActive: boolean;
   mustChangePassword: boolean;

@@ -2219,10 +2219,18 @@ export async function readPublishedArticles(locale?: Locale) {
     internal_links_json: string;
     primary_keyword: string;
     secondary_keywords_json: string;
+    author_name: string | null;
+    author_title: string | null;
+    author_bio: string | null;
   }>(`
-    SELECT pa.*
+    SELECT
+      pa.*,
+      u.full_name AS author_name,
+      u.author_title,
+      u.author_bio
     FROM published_articles pa
     INNER JOIN articles a ON a.id = pa.article_id
+    LEFT JOIN users u ON u.id = a.owner_user_id
     WHERE a.review_status = 'published'
       AND ($locale IS NULL OR pa.locale = $locale)
     ORDER BY pa.published_at DESC
@@ -2244,7 +2252,10 @@ export async function readPublishedArticles(locale?: Locale) {
     livePath: row.live_path,
     internalLinks: parseJson<InternalLinkSuggestion[]>(row.internal_links_json, []),
     primaryKeyword: row.primary_keyword,
-    secondaryKeywords: parseJson<string[]>(row.secondary_keywords_json, [])
+    secondaryKeywords: parseJson<string[]>(row.secondary_keywords_json, []),
+    authorName: row.author_name?.trim() || "CMS Auto",
+    authorTitle: row.author_title?.trim() ?? "",
+    authorBio: row.author_bio?.trim() ?? ""
   } satisfies PublishedArticle));
 }
 

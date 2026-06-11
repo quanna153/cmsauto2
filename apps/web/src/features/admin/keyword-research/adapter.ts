@@ -1,4 +1,5 @@
-import { postJson } from "@/lib/api";
+import type { HistoryRecord } from "@/features/admin/types";
+import { getJson, postJson } from "@/lib/api";
 import type { KeywordRefreshRequest, KeywordResearchRequest, KeywordResearchResponse } from "./model";
 
 export async function suggestKeywords(input: KeywordResearchRequest) {
@@ -7,4 +8,9 @@ export async function suggestKeywords(input: KeywordResearchRequest) {
 
 export async function refreshKeywordVolumes(input: KeywordRefreshRequest) {
   return await postJson<KeywordResearchResponse>("/keywords/refresh-volume", input);
+}
+
+export async function getKeywordResearchHistory() {
+  const result = await getJson<{ records: HistoryRecord[] }>("/history");
+  return result.records.filter((record) => record.step === "keywords");
 }

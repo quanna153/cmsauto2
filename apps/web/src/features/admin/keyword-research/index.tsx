@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { RefreshCw, WandSparkles } from "lucide-react";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, RotateCcw, WandSparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
-import { refreshKeywordVolumes, suggestKeywords } from "./adapter";
+import { getKeywordResearchHistory, refreshKeywordVolumes, suggestKeywords } from "./adapter";
 import type { KeywordResearchLanguage, KeywordResearchRow } from "./model";
+import type { HistoryRecord } from "@/features/admin/types";
 
 const defaultPrompt = [
   "Select 4 to 8 useful SEO keyword ideas from the provider data.",
@@ -39,10 +40,17 @@ function formatCheckedAt(value: string | null) {
 }
 
 export function KeywordResearchFeature() {
+  const client = useQueryClient();
   const [seedKeyword, setSeedKeyword] = useState("");
   const [language, setLanguage] = useState<KeywordResearchLanguage>("vi");
   const [rows, setRows] = useState<KeywordResearchRow[]>([]);
   const [recordId, setRecordId] = useState<string | null>(null);
+  const [historyHydrated, setHistoryHydrated] = useState(false);
+  const historyQuery = useQuery({
+    queryKey: ["keyword-research-history"],
+    queryFn: getKeywordResearchHistory
+  });
+  const keywordHistory = useMemo(() => historyQuery.data?.slice(0, 8) ?? [], [historyQuery.data]);
 
   const suggest = useMutation({
     mutationFn: () => suggestKeywords({
@@ -53,6 +61,7 @@ export function KeywordResearchFeature() {
     onSuccess: (result) => {
       setRows(result.keywordIdeas);
       setRecordId(result.recordId ?? null);
+      void client.invalidateQueries({ queryKey: ["keyword-research-history"] });
     }
   });
   const refresh = useMutation({
@@ -68,9 +77,31 @@ export function KeywordResearchFeature() {
     onSuccess: (result) => {
       setRows(result.keywordIdeas);
       setRecordId(result.recordId ?? recordId);
+      void client.invalidateQueries({ queryKey: ["keyword-research-history"] });
     }
   });
   const isBusy = suggest.isPending || refresh.isPending;
+
+  useEffect(() => {
+    if (historyHydrated || rows.length > 0 || seedKeyword.trim()) {
+      return;
+    }
+    const latest = keywordHistory[0];
+    if (!latest) {
+      return;
+    }
+    restoreHistory(latest);
+    setHistoryHydrated(true);
+  }, [historyHydrated, keywordHistory, rows.length, seedKeyword]);
+
+  function restoreHistory(record: HistoryRecord) {
+    const request = record.request as Partial<{ seedKeyword: string; language: KeywordResearchLanguage }> | null;
+    const response = record.response as Partial<{ keywordIdeas: KeywordResearchRow[] }> | null;
+    setSeedKeyword(request?.seedKeyword ?? "");
+    setLanguage(request?.language ?? "vi");
+    setRows(response?.keywordIdeas ?? []);
+    setRecordId(record.id);
+  }
 
   return <>
     <PageHeader
@@ -173,6 +204,44 @@ export function KeywordResearchFeature() {
               ))}
             </div>
           </>}
+    <section className="mt-5 rounded-xl border bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-[#172033]">Lịch sử nghiên cứu</h2>
+          <p className="mt-1 text-sm text-[#687386]">Các lần search keyword được lưu trên backend, refresh trang không mất.</p>
+        </div>
+        <Button disabled={!rows.length} onClick={() => {
+          setRows([]);
+          setRecordId(null);
+          setSeedKeyword("");
+        }} size="sm" type="button" variant="secondary">
+          <RotateCcw size={15} />Làm mới form
+        </Button>
+      </div>
+      {historyQuery.isLoading
+        ? <LoadingSkeleton label="Đang tải lịch sử keyword..." />
+        : keywordHistory.length === 0
+          ? <p className="rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#687386]">Chưa có lịch sử nghiên cứu từ khóa.</p>
+          : <div className="grid gap-2 md:grid-cols-2">
+              {keywordHistory.map((record) => <button
+                className="rounded-lg border bg-white p-3 text-left text-sm transition hover:border-[#d2b34d] hover:bg-[#fcfbf7]"
+                key={record.id}
+                onClick={() => restoreHistory(record)}
+                type="button"
+              >
+                <span className="block font-semibold text-[#172033]">{historyTitle(record)}</span>
+                <span className="mt-1 block text-xs text-[#687386]">{new Date(record.createdAt).toLocaleString("vi-VN")}</span>
+              </button>)}
+            </div>}
+    </section>
     <div className="sr-only" aria-live="polite">{rows.length} keyword results</div>
   </>;
+}
+
+function historyTitle(record: HistoryRecord) {
+  const request = record.request as Partial<{ seedKeyword: string; language: KeywordResearchLanguage }> | null;
+  const response = record.response as Partial<{ keywordIdeas: KeywordResearchRow[] }> | null;
+  const count = response?.keywordIdeas?.length ?? 0;
+  const language = request?.language === "en" ? "English" : "Vietnamese";
+  return `${request?.seedKeyword ?? "Keyword"} · ${language} · ${count} kết quả`;
 }

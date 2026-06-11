@@ -5,6 +5,8 @@ const user = {
   username: "admin",
   fullName: "Playwright Super Admin",
   email: null,
+  authorTitle: "",
+  authorBio: "",
   role: "super_admin",
   isActive: true,
   mustChangePassword: false,

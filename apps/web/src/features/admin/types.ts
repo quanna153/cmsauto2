@@ -5,6 +5,8 @@ export type AdminUser = {
   username: string;
   fullName: string;
   email: string | null;
+  authorTitle: string;
+  authorBio: string;
   role: UserRole;
   isActive: boolean;
   mustChangePassword: boolean;
@@ -118,6 +120,14 @@ export type InternalLinkSuggestion = {
   intentScore?: number;
   expectationScore?: number;
   status: "pending" | "accepted" | "rejected";
+};
+
+export type HistoryRecord = {
+  id: string;
+  step: "keywords" | "brief" | "outline" | "draft" | "image" | "links" | "apply-links";
+  createdAt: string;
+  request: unknown;
+  response: unknown;
 };
 
 export type ArticleLibraryItem = {

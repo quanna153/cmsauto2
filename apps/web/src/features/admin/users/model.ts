@@ -6,6 +6,8 @@ export type CreateUserForm = {
   username: string;
   fullName: string;
   email: string;
+  authorTitle: string;
+  authorBio: string;
   temporaryPassword: string;
 };
 
@@ -13,7 +15,7 @@ export function filterUsers(users: AdminUser[], filters: { search: string; role:
   const search = filters.search.trim().toLowerCase();
 
   return users.filter((user) => {
-    const matchesSearch = !search || [user.username, user.fullName, user.email ?? ""].some((value) => value.toLowerCase().includes(search));
+    const matchesSearch = !search || [user.username, user.fullName, user.email ?? "", user.authorTitle, user.authorBio].some((value) => value.toLowerCase().includes(search));
     const matchesRole = filters.role === "all" || user.role === filters.role;
     const matchesStatus =
       filters.status === "all" ||
@@ -44,10 +46,14 @@ export function buildCreateUserPayload(form: CreateUserForm) {
     username: string;
     fullName: string;
     email?: string;
+    authorTitle?: string;
+    authorBio?: string;
     temporaryPassword: string;
   } = {
     username: form.username.trim(),
     fullName: form.fullName.trim(),
+    authorTitle: form.authorTitle.trim(),
+    authorBio: form.authorBio.trim(),
     temporaryPassword: form.temporaryPassword.trim()
   };
 

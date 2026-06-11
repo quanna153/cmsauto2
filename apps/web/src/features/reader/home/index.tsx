@@ -122,7 +122,7 @@ function mapFeaturedArticle(locale: Locale, articles: ReaderArticle[]): FeatureA
     title: article.title,
     excerpt: article.excerpt || fallbackFeatured.excerpt,
     href: article.livePath || href(locale, `/articles/${article.slug}`),
-    author: "CoinRadar Editorial",
+    author: article.authorName || "CoinRadar Editorial",
     meta: formatPublishedTime(article.publishedAt)
   };
 }

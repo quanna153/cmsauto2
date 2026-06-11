@@ -3,10 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, FilePlus2, FlaskConical, Pencil } from "lucide-react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
 import { PageHeader } from "@/components/ui/page-header";
+import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
 import type { ArticleSession } from "@/features/admin/types";
@@ -23,6 +25,11 @@ const stepLabels: Record<ArticleSession["activeStep"], string> = {
 
 export function ArticlesFeature() {
   const query = useQuery({ queryKey: ["articles"], queryFn: () => getJson<{ articles: ArticleSession[] }>("/articles") });
+  const [languageFilter, setLanguageFilter] = useState<"all" | "vi" | "en">("all");
+  const articles = query.data?.articles ?? [];
+  const filteredArticles = useMemo(() => articles.filter((article) =>
+    languageFilter === "all" || article.inputs.language === languageFilter
+  ), [articles, languageFilter]);
 
   return <>
     <PageHeader
@@ -31,16 +38,27 @@ export function ArticlesFeature() {
       eyebrow="Admin"
       title="Quản lý bài viết"
     />
+    <section className="mb-4 grid gap-3 rounded-xl border bg-white p-4 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-center">
+      <Select onChange={(event) => setLanguageFilter(event.target.value as "all" | "vi" | "en")} value={languageFilter}>
+        <option value="all">Tất cả ngôn ngữ</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="en">English</option>
+      </Select>
+      <p className="text-sm text-[#687386]">Lọc riêng bài tiếng Việt và tiếng Anh để tránh trộn nội dung khi duyệt.</p>
+      <p className="text-sm font-semibold text-[#566174] sm:text-right">{filteredArticles.length} / {articles.length} bài</p>
+    </section>
     {query.isLoading
       ? <LoadingSkeleton />
       : query.error
         ? <ErrorState message={query.error.message} />
-        : !query.data?.articles.length
+        : !articles.length
           ? <EmptyState description="Tạo bài bằng Article Factory hoặc đăng bài thủ công." title="Chưa có bài viết" />
+          : filteredArticles.length === 0
+            ? <EmptyState description="Không có bài viết nào thuộc ngôn ngữ đang lọc." title="Không có bài phù hợp" />
           : <div className="overflow-hidden rounded-xl border bg-white">
               <Table>
                 <TableHead><tr><th className="px-4 py-3">Bài viết</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></TableHead>
-                <tbody>{query.data.articles.map((article) =>
+                <tbody>{filteredArticles.map((article) =>
                   <tr key={article.id}>
                     <TableCell>
                       <strong>{article.draft?.title || article.inputs.seedKeyword || "Bài chưa đặt tiêu đề"}</strong>

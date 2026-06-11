@@ -11,6 +11,8 @@ type UserRow = {
   password_hash: string;
   full_name: string;
   email: string | null;
+  author_title: string;
+  author_bio: string;
   role: UserRole;
   is_active: number;
   must_change_password: number;
@@ -59,6 +61,8 @@ function serializeUser(row: UserRow): AuthUser {
     username: row.username,
     fullName: row.full_name,
     email: row.email,
+    authorTitle: row.author_title ?? "",
+    authorBio: row.author_bio ?? "",
     role: row.role,
     isActive: Boolean(row.is_active),
     mustChangePassword: Boolean(row.must_change_password),
@@ -116,10 +120,10 @@ async function ensureBootstrapSuperAdmin() {
     await withTransaction((db) => {
       db.run(`
         INSERT INTO users (
-          id, username, password_hash, full_name, email, role, is_active,
+          id, username, password_hash, full_name, email, author_title, author_bio, role, is_active,
           must_change_password, created_by_user_id, last_login_at, created_at, updated_at
         ) VALUES (
-          $id, $username, $passwordHash, $fullName, NULL, 'super_admin', 1,
+          $id, $username, $passwordHash, $fullName, NULL, '', '', 'super_admin', 1,
           0, NULL, NULL, $createdAt, $createdAt
         )
       `, {
@@ -270,6 +274,8 @@ export async function readAuthSessionState(token: string) {
     password_hash: string;
     full_name: string;
     email: string | null;
+    author_title: string;
+    author_bio: string;
     role: UserRole;
     is_active: number;
     must_change_password: number;
@@ -292,6 +298,8 @@ export async function readAuthSessionState(token: string) {
       u.password_hash,
       u.full_name,
       u.email,
+      u.author_title,
+      u.author_bio,
       u.role,
       u.is_active,
       u.must_change_password,
@@ -320,6 +328,8 @@ export async function readAuthSessionState(token: string) {
     password_hash: row.password_hash,
     full_name: row.full_name,
     email: row.email,
+    author_title: row.author_title ?? "",
+    author_bio: row.author_bio ?? "",
     role: row.role,
     is_active: Number(row.is_active),
     must_change_password: Number(row.must_change_password),
@@ -464,6 +474,8 @@ export async function createAdminUser(input: {
   username: string;
   fullName: string;
   email?: string | null;
+  authorTitle?: string | null;
+  authorBio?: string | null;
   temporaryPassword: string;
 }) {
   await ensureBootstrapSuperAdmin();
@@ -471,6 +483,8 @@ export async function createAdminUser(input: {
   const username = input.username.trim();
   const fullName = input.fullName.trim();
   const email = input.email?.trim() || null;
+  const authorTitle = input.authorTitle?.trim() ?? "";
+  const authorBio = input.authorBio?.trim() ?? "";
   const temporaryPassword = input.temporaryPassword.trim();
 
   if (!username || !fullName || temporaryPassword.length < 8) {
@@ -495,10 +509,10 @@ export async function createAdminUser(input: {
   await withTransaction((db) => {
     db.run(`
       INSERT INTO users (
-        id, username, password_hash, full_name, email, role, is_active,
+        id, username, password_hash, full_name, email, author_title, author_bio, role, is_active,
         must_change_password, created_by_user_id, last_login_at, created_at, updated_at
       ) VALUES (
-        $id, $username, $passwordHash, $fullName, $email, 'admin', 1,
+        $id, $username, $passwordHash, $fullName, $email, $authorTitle, $authorBio, 'admin', 1,
         1, $createdByUserId, NULL, $createdAt, $createdAt
       )
     `, {
@@ -507,6 +521,8 @@ export async function createAdminUser(input: {
       $passwordHash: passwordHash,
       $fullName: fullName,
       $email: email,
+      $authorTitle: authorTitle,
+      $authorBio: authorBio,
       $createdByUserId: input.actorUserId,
       $createdAt: createdAt
     } as never);
@@ -530,6 +546,8 @@ export async function createAdminUser(input: {
     username,
     fullName,
     email,
+    authorTitle,
+    authorBio,
     role: "admin" as const,
     isActive: true,
     mustChangePassword: true,
@@ -544,6 +562,8 @@ export async function updateManagedUser(input: {
   userId: string;
   fullName?: string;
   email?: string | null;
+  authorTitle?: string | null;
+  authorBio?: string | null;
   isActive?: boolean;
 }) {
   await ensureBootstrapSuperAdmin();
@@ -556,6 +576,8 @@ export async function updateManagedUser(input: {
 
   const nextFullName = input.fullName?.trim() || existing.full_name;
   const nextEmail = input.email === undefined ? existing.email : (input.email?.trim() || null);
+  const nextAuthorTitle = input.authorTitle === undefined ? existing.author_title : (input.authorTitle?.trim() ?? "");
+  const nextAuthorBio = input.authorBio === undefined ? existing.author_bio : (input.authorBio?.trim() ?? "");
   const nextIsActive = input.isActive === undefined ? Boolean(existing.is_active) : input.isActive;
   const updatedAt = nowIso();
 
@@ -564,12 +586,16 @@ export async function updateManagedUser(input: {
       UPDATE users
       SET full_name = $fullName,
           email = $email,
+          author_title = $authorTitle,
+          author_bio = $authorBio,
           is_active = $isActive,
           updated_at = $updatedAt
       WHERE id = $userId
     `, {
       $fullName: nextFullName,
       $email: nextEmail,
+      $authorTitle: nextAuthorTitle,
+      $authorBio: nextAuthorBio,
       $isActive: nextIsActive ? 1 : 0,
       $updatedAt: updatedAt,
       $userId: input.userId
@@ -587,7 +613,9 @@ export async function updateManagedUser(input: {
       targetId: input.userId,
       payload: {
         fullName: nextFullName,
-        email: nextEmail
+        email: nextEmail,
+        authorTitle: nextAuthorTitle,
+        authorBio: nextAuthorBio
       },
       createdAt: updatedAt
     });
@@ -597,6 +625,8 @@ export async function updateManagedUser(input: {
     ...serializeUser(existing),
     fullName: nextFullName,
     email: nextEmail,
+    authorTitle: nextAuthorTitle,
+    authorBio: nextAuthorBio,
     isActive: nextIsActive,
     updatedAt
   } satisfies AuthUser;

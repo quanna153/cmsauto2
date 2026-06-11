@@ -16,6 +16,9 @@ export type ReaderArticle = {
   livePath: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
+  authorName?: string;
+  authorTitle?: string;
+  authorBio?: string;
 };
 
 export type ReaderListResponse = {

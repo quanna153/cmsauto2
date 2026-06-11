@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSpreadsheet, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
 import { Input } from "@/components/ui/input";
@@ -12,23 +11,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import type { ArticleLibraryImportItem, ArticleLibraryImportResult, ArticleLibraryItem } from "@/features/admin/types";
 import { deleteJson, getJson, patchJson, postJson } from "@/lib/api";
-
-function parseKeywordLabels(value: string) {
-  const seen = new Set<string>();
-  return value
-    .split(/[,;\n]+/)
-    .map((label) => label.trim().replace(/^#+/, "").trim())
-    .filter((label) => {
-      const key = label.toLocaleLowerCase();
-      if (!label || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
-function formatKeywordLabels(labels: string[]) {
-  return labels.map((label) => `#${label}`).join(", ");
-}
 
 function normalizeHeader(value: string) {
   return value.trim().toLowerCase().replace(/[\s_-]+/g, "");
@@ -145,13 +127,11 @@ export function InternalLinksFeature() {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [language, setLanguage] = useState<"vi" | "en">("vi");
-  const [keywordLabels, setKeywordLabels] = useState("");
   const [librarySearch, setLibrarySearch] = useState("");
   const [libraryLanguage, setLibraryLanguage] = useState<"all" | "vi" | "en">("all");
   const [libraryPage, setLibraryPage] = useState(1);
   const [importError, setImportError] = useState("");
   const [importResult, setImportResult] = useState<ArticleLibraryImportResult | null>(null);
-  const parsedKeywords = parseKeywordLabels(keywordLabels);
   const pageSize = 25;
   const filteredArticles = useMemo(() => {
     const articles = query.data?.articles ?? [];
@@ -160,7 +140,7 @@ export function InternalLinksFeature() {
     return articles.filter((article) => {
       const matchesLanguage = libraryLanguage === "all" || article.language === libraryLanguage;
       const matchesSearch = !normalizedSearch
-        || [article.title, article.url, article.keywords.join(" ")].join(" ").toLocaleLowerCase().includes(normalizedSearch);
+        || [article.title, article.url].join(" ").toLocaleLowerCase().includes(normalizedSearch);
 
       return matchesLanguage && matchesSearch;
     });
@@ -175,17 +155,16 @@ export function InternalLinksFeature() {
       url,
       language,
       summary: "",
-      keywords: parsedKeywords
+      keywords: []
     }),
     onSuccess: async () => {
       setTitle("");
       setUrl("");
-      setKeywordLabels("");
       await client.invalidateQueries({ queryKey: ["article-library"] });
     }
   });
   const updateArticle = useMutation({
-    mutationFn: ({ article, changes }: { article: ArticleLibraryItem; changes: Pick<ArticleLibraryItem, "title" | "url" | "keywords"> }) =>
+    mutationFn: ({ article, changes }: { article: ArticleLibraryItem; changes: Pick<ArticleLibraryItem, "title" | "url"> }) =>
       patchJson(`/article-library/${article.id}`, {
         expectedRevision: article.revision,
         changes
@@ -224,16 +203,16 @@ export function InternalLinksFeature() {
 
   return <>
     <PageHeader
-      description="Shared destination URL database for automated internal link suggestions. Import CSV/XLSX once and reuse those records for future articles."
+      description="Kho URL đích dùng chung cho hệ thống gợi ý internal link. Matching hiện ưu tiên tiêu đề bài và URL."
       eyebrow="Admin"
-      title="Internal Link Library"
+      title="Kho links"
     />
     <section className="mb-5 grid gap-4 rounded-xl border bg-white p-4 lg:grid-cols-[1fr_auto] lg:items-center">
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-[#f7f7f4] p-2 text-[#80640b]"><FileSpreadsheet size={20} /></div>
         <div>
           <h2 className="font-semibold">Import CSV/XLSX</h2>
-          <p className="mt-1 text-sm text-[#687386]">Required columns: title, url. Optional columns: keywords, language. If language is empty, /vi-vn/ imports as Vietnamese; other valid URLs import as English.</p>
+          <p className="mt-1 text-sm text-[#687386]">Cột bắt buộc: title, url. Cột language là tuỳ chọn. Nếu bỏ trống, /vi-vn/ sẽ là Vietnamese; URL hợp lệ khác sẽ là English.</p>
         </div>
       </div>
       <input
@@ -274,14 +253,6 @@ export function InternalLinksFeature() {
       <Button disabled={!title.trim() || !url.trim() || create.isPending} onClick={() => create.mutate()}>
         <Plus size={16} />Add
       </Button>
-      <label className="grid gap-1 lg:col-span-4">
-        <span className="text-xs font-semibold text-[#566174]">Optional keywords, separated by commas</span>
-        <Input
-          onChange={(event) => setKeywordLabels(event.target.value)}
-          placeholder="#bitcoin, #blockchain, what is bitcoin"
-          value={keywordLabels}
-        />
-      </label>
     </section>
     {create.error ? <div className="mb-5"><ErrorState message={create.error.message} /></div> : null}
     {updateArticle.error ? <div className="mb-5"><ErrorState message={updateArticle.error.message} /></div> : null}
@@ -298,7 +269,7 @@ export function InternalLinksFeature() {
                     setLibrarySearch(event.target.value);
                     setLibraryPage(1);
                   }}
-                  placeholder="Search title, URL, or keyword"
+                  placeholder="Search title or URL"
                   value={librarySearch}
                 />
                 <Select
@@ -317,7 +288,7 @@ export function InternalLinksFeature() {
                 </p>
               </section>
               {visibleArticles.length === 0
-                ? <EmptyState description="Try another title, URL, keyword, or language filter." title="No matching links" />
+                ? <EmptyState description="Try another title, URL, or language filter." title="No matching links" />
                 : <div className="grid gap-3">
                     {visibleArticles.map((article) =>
                       <ArticleLibraryCard
@@ -349,26 +320,18 @@ function ArticleLibraryCard({
   article: ArticleLibraryItem;
   isPending: boolean;
   onRemove: () => void;
-  onSave: (changes: Pick<ArticleLibraryItem, "title" | "url" | "keywords">) => void;
+  onSave: (changes: Pick<ArticleLibraryItem, "title" | "url">) => void;
 }) {
   const [title, setTitle] = useState(article.title);
   const [url, setUrl] = useState(article.url);
-  const [keywordLabels, setKeywordLabels] = useState(formatKeywordLabels(article.keywords));
-  const parsedKeywords = parseKeywordLabels(keywordLabels);
 
   return <article className="rounded-xl border bg-white p-4">
     <div className="flex items-start justify-between gap-4">
       <div>
-        <strong>{title}</strong>
-        <p className="text-sm text-[#687386]">{url}</p>
+        <strong>{article.language === "vi" ? "Vietnamese" : "English"}</strong>
         <p className="mt-1 text-xs text-[#687386]">Imported {new Date(article.createdAt).toLocaleDateString()}</p>
       </div>
       <Button aria-label="Delete link" onClick={onRemove} size="sm" variant="ghost"><Trash2 size={16} /></Button>
-    </div>
-    <div className="mt-3 flex flex-wrap gap-2">
-      {article.keywords.length > 0
-        ? article.keywords.map((keyword) => <Badge key={keyword}>#{keyword}</Badge>)
-        : <p className="text-xs font-semibold text-[#687386]">No keywords yet; matching can still use the title.</p>}
     </div>
     <div className="mt-3 grid gap-2">
       <Input
@@ -383,16 +346,10 @@ function ArticleLibraryCard({
         placeholder="/vi-vn/slug or https://..."
         value={url}
       />
-      <Input
-        aria-label={`Keywords for ${article.title}`}
-        onChange={(event) => setKeywordLabels(event.target.value)}
-        placeholder="#bitcoin, #blockchain"
-        value={keywordLabels}
-      />
       <div><Button
         aria-label={`Save changes for ${article.title}`}
         disabled={!title.trim() || !url.trim() || isPending}
-        onClick={() => onSave({ title: title.trim(), url: url.trim(), keywords: parsedKeywords })}
+        onClick={() => onSave({ title: title.trim(), url: url.trim() })}
         size="sm"
         variant="secondary"
       >

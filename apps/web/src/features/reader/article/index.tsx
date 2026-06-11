@@ -36,7 +36,7 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <UserRound className="h-4 w-4" />
-                  {article.locale === "vi-vn" ? "Đăng bởi CMS Auto" : "By CMS Auto"}
+                  {article.locale === "vi-vn" ? "Đăng bởi " : "By "}{article.authorName || "CMS Auto"}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <Clock3 className="h-4 w-4" />
@@ -78,6 +78,12 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
                 <div>
                   <dt className="font-semibold text-[#4B5563]">{article.locale === "vi-vn" ? "Chủ đề" : "Topic"}</dt>
                   <dd className="mt-1 font-bold text-[#111827]">{article.primaryKeyword || copy.articles}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-[#4B5563]">{article.locale === "vi-vn" ? "Tác giả" : "Author"}</dt>
+                  <dd className="mt-1 font-bold text-[#111827]">{article.authorName || "CMS Auto"}</dd>
+                  {article.authorTitle ? <dd className="mt-1 text-xs font-semibold text-[#A88412]">{article.authorTitle}</dd> : null}
+                  {article.authorBio ? <dd className="mt-2 leading-6 text-[#4B5563]">{article.authorBio}</dd> : null}
                 </div>
                 <div>
                   <dt className="font-semibold text-[#4B5563]">{article.locale === "vi-vn" ? "Từ khóa phụ" : "Secondary keywords"}</dt>

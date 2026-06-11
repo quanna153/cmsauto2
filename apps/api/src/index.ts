@@ -764,11 +764,15 @@ const createUserRequestSchema = z.object({
   username: z.string().min(1),
   fullName: z.string().min(1),
   email: z.string().email().nullable().optional(),
+  authorTitle: z.string().optional(),
+  authorBio: z.string().optional(),
   temporaryPassword: z.string().min(8)
 });
 const updateUserRequestSchema = z.object({
   fullName: z.string().min(1).optional(),
   email: z.string().email().nullable().optional(),
+  authorTitle: z.string().optional(),
+  authorBio: z.string().optional(),
   isActive: z.boolean().optional()
 });
 const resetPasswordRequestSchema = z.object({
@@ -967,6 +971,8 @@ app.post("/api/users", async (request, response, next) => {
       username: payload.username,
       fullName: payload.fullName,
       email: payload.email,
+      authorTitle: payload.authorTitle,
+      authorBio: payload.authorBio,
       temporaryPassword: payload.temporaryPassword
     });
     response.json({ user });
@@ -986,6 +992,8 @@ app.patch("/api/users/:id", async (request, response, next) => {
       userId: request.params.id,
       fullName: payload.fullName,
       email: payload.email,
+      authorTitle: payload.authorTitle,
+      authorBio: payload.authorBio,
       isActive: payload.isActive
     });
     response.json({ user });
@@ -1440,7 +1448,11 @@ app.post("/api/keywords/refresh-volume", async (request, response, next) => {
       language: payload.language
     });
 
-    response.json({ keywordIdeas: enriched });
+    const record = await appendHistory("keywords", payload, {
+      mode: "refresh-volume",
+      keywordIdeas: enriched
+    }, getAuth(request).user.id);
+    response.json({ keywordIdeas: enriched, recordId: record.id });
   } catch (error) {
     next(error);
   }
