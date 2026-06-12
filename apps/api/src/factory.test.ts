@@ -5,6 +5,7 @@ import {
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildInternalLinkMappingCsv,
   findAnchorTextCandidates,
+  formatAnchorCandidatesForPrompt,
   selectInternalLinkCandidatesForAnchorCandidates,
   mapAnchorCandidatesToInternalLinks,
   mapSelectedInternalLinkTargetsToSuggestions,
@@ -40,6 +41,15 @@ function libraryItem(overrides: Partial<ArticleLibraryItem>): ArticleLibraryItem
     keywords: [],
     ...overrides
   };
+}
+
+function normalizeTestText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
 }
 
 describe("internal link matching", () => {
@@ -83,6 +93,155 @@ describe("internal link matching", () => {
         semanticClarity: true
       })
     }));
+  });
+
+  it("does not create anchor candidates across sentence boundaries", () => {
+    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(
+      {
+        ...draft,
+        title: "Altcoin guide",
+        markdown: "Cẩm nang Altcoin toàn diện. Năm 2026, quản trị rủi ro vẫn là ưu tiên."
+      },
+      "altcoin",
+      [],
+      "vi",
+      [
+        libraryItem({
+          id: "altcoin-guide",
+          title: "Cẩm nang Altcoin toàn diện và những Narrative tiềm năng nhất năm 2026",
+          url: "/vi-vn/cam-nang-altcoin.html",
+          language: "vi"
+        })
+      ]
+    );
+
+    expect(suggestions.some((suggestion) => suggestion.anchor.includes(". "))).toBe(false);
+  });
+
+  it("does not link the draft main topic identified from the title", () => {
+    const tokenomicsDraft: Draft = {
+      ...draft,
+      title: "Tokenomics là gì? Hướng dẫn phân tích Tokenomics nhận biết dự án tiềm năng",
+      markdown: "Tokenomics giúp nhà đầu tư đánh giá cung cầu token. Quản trị rủi ro vẫn là bước quan trọng."
+    };
+    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(tokenomicsDraft, "tokenomics", [], "vi", [
+      libraryItem({
+        id: "tokenomics",
+        title: "Tokenomics là gì? Phân tích tiềm năng dự án tiền mã hóa",
+        url: "/vi-vn/huong-dan-phan-tich-tokenomics.html",
+        language: "vi"
+      }),
+      libraryItem({
+        id: "risk",
+        title: "Quản trị rủi ro khi đầu tư crypto",
+        url: "/vi-vn/quan-tri-rui-ro.html",
+        language: "vi"
+      })
+    ]);
+
+    expect(suggestions.some((suggestion) => suggestion.anchor.toLowerCase() === "tokenomics")).toBe(false);
+  });
+
+  it("does not select broad overview articles for the draft main topic", () => {
+    const avalancheDraft: Draft = {
+      ...draft,
+      title: "Avalanche Subnet là gì? Cách hoạt động và vai trò trong hệ sinh thái AVAX",
+      markdown: "Avalanche Subnet giúp các dự án tạo blockchain riêng với bộ validator và logic vận hành riêng."
+    };
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      avalancheDraft,
+      "vi",
+      [
+        libraryItem({
+          id: "avalanche-overview",
+          title: "Tổng hợp kiến thức Avalanche AVAX nền tảng blockchain vượt trội",
+          url: "/vi-vn/toan-tap-ve-avalanche-va-avax.html",
+          language: "vi"
+        })
+      ],
+      [{
+        anchor: "Avalanche Subnet",
+        targetUrl: "/vi-vn/toan-tap-ve-avalanche-va-avax.html",
+        confidence: 0.85,
+        reason: "Selected by AI."
+      }]
+    );
+
+    expect(suggestions).toHaveLength(0);
+  });
+
+  it("does not promote awkward library title fragments into anchors", () => {
+    const viDraft: Draft = {
+      ...draft,
+      title: "Hướng dẫn đầu tư crypto",
+      markdown: "Phân tích phần rủi ro giúp nhà đầu tư hiểu rõ hơn trước khi xuống tiền."
+    };
+    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(viDraft, "crypto", [], "vi", [
+      libraryItem({
+        id: "market-analysis",
+        title: "Phân Tích Thị Trường Crypto - Dữ Liệu và Chiến Lược Đầu Tư",
+        url: "/vi-vn/phan-tich-thi-truong-crypto",
+        language: "vi"
+      })
+    ]);
+
+    expect(suggestions.some((suggestion) => normalizeTestText(suggestion.anchor) === "phan tich phan")).toBe(false);
+  });
+
+  it("does not accept weak AI-selected anchor fragments", () => {
+    const viDraft: Draft = {
+      ...draft,
+      title: "Bảo mật dữ liệu trong crypto",
+      markdown: "Việc bảo vệ dữ liệu người dùng là điều cần thiết khi xây dựng sản phẩm tài chính."
+    };
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      viDraft,
+      "vi",
+      [
+        libraryItem({
+          id: "privacy",
+          title: "Chính Sách Bảo Mật Dữ Liệu Người Dùng - CoinMinutes",
+          url: "/vi-vn/chinh-sach-bao-mat",
+          language: "vi"
+        })
+      ],
+      [{
+        anchor: "liệu người dùng",
+        targetUrl: "/vi-vn/chinh-sach-bao-mat",
+        confidence: 0.99,
+        reason: "Selected by AI."
+      }]
+    );
+
+    expect(suggestions).toHaveLength(0);
+  });
+
+  it("does not accept descriptive clauses as anchor candidates", () => {
+    const viDraft: Draft = {
+      ...draft,
+      title: "DeFi là gì? Hướng dẫn cho người mới",
+      markdown: "Blockchain là nền tảng cốt lõi của DeFi. Vai trò của Blockchain trong DeFi vẫn rất quan trọng."
+    };
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      viDraft,
+      "vi",
+      [
+        libraryItem({
+          id: "avalanche-overview",
+          title: "Tổng hợp kiến thức Avalanche AVAX nền tảng blockchain vượt trội",
+          url: "/vi-vn/toan-tap-ve-avalanche-va-avax.html",
+          language: "vi"
+        })
+      ],
+      [{
+        anchor: "Blockchain là nền tảng",
+        targetUrl: "/vi-vn/toan-tap-ve-avalanche-va-avax.html",
+        confidence: 0.99,
+        reason: "Selected by AI."
+      }]
+    );
+
+    expect(suggestions).toHaveLength(0);
   });
 
   it("does not select a library URL when the anchor step did not qualify the term", () => {
@@ -388,6 +547,20 @@ describe("internal link matching", () => {
     expect(candidates.length).toBeLessThanOrEqual(14);
   });
 
+  it("formats compact anchor contexts for AI target selection", () => {
+    const articleContent = [
+      "Proof of Stake creates validator incentives.",
+      "",
+      "Unrelated background paragraph that should not be needed for target selection."
+    ].join("\n");
+    const [candidate] = findAnchorTextCandidates("Crypto concepts", articleContent, "en");
+    const promptContext = formatAnchorCandidatesForPrompt(articleContent, "en", candidate ? [candidate] : []);
+
+    expect(promptContext).toContain("anchorText: Proof of Stake");
+    expect(promptContext).toContain("sourceContext: Proof of Stake creates validator incentives.");
+    expect(promptContext).not.toContain("Unrelated background paragraph");
+  });
+
   it("does not apply accepted internal links inside headings or append heading-only anchors", () => {
     const markdown = applyInternalLinks([
       "# Blockchain Scalability",
@@ -515,9 +688,9 @@ describe("internal link matching", () => {
         }),
         libraryItem({
           id: "alternative",
-          title: "Blockchain Guide",
-          url: "/blockchain-guide",
-          keywords: ["blockchain guide"]
+          title: "Verifiable Blockchain Transactions",
+          url: "/verifiable-blockchain-transactions",
+          keywords: ["blockchain transactions"]
         })
       ],
       [{
@@ -547,7 +720,7 @@ describe("internal link matching", () => {
     expect(suggestions[0]).toMatchObject({
       anchor: "Blockchain",
       targetArticleId: "alternative",
-      targetUrl: "/blockchain-guide"
+      targetUrl: "/verifiable-blockchain-transactions"
     });
   });
 

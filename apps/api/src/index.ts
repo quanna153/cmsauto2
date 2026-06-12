@@ -32,6 +32,9 @@ import {
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildOutline,
   findInternalLinkAnchorCandidates,
+  formatAnchorCandidatesForPrompt,
+  mapAnchorCandidatesToInternalLinks,
+  mapAnchorTextCandidatesToInternalLinkCandidates,
   mapSelectedInternalLinkTargetsToSuggestions,
   retrieveInternalLinkArticles,
   selectInternalLinkCandidatesForAnchorCandidates,
@@ -483,6 +486,101 @@ function formatInternalLinkCandidateArticlesForPrompt(articles: ArticleLibraryIt
     .join("\n\n");
 }
 
+function normalizeSuggestionAnchor(anchor: string) {
+  return anchor.trim().toLowerCase();
+}
+
+function normalizeSuggestionUrl(url: string) {
+  return url.trim().toLowerCase();
+}
+
+function isExistingInternalLinkSuggestion(
+  suggestion: InternalLinkSuggestion,
+  existingAnchors: Set<string>,
+  existingUrls: Set<string>
+) {
+  return existingAnchors.has(normalizeSuggestionAnchor(suggestion.anchor))
+    || (suggestion.targetUrl.trim() && existingUrls.has(normalizeSuggestionUrl(suggestion.targetUrl)));
+}
+
+function formatRejectedInternalLinkAnchorsForPrompt(suggestions: InternalLinkSuggestion[]) {
+  return suggestions
+    .map((suggestion, index) => [
+      `${index + 1}. anchorText: ${suggestion.anchor}`,
+      `   confidence: ${suggestion.confidence}`,
+      suggestion.sourceContext ? `   sourceContext: ${suggestion.sourceContext}` : null,
+      suggestion.reason ? `   previousReason: ${suggestion.reason}` : null,
+      suggestion.targetUrl ? `   rejectedUrl: ${suggestion.targetUrl}` : null
+    ].filter(Boolean).join("\n"))
+    .join("\n\n");
+}
+
+function mergeAdditionalInternalLinks(
+  existingSuggestions: InternalLinkSuggestion[],
+  additionalSuggestions: InternalLinkSuggestion[],
+  maxLinks = 10
+) {
+  if (existingSuggestions.length === 0) {
+    return additionalSuggestions.slice(0, maxLinks);
+  }
+
+  const existingAnchors = new Set(existingSuggestions.map((suggestion) => normalizeSuggestionAnchor(suggestion.anchor)));
+  const existingUrls = new Set(existingSuggestions.map((suggestion) => normalizeSuggestionUrl(suggestion.targetUrl)).filter(Boolean));
+  const room = Math.max(0, maxLinks - existingSuggestions.length);
+  const additions = additionalSuggestions
+    .filter((suggestion) => !isExistingInternalLinkSuggestion(suggestion, existingAnchors, existingUrls))
+    .slice(0, room);
+
+  return [...existingSuggestions, ...additions];
+}
+
+function mergeRegeneratedInternalLinks(
+  existingSuggestions: InternalLinkSuggestion[],
+  regeneratedSuggestions: InternalLinkSuggestion[]
+) {
+  if (existingSuggestions.length === 0) {
+    return regeneratedSuggestions;
+  }
+
+  const replacements = new Map(regeneratedSuggestions.map((suggestion) => [
+    normalizeSuggestionAnchor(suggestion.anchor),
+    suggestion
+  ]));
+  const used = new Set<string>();
+  const merged = existingSuggestions.flatMap((suggestion) => {
+    if (suggestion.status !== "rejected") {
+      return [suggestion];
+    }
+
+    const replacement = replacements.get(normalizeSuggestionAnchor(suggestion.anchor));
+    if (!replacement) {
+      return [];
+    }
+    used.add(normalizeSuggestionAnchor(replacement.anchor));
+    return [replacement];
+  });
+
+  return merged;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+}
+
+function canFallbackToLocalInternalLinks(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("fetch failed") || normalized.includes("timed out");
+}
+
 function formatCompetitorPagesForPrompt(pages: Array<z.infer<typeof competitorPageSchema>>) {
   return pages
     .map((page, index) => [
@@ -672,7 +770,10 @@ const linksRequestSchema = z.object({
   language: languageSchema,
   prompt: z.string().min(1),
   draft: draftSchema,
-  rejectedSuggestions: z.array(suggestionSchema).optional()
+  existingSuggestions: z.array(suggestionSchema).optional(),
+  preservedSuggestions: z.array(suggestionSchema).optional(),
+  rejectedSuggestions: z.array(suggestionSchema).optional(),
+  expandSuggestions: z.boolean().optional()
 });
 const applyLinksRequestSchema = z.object({
   markdown: z.string().min(1),
@@ -1725,15 +1826,57 @@ app.post("/api/links/suggest", async (request, response, next) => {
       return;
     }
 
-    const localAnchorCandidates = findInternalLinkAnchorCandidates(payload.draft, payload.language, articleLibrary);
-    let candidateLibrary = selectInternalLinkCandidatesForAnchorCandidates(
-      payload.draft,
-      payload.language,
-      articleLibrary,
-      localAnchorCandidates,
-      20
+    const existingSuggestions = payload.existingSuggestions ?? [];
+    const existingRejectedSuggestions = existingSuggestions.filter((suggestion) => suggestion.status === "rejected");
+    const rejectedSuggestions = payload.rejectedSuggestions ?? existingRejectedSuggestions;
+    const currentRejectedSuggestions = existingRejectedSuggestions.length > 0
+      ? existingRejectedSuggestions
+      : rejectedSuggestions;
+    const preservedSuggestions = payload.preservedSuggestions ?? existingSuggestions.filter((suggestion) => suggestion.status !== "rejected");
+    const shouldRegenerateRejectedOnly = currentRejectedSuggestions.length > 0;
+    const shouldExpandSuggestions = Boolean(payload.expandSuggestions && existingSuggestions.length > 0 && !shouldRegenerateRejectedOnly);
+    const existingAnchors = new Set(existingSuggestions.map((suggestion) => normalizeSuggestionAnchor(suggestion.anchor)));
+    const existingUrls = new Set(existingSuggestions.map((suggestion) => normalizeSuggestionUrl(suggestion.targetUrl)).filter(Boolean));
+    const unavailableUrls = new Set(
+      (shouldExpandSuggestions ? existingSuggestions : [...preservedSuggestions, ...rejectedSuggestions])
+        .map((suggestion) => suggestion.targetUrl.trim().toLowerCase())
+        .filter(Boolean)
     );
-    if (candidateLibrary.length === 0) {
+    const eligibleArticleLibrary = shouldRegenerateRejectedOnly || shouldExpandSuggestions
+      ? articleLibrary.filter((article) => !unavailableUrls.has(article.url.trim().toLowerCase()))
+      : articleLibrary;
+    const localAnchorCandidates = shouldRegenerateRejectedOnly
+      ? []
+      : findInternalLinkAnchorCandidates(
+        payload.draft,
+        payload.language,
+        articleLibrary,
+        shouldExpandSuggestions ? 26 : 14
+      ).filter((candidate) => !existingAnchors.has(normalizeSuggestionAnchor(candidate.anchorText)));
+    const rejectedAnchorCandidates = currentRejectedSuggestions.map((suggestion) => ({
+      anchor: suggestion.anchor,
+      sourceContext: suggestion.sourceContext,
+      reason: suggestion.reason,
+      confidence: suggestion.confidence
+    }));
+    let candidateLibrary = shouldRegenerateRejectedOnly
+      ? Array.from(new Map(rejectedAnchorCandidates.flatMap((candidate) =>
+        retrieveInternalLinkArticles(
+          candidate.anchor,
+          candidate.sourceContext ?? "",
+          payload.language,
+          eligibleArticleLibrary,
+          40
+        )
+      ).map((article) => [article.id, article])).values())
+      : selectInternalLinkCandidatesForAnchorCandidates(
+        payload.draft,
+        payload.language,
+        eligibleArticleLibrary,
+        localAnchorCandidates,
+        20
+      );
+    if (candidateLibrary.length === 0 && (!shouldExpandSuggestions || localAnchorCandidates.length > 0)) {
       candidateLibrary = retrieveInternalLinkArticles(
         payload.draft.title,
         [
@@ -1743,26 +1886,64 @@ app.post("/api/links/suggest", async (request, response, next) => {
           payload.draft.markdown.slice(0, 1600)
         ].filter(Boolean).join("\n"),
         payload.language,
-        articleLibrary,
+        eligibleArticleLibrary,
         20
       );
     }
-    if (candidateLibrary.length === 0) {
-      candidateLibrary = articleLibrary.slice(0, 20);
+    if (candidateLibrary.length === 0 && !shouldExpandSuggestions) {
+      candidateLibrary = eligibleArticleLibrary.slice(0, shouldRegenerateRejectedOnly ? 40 : 20);
     }
-    let candidateLibraryCount = candidateLibrary.length;
-    let suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(
-      payload.draft,
-      payload.primaryKeyword,
-      payload.secondaryKeywords,
-      payload.language,
-      candidateLibrary,
-      payload.rejectedSuggestions ?? []
-    );
+    const candidateLibraryCount = candidateLibrary.length;
+    let regeneratedSuggestions = shouldRegenerateRejectedOnly
+      ? mapAnchorCandidatesToInternalLinks(
+        payload.draft,
+        payload.language,
+        candidateLibrary,
+        rejectedAnchorCandidates,
+        rejectedSuggestions
+      )
+      : shouldExpandSuggestions
+        ? mapAnchorCandidatesToInternalLinks(
+          payload.draft,
+          payload.language,
+          candidateLibrary,
+          mapAnchorTextCandidatesToInternalLinkCandidates(payload.draft.markdown, payload.language, localAnchorCandidates),
+          existingSuggestions
+        )
+      : buildInternalLinkSuggestionsFromAnchorCandidates(
+        payload.draft,
+        payload.primaryKeyword,
+        payload.secondaryKeywords,
+        payload.language,
+        candidateLibrary,
+        rejectedSuggestions
+      );
 
-    if (hasGeminiConfig(customConfig)) {
+    const shouldUseAiTargetSelection = hasGeminiConfig(customConfig)
+      && !shouldExpandSuggestions;
+    let suggestionMode = shouldUseAiTargetSelection
+      ? "prefiltered-library + ai-target-selection"
+      : "local-anchor + prefiltered-library-match";
+    if (shouldExpandSuggestions) {
+      suggestionMode = "local-anchor + prefiltered-library-match + append-more";
+    }
+    let aiSelectionError: string | undefined;
+
+    if (shouldUseAiTargetSelection) {
       const candidateArticles = formatInternalLinkCandidateArticlesForPrompt(candidateLibrary);
-      const aiResult = await generateStructuredJson({
+      const anchorContexts = shouldRegenerateRejectedOnly
+        ? formatRejectedInternalLinkAnchorsForPrompt(currentRejectedSuggestions)
+        : formatAnchorCandidatesForPrompt(
+          payload.draft.markdown,
+          payload.language,
+          localAnchorCandidates
+        );
+      const compactDraftContext = [
+        `title: ${payload.draft.title}`,
+        payload.draft.excerpt ? `excerpt: ${payload.draft.excerpt}` : null,
+        anchorContexts ? `anchor_candidates:\n${anchorContexts}` : null
+      ].filter(Boolean).join("\n\n");
+      const aiResult = await withTimeout(generateStructuredJson({
         prompt: payload.prompt,
         variables: {
           keyword: payload.primaryKeyword,
@@ -1770,18 +1951,20 @@ app.post("/api/links/suggest", async (request, response, next) => {
           secondary_keywords: payload.secondaryKeywords.join(", "),
           language: payload.language,
           draft_title: payload.draft.title,
-          draft_markdown: payload.draft.markdown,
+          draft_markdown: compactDraftContext,
+          anchor_candidates: anchorContexts,
           candidate_articles: candidateArticles,
           articleTitle: payload.draft.title,
-          articleContent: payload.draft.markdown
+          articleContent: compactDraftContext
         },
         contextLines: [
           `Từ khóa chính: ${payload.primaryKeyword}`,
           `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
           `Ngôn ngữ: ${payload.language}`,
           `Tiêu đề bản nháp: ${payload.draft.title}`,
+          `Anchor candidates đã detect (${localAnchorCandidates.length}):\n${anchorContexts || "Không có anchor candidate."}`,
           `Candidate articles đã lọc trước (${candidateLibrary.length}/${articleLibrary.length}):\n${candidateArticles}`,
-          `Toàn bộ bản nháp:\n${payload.draft.markdown}`
+          `Compact draft context:\n${compactDraftContext}`
         ],
         jsonShapeHint: JSON.stringify({
           internalLinks: [
@@ -1797,30 +1980,52 @@ app.post("/api/links/suggest", async (request, response, next) => {
         validator: geminiInternalLinkSelectionSchema,
         temperature: 0.3,
         customConfig
+      }), 12000, "Gemini internal link selection").catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unknown Gemini error.";
+        if (!canFallbackToLocalInternalLinks(message)) {
+          throw error;
+        }
+        aiSelectionError = message;
+        suggestionMode = "prefiltered-library + local-fallback-after-ai-network-error";
+        console.warn("Gemini internal link selection failed; falling back to local suggestions.", message);
+        return null;
       });
 
-      const selectedSuggestions = mapSelectedInternalLinkTargetsToSuggestions(
-        payload.draft,
-        payload.language,
-        candidateLibrary,
-        aiResult.internalLinks.map((link) => ({
-          anchor: link.anchorText,
-          targetUrl: link.targetUrl,
-          confidence: link.confidence,
-          reason: link.reason
-        })),
-        payload.rejectedSuggestions ?? []
-      );
+      if (aiResult) {
+        const selectedSuggestions = mapSelectedInternalLinkTargetsToSuggestions(
+          payload.draft,
+          payload.language,
+          candidateLibrary,
+          aiResult.internalLinks.map((link) => ({
+            anchor: link.anchorText,
+            targetUrl: link.targetUrl,
+            confidence: link.confidence,
+            reason: link.reason
+          })),
+          rejectedSuggestions
+        );
 
-      if (selectedSuggestions.length > 0) {
-        suggestions = selectedSuggestions;
+        if (selectedSuggestions.length > 0) {
+          regeneratedSuggestions = mergeAdditionalInternalLinks(selectedSuggestions, regeneratedSuggestions);
+        }
       }
     }
+    const suggestions = shouldRegenerateRejectedOnly
+      ? mergeRegeneratedInternalLinks(existingSuggestions, regeneratedSuggestions)
+      : shouldExpandSuggestions
+        ? mergeAdditionalInternalLinks(
+          existingSuggestions,
+          regeneratedSuggestions.filter((suggestion) =>
+            !isExistingInternalLinkSuggestion(suggestion, existingAnchors, existingUrls)
+          )
+        )
+      : regeneratedSuggestions;
 
     const record = await appendHistory("links", payload, {
-      mode: hasGeminiConfig(customConfig) ? "prefiltered-library + ai-target-selection" : "local-anchor + prefiltered-library-match",
+      mode: suggestionMode,
       articleLibraryCount: articleLibrary.length,
       candidateLibraryCount,
+      aiSelectionError,
       suggestions
     }, getAuth(request).user.id);
     response.json({

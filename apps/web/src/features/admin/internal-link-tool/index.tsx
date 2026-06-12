@@ -36,6 +36,8 @@ export function InternalLinkToolFeature() {
   const [content, setContent] = useState("");
   const [language, setLanguage] = useState<Language>("vi");
   const [suggestions, setSuggestions] = useState<InternalLinkSuggestion[]>([]);
+  const [manualRematchSuggestionIds, setManualRematchSuggestionIds] = useState<Set<string>>(() => new Set());
+  const [rejectedSuggestionHistory, setRejectedSuggestionHistory] = useState<InternalLinkSuggestion[]>([]);
   const [outputMarkdown, setOutputMarkdown] = useState("");
   const historyQuery = useQuery({
     queryKey: ["history"],
@@ -48,15 +50,33 @@ export function InternalLinkToolFeature() {
   }, [historyQuery.data?.records]);
 
   const suggest = useMutation({
-    mutationFn: () => postJson<SuggestResponse>("/links/suggest", {
-      primaryKeyword: title.trim(),
-      secondaryKeywords: [title.trim()],
-      language,
-      prompt: defaultPrompt,
-      draft: buildDraft(title, content)
-    }),
+    mutationFn: (options?: { expandSuggestions?: boolean; regenerateRejected?: boolean }) => {
+      const expandSuggestions = Boolean(options?.expandSuggestions);
+      const shouldRegenerateRejected = Boolean(options?.regenerateRejected || manualRematchSuggestionIds.size > 0);
+      const requestSuggestions = suggestions.map((suggestion) => shouldRegenerateRejected && !expandSuggestions && manualRematchSuggestionIds.has(suggestion.id)
+        ? { ...suggestion, sourceContext: "", status: "rejected" as const }
+        : suggestion);
+      const rejectedSuggestions = shouldRegenerateRejected
+        ? mergeRejectedSuggestionHistory(
+          rejectedSuggestionHistory,
+          requestSuggestions.filter((suggestion) => suggestion.status === "rejected")
+        )
+        : [];
+      return postJson<SuggestResponse>("/links/suggest", {
+        primaryKeyword: title.trim(),
+        secondaryKeywords: [title.trim()],
+        language,
+        prompt: defaultPrompt,
+        draft: buildDraft(title, content),
+        existingSuggestions: requestSuggestions,
+        preservedSuggestions: requestSuggestions.filter((suggestion) => suggestion.status !== "rejected"),
+        rejectedSuggestions: expandSuggestions ? [] : rejectedSuggestions,
+        expandSuggestions
+      });
+    },
     onSuccess: async (result) => {
       setSuggestions(result.suggestions);
+      setManualRematchSuggestionIds(new Set());
       setOutputMarkdown("");
       await client.invalidateQueries({ queryKey: ["history"] });
     }
@@ -82,7 +102,21 @@ export function InternalLinkToolFeature() {
   const busy = suggest.isPending || apply.isPending;
 
   function updateSuggestion(id: string, changes: Partial<InternalLinkSuggestion>) {
-    setSuggestions((current) => current.map((suggestion) => suggestion.id === id ? { ...suggestion, ...changes } : suggestion));
+    const nextChanges = typeof changes.anchor === "string"
+      ? { ...changes, status: "pending" as const }
+      : changes;
+    if (typeof changes.anchor === "string") {
+      setManualRematchSuggestionIds((current) => new Set(current).add(id));
+    }
+    if (changes.status === "rejected") {
+      const rejectedSuggestion = suggestions.find((suggestion) => suggestion.id === id);
+      if (rejectedSuggestion) {
+        setRejectedSuggestionHistory((current) =>
+          mergeRejectedSuggestionHistory(current, [{ ...rejectedSuggestion, ...nextChanges, status: "rejected" }])
+        );
+      }
+    }
+    setSuggestions((current) => current.map((suggestion) => suggestion.id === id ? { ...suggestion, ...nextChanges } : suggestion));
   }
 
   function restoreHistory(record: HistoryRecord) {
@@ -99,6 +133,8 @@ export function InternalLinkToolFeature() {
     setContent(response?.markdown ?? request?.draft?.markdown ?? content);
     setLanguage(request?.language ?? language);
     setSuggestions(response?.suggestions ?? []);
+    setManualRematchSuggestionIds(new Set());
+    setRejectedSuggestionHistory([]);
     setOutputMarkdown(response?.markdown ?? "");
   }
 
@@ -130,9 +166,15 @@ export function InternalLinkToolFeature() {
             <Textarea className="min-h-[360px] font-mono" onChange={(event) => setContent(event.target.value)} placeholder="Dán bài viết ngoài vào đây..." value={content} />
           </label>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !title.trim() || !content.trim()} onClick={() => suggest.mutate()} type="button">
+            <Button disabled={busy || !title.trim() || !content.trim()} onClick={() => suggest.mutate({})} type="button">
               <WandSparkles size={16} />Gợi ý internal link
             </Button>
+            {suggestions.length ? <Button disabled={busy || !title.trim() || !content.trim()} onClick={() => suggest.mutate({ regenerateRejected: true })} type="button" variant="secondary">
+              <WandSparkles size={16} />Gợi ý lại link
+            </Button> : null}
+            {suggestions.length ? <Button disabled={busy || !title.trim() || !content.trim()} onClick={() => suggest.mutate({ expandSuggestions: true })} type="button" variant="secondary">
+              <WandSparkles size={16} />Gợi ý thêm link
+            </Button> : null}
             <Button disabled={busy || suggestions.length === 0 || acceptedCount === 0} onClick={() => apply.mutate()} type="button" variant="secondary">
               <CheckCircle2 size={16} />Chèn link đã chọn
             </Button>
@@ -194,6 +236,8 @@ export function InternalLinkToolFeature() {
           setTitle("");
           setContent("");
           setSuggestions([]);
+          setManualRematchSuggestionIds(new Set());
+          setRejectedSuggestionHistory([]);
           setOutputMarkdown("");
         }} type="button" variant="secondary">
           <RotateCcw size={16} />Làm bài khác
@@ -248,6 +292,23 @@ function buildDraft(title: string, markdown: string) {
     metaDescription: normalizedMarkdown.slice(0, 160),
     markdown: normalizedMarkdown
   };
+}
+
+function mergeRejectedSuggestionHistory(
+  current: InternalLinkSuggestion[],
+  next: InternalLinkSuggestion[]
+) {
+  const merged = new Map(current.map((suggestion) => [rejectedSuggestionKey(suggestion), suggestion]));
+  for (const suggestion of next) {
+    if (suggestion.anchor.trim() && suggestion.targetUrl.trim()) {
+      merged.set(rejectedSuggestionKey(suggestion), suggestion);
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function rejectedSuggestionKey(suggestion: InternalLinkSuggestion) {
+  return `${suggestion.anchor.trim().toLowerCase()}::${suggestion.targetUrl.trim().toLowerCase()}`;
 }
 
 function slugify(value: string) {
