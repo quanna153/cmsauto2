@@ -127,6 +127,7 @@ export function FactoryFeature() {
   const [outline, setOutline] = useState<Outline | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [links, setLinks] = useState<InternalLinkSuggestion[]>([]);
+  const [rejectedLinkHistory, setRejectedLinkHistory] = useState<InternalLinkSuggestion[]>([]);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplates>(fallbackPrompts);
   const [promptsHydrated, setPromptsHydrated] = useState(false);
   const [selectedStep, setSelectedStep] = useState<Step>("keywords");
@@ -291,15 +292,21 @@ export function FactoryFeature() {
 
   async function generateLinks() {
     if (!primary || !draft) return;
+    const currentRejectedLinks = links.filter((link) => link.status === "rejected");
+    const rejectedSuggestions = currentRejectedLinks.length > 0
+      ? mergeRejectedSuggestionHistory(rejectedLinkHistory, currentRejectedLinks)
+      : [];
     const result = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.links,
       draft,
-      rejectedSuggestions: links.filter((link) => link.status === "rejected")
+      existingSuggestions: links,
+      preservedSuggestions: links.filter((link) => link.status !== "rejected"),
+      rejectedSuggestions
     });
-    setLinks(result.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" : "pending" })));
+    setLinks(result.suggestions.map((link) => ({ ...link, status: link.status ?? (link.targetUrl ? "accepted" : "pending") })));
   }
 
   async function runAutoArticle() {
@@ -385,6 +392,7 @@ export function FactoryFeature() {
       });
       const nextLinks = linksResult.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" as const : "pending" as const }));
       setLinks(nextLinks);
+      setRejectedLinkHistory([]);
 
       setSelectedStep("ready");
       setBusyLabel("06/06 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
@@ -429,6 +437,7 @@ export function FactoryFeature() {
     setOutline(article.outline);
     setDraft(article.draft);
     setLinks(article.linkSuggestions);
+    setRejectedLinkHistory([]);
     setSavedArticleId(article.id);
     setSavedRevision(article.revision);
     setSelectedStep(article.activeStep);
@@ -522,7 +531,10 @@ export function FactoryFeature() {
     if (startIndex <= workflowStages.findIndex((item) => item.key === "brief")) setBrief(null);
     if (startIndex <= workflowStages.findIndex((item) => item.key === "outline")) setOutline(null);
     if (startIndex <= workflowStages.findIndex((item) => item.key === "draft")) setDraft(null);
-    if (startIndex <= workflowStages.findIndex((item) => item.key === "links")) setLinks([]);
+    if (startIndex <= workflowStages.findIndex((item) => item.key === "links")) {
+      setLinks([]);
+      setRejectedLinkHistory([]);
+    }
   }
 
   function resetSession() {
@@ -535,6 +547,7 @@ export function FactoryFeature() {
     setOutline(null);
     setDraft(null);
     setLinks([]);
+    setRejectedLinkHistory([]);
     setSelectedStep("keywords");
     setSavedArticleId(null);
     setSavedRevision(null);
@@ -558,6 +571,14 @@ export function FactoryFeature() {
   }
 
   function setLinkStatus(id: string, status: InternalLinkSuggestion["status"]) {
+    if (status === "rejected") {
+      const rejectedLink = links.find((link) => link.id === id);
+      if (rejectedLink) {
+        setRejectedLinkHistory((current) =>
+          mergeRejectedSuggestionHistory(current, [{ ...rejectedLink, status: "rejected" }])
+        );
+      }
+    }
     setLinks((current) => current.map((link) => link.id === id ? { ...link, status } : link));
   }
 
@@ -1228,4 +1249,21 @@ function TagList({ items }: { items: string[] }) {
 
 function List({ items }: { items: string[] }) {
   return <ul className="list-disc space-y-1 pl-5 text-sm text-[#566174] break-words">{items.map((item) => <li key={item}>{item}</li>)}</ul>;
+}
+
+function mergeRejectedSuggestionHistory(
+  current: InternalLinkSuggestion[],
+  next: InternalLinkSuggestion[]
+) {
+  const merged = new Map(current.map((suggestion) => [rejectedSuggestionKey(suggestion), suggestion]));
+  for (const suggestion of next) {
+    if (suggestion.anchor.trim() && suggestion.targetUrl.trim()) {
+      merged.set(rejectedSuggestionKey(suggestion), suggestion);
+    }
+  }
+  return Array.from(merged.values());
+}
+
+function rejectedSuggestionKey(suggestion: InternalLinkSuggestion) {
+  return `${suggestion.anchor.trim().toLowerCase()}::${suggestion.targetUrl.trim().toLowerCase()}`;
 }
