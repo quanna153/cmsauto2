@@ -122,6 +122,23 @@ export type ArticleLibraryItem = {
   keywords: string[];
 };
 
+export type ImageLibraryItem = {
+  id: string;
+  createdAt: string;
+  provider: string;
+  prompt: string;
+  url: string;
+  metadataJson: string;
+};
+
+export type GenerateImageRequest = {
+  provider: "cloud_run" | "modelslab";
+  prompt: string;
+  negativePrompt?: string;
+  width?: number;
+  height?: number;
+};
+
 export type ArticleLibraryImportItem = {
   title: string;
   url: string;

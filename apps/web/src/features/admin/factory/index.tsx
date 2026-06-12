@@ -27,11 +27,12 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
 import { getJson, patchJson, postJson } from "@/lib/api";
+import { ImagePickerModal, ImageGeneratorModal } from "./image-modals";
 
 type Keyword = ArticleSession["keywordIdeas"][number];
 type Brief = NonNullable<ArticleSession["brief"]>;
 type Outline = NonNullable<ArticleSession["outline"]>;
-type Draft = NonNullable<ArticleSession["draft"]>;
+export type Draft = NonNullable<ArticleSession["draft"]>;
 type Step = ArticleSession["activeStep"];
 type AiStep = Exclude<Step, "ready">;
 type PromptTemplates = Record<AiStep, string>;
@@ -671,8 +672,40 @@ export function FactoryFeature() {
           onFinish={() => void run(finish, "Đang áp dụng link và lưu bài để duyệt...")}
           onGenerateBrief={() => void run(generateBrief, "Đang đọc top 10 kết quả và rút insight đối thủ...")}
           onGenerateDraft={() => void run(generateDraft, "Đang viết bản nháp bằng Gemini...")}
-          onGenerateImage={() => void run(generateArticleImage, "Đang tạo kế hoạch ảnh hoặc gọi provider ảnh...")}
+          onAddImage={(img) => {
+            setDraft((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                generatedImages: [img, ...(prev.generatedImages ?? [])]
+              };
+            });
+          }}
+          onAddImages={(imgs) => {
+            setDraft((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                generatedImages: [...imgs, ...(prev.generatedImages ?? [])]
+              };
+            });
+          }}
+          onRemoveImage={(id) => {
+            setDraft((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                generatedImages: (prev.generatedImages ?? []).filter(img => img.id !== id)
+              };
+            });
+          }}
           onGenerateKeywords={() => void run(generateKeywords, "Đang lấy keyword và volume từ Semrush...")}
+          onUpdateMarkdown={(md) => {
+            setDraft((prev) => {
+              if (!prev) return prev;
+              return { ...prev, markdown: md };
+            });
+          }}
           onGenerateLinks={() => void run(generateLinks, "Đang phân tích bản nháp và so khớp kho internal links, bước này có thể mất 1-2 phút...")}
           onGenerateOutline={() => void run(generateOutline, "Đang ghép keyword, volume và insight để sinh outline...")}
           onLanguageChange={setLanguage}
@@ -762,7 +795,10 @@ function WorkflowWorkspace(props: {
   onFinish: () => void;
   onGenerateBrief: () => void;
   onGenerateDraft: () => void;
-  onGenerateImage: () => void;
+  onUpdateMarkdown: (md: string) => void;
+  onAddImage: (img: GeneratedArticleImage) => void;
+  onAddImages?: (imgs: GeneratedArticleImage[]) => void;
+  onRemoveImage: (id: string) => void;
   onGenerateKeywords: () => void;
   onGenerateLinks: () => void;
   onGenerateOutline: () => void;
@@ -790,7 +826,7 @@ function WorkflowWorkspace(props: {
     {props.selectedStep === "keywords" ? <KeywordsWorkspace {...props} /> : null}
     {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("outline")} onGenerate={props.onGenerateBrief} /> : null}
     {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
-    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} busyLabel={props.busyLabel} draft={props.draft} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} onGenerateImage={props.onGenerateImage} /> : null}
+    {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} busyLabel={props.busyLabel} draft={props.draft} keyword={props.keywords.find(k => k.id === props.primaryKeywordId)?.keyword} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} onUpdateMarkdown={props.onUpdateMarkdown} onAddImage={props.onAddImage} onAddImages={props.onAddImages} onRemoveImage={props.onRemoveImage} /> : null}
     {props.selectedStep === "links"
       ? <LinksWorkspace busy={props.busy} busyLabel={props.busyLabel} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
       : null}
@@ -978,16 +1014,24 @@ function DraftWorkspace({
   busy,
   busyLabel,
   draft,
+  keyword,
   onGenerate,
-  onGenerateImage,
-  onConfirm
+  onUpdateMarkdown,
+  onConfirm,
+  onAddImage,
+  onAddImages,
+  onRemoveImage
 }: {
   busy: boolean;
   busyLabel: string;
   draft: Draft | null;
-  onGenerate: () => void;
-  onGenerateImage: () => void;
+  keyword?: string;
   onConfirm: () => void;
+  onGenerate: () => void;
+  onUpdateMarkdown: (md: string) => void;
+  onAddImage: (img: GeneratedArticleImage) => void;
+  onAddImages?: (imgs: GeneratedArticleImage[]) => void;
+  onRemoveImage: (id: string) => void;
 }) {
   return <ResultWorkspace
     actionLabel={draft ? "Sinh lại draft" : "Sinh draft"}
@@ -1004,9 +1048,9 @@ function DraftWorkspace({
         <p className="mt-3 text-sm">{draft.excerpt}</p>
         <p className="mt-3 text-xs text-[#687386]">{draft.metaTitle} · {draft.metaDescription}</p>
       </ResultCard>
-      <ArticleImagesPanel busy={busy} images={draft.generatedImages ?? []} onGenerate={onGenerateImage} />
+      <ArticleImagesPanel busy={busy} images={draft.generatedImages ?? []} draft={draft} keyword={keyword} onAddImage={onAddImage} onAddImages={onAddImages} onRemoveImage={onRemoveImage} />
       <ResultCard label="Markdown">
-        <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap text-xs leading-6">{draft.markdown}</pre>
+        <Textarea className="min-h-[520px] font-mono text-xs leading-6" value={draft.markdown} onChange={(e) => onUpdateMarkdown(e.target.value)} />
       </ResultCard>
       <div className="mt-4 flex justify-end border-t pt-4">
         <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận bản nháp và tiếp tục</Button>
@@ -1015,37 +1059,85 @@ function DraftWorkspace({
   </ResultWorkspace>;
 }
 
-function ArticleImagesPanel({
+export function ArticleImagesPanel({
   busy,
   images,
-  onGenerate
+  draft,
+  keyword,
+  onAddImage,
+  onAddImages,
+  onRemoveImage
 }: {
   busy: boolean;
   images: GeneratedArticleImage[];
-  onGenerate: () => void;
+  draft?: Draft | null;
+  keyword?: string;
+  onAddImage: (img: GeneratedArticleImage) => void;
+  onAddImages?: (imgs: GeneratedArticleImage[]) => void;
+  onRemoveImage: (id: string) => void;
 }) {
-  return <ResultCard label="Ảnh bài viết">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-sm font-semibold text-[#273247]">Hero image tự động</p>
-        <p className="mt-1 text-xs text-[#687386]">Mặc định trả image plan ở provider mock; khi nối provider thật sẽ có URL/base64 để preview.</p>
-      </div>
-      <Button disabled={busy} onClick={onGenerate} size="sm" variant="secondary">
-        <ImagePlus size={15} />Tạo ảnh hero
-      </Button>
-    </div>
-    {images.length ? <div className="mt-4 grid gap-3">
-      {images.map((image) => {
+  const [pickerModal, setPickerModal] = useState<{ isOpen: boolean; kind: "hero" | "inline" }>({ isOpen: false, kind: "hero" });
+  const [generatorModal, setGeneratorModal] = useState<{ isOpen: boolean; kind: "hero" | "inline" | "thumbnail", initialPrompt?: string, planId?: string }>({ isOpen: false, kind: "hero" });
+  const [isSuggesting, setIsSuggesting] = useState(false);
+
+  const handleSuggestPrompts = async () => {
+    if (!draft || !keyword || !onAddImages) return;
+    try {
+      setIsSuggesting(true);
+      const res = await postJson<{ images: GeneratedArticleImage[] }>("/admin/article-images/suggest-prompts", { draft, keyword });
+      if (res && res.images) onAddImages(res.images);
+    } catch (e) {
+      alert("Lỗi gợi ý kịch bản ảnh: " + String(e));
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const renderImages = (kind: "hero" | "inline") => {
+    const filtered = images.filter(i => i.kind === kind);
+    if (filtered.length === 0) return <p className="mt-2 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#687386]">Chưa có ảnh {kind === "hero" ? "bìa" : "chèn bài"}.</p>;
+    
+    return <div className="mt-2 grid gap-3">
+      {filtered.map((image) => {
         const src = image.url || (image.base64 ? `data:${image.mimeType ?? "image/png"};base64,${image.base64}` : "");
-        return <article className="grid gap-3 rounded-lg border p-3 md:grid-cols-[220px_minmax(0,1fr)]" key={image.id}>
+        return <article className="group relative grid gap-3 rounded-lg border p-3 md:grid-cols-[220px_minmax(0,1fr)]" key={image.id}>
+          <Button 
+            variant="danger" 
+            className="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full p-0 group-hover:flex"
+            onClick={() => onRemoveImage(image.id)}
+          >
+            <XCircle size={12} />
+          </Button>
           <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-[#f7f7f4] text-center text-xs font-semibold text-[#687386]">
             {src ? <img alt={image.altText} className="h-full w-full object-cover" src={src} /> : "Image plan"}
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge>{image.provider}</Badge>
               <Badge>{image.status}</Badge>
-              <Badge>{image.aspectRatio}</Badge>
+              {image.status === "planned" && (
+                <Button
+                  size="sm"
+                  className="ml-2 h-6 px-2 text-xs"
+                  onClick={() => setGeneratorModal({ isOpen: true, kind: image.kind, initialPrompt: image.prompt, planId: image.id })}
+                >
+                  <Wand2 size={12} className="mr-1" /> Tạo ảnh ngay
+                </Button>
+              )}
+              {image.status !== "planned" && src && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="ml-2 h-6 px-2 text-xs"
+                  onClick={() => {
+                    const md = `![${image.altText || "Minh họa bài viết"}](${src})`;
+                    navigator.clipboard.writeText(md);
+                    alert("Đã copy mã Markdown! Bạn có thể dán vào nội dung bên dưới.");
+                  }}
+                >
+                  <FileText size={12} className="mr-1" /> Copy Markdown
+                </Button>
+              )}
             </div>
             <p className="mt-3 text-sm font-semibold text-[#273247]">{image.altText}</p>
             {image.caption ? <p className="mt-1 text-xs text-[#687386]">{image.caption}</p> : null}
@@ -1053,7 +1145,70 @@ function ArticleImagesPanel({
           </div>
         </article>;
       })}
-    </div> : <p className="mt-4 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#687386]">Chưa có ảnh. Dev core có thể nối provider thật ở `apps/api/src/article-images.ts`.</p>}
+    </div>;
+  };
+
+  return <ResultCard label="Ảnh bài viết">
+    <div className="mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#273247]">1. Ảnh bìa (Hero Image)</p>
+          <p className="mt-1 text-xs text-[#687386]">Dùng làm cover/thumbnail cho bài viết.</p>
+        </div>
+        <div className="flex gap-2">
+          {draft && onAddImages && (
+            <Button disabled={busy || isSuggesting} onClick={handleSuggestPrompts} size="sm" variant="secondary">
+              <Wand2 size={15} className="mr-2" />{isSuggesting ? "Đang nghĩ..." : "Gợi ý kịch bản (AI)"}
+            </Button>
+          )}
+          <Button disabled={busy} onClick={() => setPickerModal({ isOpen: true, kind: "hero" })} size="sm" variant="secondary">
+            <ImagePlus size={15} className="mr-2" />Chọn từ thư viện
+          </Button>
+          <Button disabled={busy} onClick={() => setGeneratorModal({ isOpen: true, kind: "hero" })} size="sm" variant="secondary">
+            <Wand2 size={15} className="mr-2" />Tạo ảnh bìa
+          </Button>
+        </div>
+      </div>
+      {renderImages("hero")}
+    </div>
+    
+    <div className="border-t pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#273247]">2. Ảnh chèn trong bài (Inline Images)</p>
+          <p className="mt-1 text-xs text-[#687386]">Sử dụng prompt để sinh hình minh họa cho bài viết.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button disabled={busy} onClick={() => setPickerModal({ isOpen: true, kind: "inline" })} size="sm" variant="secondary">
+            <ImagePlus size={15} className="mr-2" />Chọn từ thư viện
+          </Button>
+          <Button disabled={busy} onClick={() => setGeneratorModal({ isOpen: true, kind: "inline" })} size="sm" variant="secondary">
+            <Wand2 size={15} className="mr-2" />Tạo ảnh chèn bài
+          </Button>
+        </div>
+      </div>
+      {renderImages("inline")}
+    </div>
+
+    <ImagePickerModal 
+      isOpen={pickerModal.isOpen} 
+      kind={pickerModal.kind} 
+      onClose={() => setPickerModal({ isOpen: false, kind: pickerModal.kind })} 
+    onPick={onAddImage} 
+    />
+    <ImageGeneratorModal 
+      isOpen={generatorModal.isOpen} 
+      kind={generatorModal.kind} 
+      initialPrompt={generatorModal.initialPrompt}
+      onClose={() => setGeneratorModal({ isOpen: false, kind: generatorModal.kind })} 
+      onGenerate={(img) => {
+        if (generatorModal.planId) {
+          onRemoveImage(generatorModal.planId);
+        }
+        onAddImage(img);
+        setGeneratorModal({ isOpen: false, kind: generatorModal.kind });
+      }}
+    />
   </ResultCard>;
 }
 
