@@ -105,12 +105,12 @@ test("filters and paginates the internal links library", async ({ page }) => {
     await route.fulfill({ json: { articles } });
   });
 
-  await page.goto("/admin/internal-links");
+  await page.goto("/admin/link-library");
   await login(page);
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByText("Page 2 of 2")).toBeVisible();
-  await page.getByPlaceholder("Search title, URL, or keyword").fill("article-29");
+  await page.getByPlaceholder("Search title or URL").fill("article-29");
   await expect(page.getByText("1 / 30 links")).toBeVisible();
-  await expect(page.getByText("Library Article 29")).toBeVisible();
+  await expect(page.getByLabel("Title for Library Article 29")).toBeVisible();
 });
