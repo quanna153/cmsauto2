@@ -1,8 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Save } from "lucide-react";
+import { CalendarClock, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,10 +14,11 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import type { ArticleSession, InternalLinkSuggestion } from "@/features/admin/types";
-import { ApiError, getJson, patchJson, postJson } from "@/lib/api";
+import { ApiError, deleteJson, getJson, patchJson, postJson } from "@/lib/api";
 
 export function ArticleEditorFeature({ id }: { id: string }) {
   const client = useQueryClient();
+  const router = useRouter();
   const query = useQuery({ queryKey: ["articles"], queryFn: () => getJson<{ articles: ArticleSession[] }>("/articles") });
   const article = query.data?.articles.find((item) => item.id === id);
   const [linkSuggestions, setLinkSuggestions] = useState<InternalLinkSuggestion[]>([]);
@@ -59,6 +61,13 @@ export function ArticleEditorFeature({ id }: { id: string }) {
     },
     onError(error) {
       setSyncMessage(error instanceof ApiError && error.status === 409 ? "Có phiên sửa mới hơn. Tải lại trang trước khi tiếp tục." : error.message);
+    }
+  });
+  const remove = useMutation({
+    mutationFn: async () => deleteJson(`/articles/${id}`),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["articles"] });
+      router.push("/admin/articles");
     }
   });
 
@@ -112,6 +121,14 @@ export function ArticleEditorFeature({ id }: { id: string }) {
     }
   }
 
+  function confirmDeleteArticle() {
+    const title = article?.draft?.title || article?.inputs.seedKeyword || "bài viết này";
+    if (!window.confirm(`Xóa "${title}"? Bài sẽ bị xóa khỏi quản lý bài và public nếu đã publish.`)) {
+      return;
+    }
+    remove.mutate();
+  }
+
   if (query.isLoading) return <LoadingSkeleton />;
   if (query.error) return <ErrorState message={query.error.message} />;
   if (!article) return <ErrorState message="Không tìm thấy bài viết." />;
@@ -129,6 +146,9 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   return <>
     <PageHeader
       actions={<div className="flex flex-wrap gap-2">
+        <Button disabled={save.isPending || reviewBusy || remove.isPending} onClick={confirmDeleteArticle} variant="danger">
+          <Trash2 size={16} />{remove.isPending ? "Đang xóa..." : "Xóa bài"}
+        </Button>
         <Button disabled={save.isPending || !hasUnsavedChanges} onClick={() => save.mutate()} variant="secondary">
           <Save size={16} />{save.isPending ? "Đang lưu..." : "Lưu thay đổi"}
         </Button>
@@ -140,6 +160,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
       eyebrow="Editor"
       title={article.draft?.title || article.inputs.seedKeyword}
     />
+    {remove.error ? <div className="mb-5"><ErrorState message={remove.error.message} /></div> : null}
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="space-y-5">
         <section className="rounded-xl border bg-white p-5">

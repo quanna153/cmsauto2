@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, FilePlus2, FlaskConical, Pencil } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, FilePlus2, FlaskConical, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
 import type { ArticleSession } from "@/features/admin/types";
-import { getJson } from "@/lib/api";
+import { deleteJson, getJson } from "@/lib/api";
 
 const stepLabels: Record<ArticleSession["activeStep"], string> = {
   keywords: "Đang làm: Từ khóa",
@@ -24,12 +24,27 @@ const stepLabels: Record<ArticleSession["activeStep"], string> = {
 };
 
 export function ArticlesFeature() {
+  const client = useQueryClient();
   const query = useQuery({ queryKey: ["articles"], queryFn: () => getJson<{ articles: ArticleSession[] }>("/articles") });
   const [languageFilter, setLanguageFilter] = useState<"all" | "vi" | "en">("all");
   const articles = query.data?.articles ?? [];
   const filteredArticles = useMemo(() => articles.filter((article) =>
     languageFilter === "all" || article.inputs.language === languageFilter
   ), [articles, languageFilter]);
+  const remove = useMutation({
+    mutationFn: (article: ArticleSession) => deleteJson(`/articles/${article.id}`),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["articles"] });
+    }
+  });
+
+  function confirmDelete(article: ArticleSession) {
+    const title = article.draft?.title || article.inputs.seedKeyword || "bài viết này";
+    if (!window.confirm(`Xóa "${title}"? Bài sẽ bị xóa khỏi quản lý bài và public nếu đã publish.`)) {
+      return;
+    }
+    remove.mutate(article);
+  }
 
   return <>
     <PageHeader
@@ -51,6 +66,8 @@ export function ArticlesFeature() {
       ? <LoadingSkeleton />
       : query.error
         ? <ErrorState message={query.error.message} />
+        : remove.error
+          ? <ErrorState message={remove.error.message} />
         : !articles.length
           ? <EmptyState description="Tạo bài bằng Article Factory hoặc đăng bài thủ công." title="Chưa có bài viết" />
           : filteredArticles.length === 0
@@ -74,6 +91,14 @@ export function ArticlesFeature() {
                           : null}
                         <Link className="inline-flex items-center gap-1 font-semibold text-[#80640b]" href={`/admin/articles/${article.id}`}><Pencil size={14} />Sửa bài</Link>
                         {article.livePath ? <Link className="inline-flex items-center gap-1 font-semibold text-[#566174]" href={article.livePath}><ExternalLink size={14} />Xem public</Link> : null}
+                        <button
+                          className="inline-flex items-center gap-1 font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={remove.isPending}
+                          onClick={() => confirmDelete(article)}
+                          type="button"
+                        >
+                          <Trash2 size={14} />Xóa
+                        </button>
                       </div>
                     </TableCell>
                   </tr>
