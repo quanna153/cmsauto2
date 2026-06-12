@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Image as ImageIcon, Wand2, Loader2, Upload } from "lucide-react";
+import { X, Wand2, Loader2, Upload } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

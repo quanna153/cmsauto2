@@ -271,26 +271,6 @@ export function FactoryFeature() {
     resetFrom("links");
   }
 
-  async function generateArticleImage() {
-    if (!primary || !draft) return;
-    const result = await apiPost<{ image: GeneratedArticleImage }>("/article-images/generate", {
-      primaryKeyword: primary.keyword,
-      secondaryKeywords: secondary.map((item) => item.keyword),
-      language,
-      title: draft.title,
-      excerpt: draft.excerpt,
-      outline: outline ?? undefined,
-      draft,
-      kind: "hero",
-      aspectRatio: "16:9",
-      stylePreset: "CoinRadar editorial crypto finance, black gold white palette, clean high-trust newsroom style"
-    });
-    setDraft({
-      ...draft,
-      generatedImages: [result.image, ...(draft.generatedImages ?? [])].slice(0, 4)
-    });
-  }
-
   async function generateLinks() {
     if (!primary || !draft) return;
     const currentRejectedLinks = links.filter((link) => link.status === "rejected");

@@ -2098,7 +2098,7 @@ app.delete("/api/admin/images/:id", async (request, response, next) => {
 
 app.post("/api/admin/article-images/suggest-prompts", async (request, response, next) => {
   try {
-    const { draft, keyword, language = "vi" } = request.body;
+    const { draft, keyword } = request.body;
     
     const systemPrompt = `You are an expert AI image prompt engineer. 
 Based on the following article draft, suggest 1 hero image (cover) and 1 to 3 inline images to be inserted within the article.
