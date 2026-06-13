@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { AdminTopbar } from "@/components/admin/admin-topbar";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingSkeleton } from "@/components/ui/states";
 import { Input } from "@/components/ui/input";
@@ -68,7 +67,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   if (user.mustChangePassword) return <AuthPanel title="Đổi mật khẩu lần đầu" error={error}><Input onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Mật khẩu tạm" type="password" value={currentPassword} /><Input onChange={(event) => setNewPassword(event.target.value)} placeholder="Mật khẩu mới, tối thiểu 8 ký tự" type="password" value={newPassword} /><Button disabled={busy || newPassword.length < 8} onClick={() => void changePassword()}>Cập nhật mật khẩu</Button></AuthPanel>;
 
-  return <div className="lg:flex"><AdminSidebar canManageUsers={Boolean(user.canManageUsers)} /><div className="min-w-0 flex-1"><AdminTopbar onLogout={() => void logout()} user={user} /><main className="mx-auto max-w-7xl p-5 lg:p-8">{children}</main></div></div>;
+  return (
+    <div className="lg:flex">
+      <AdminSidebar canManageUsers={Boolean(user.canManageUsers)} onLogout={() => void logout()} user={user} />
+      <div className="min-w-0 flex-1">
+        <main className="mx-auto max-w-7xl p-5 lg:p-8">{children}</main>
+      </div>
+    </div>
+  );
 }
 
 function AuthPanel({ title, error, children }: { title: string; error: string | null; children: React.ReactNode }) {

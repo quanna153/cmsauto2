@@ -1,9 +1,11 @@
 "use client";
 
-import { BarChart3, BookOpenText, FilePenLine, FileSpreadsheet, FlaskConical, Image, Link2, SearchCode, ShieldUser } from "lucide-react";
+import { BarChart3, BookOpenText, FilePenLine, FileSpreadsheet, FlaskConical, Image, Link2, LogOut, SearchCode, ShieldUser } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import type { AdminUser } from "@/features/admin/types";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -17,7 +19,47 @@ const navigation = [
   { href: "/admin/users", label: "Tài khoản", icon: ShieldUser }
 ];
 
-export function AdminSidebar({ canManageUsers }: { canManageUsers: boolean }) {
+type AdminSidebarProps = {
+  canManageUsers: boolean;
+  onLogout: () => void;
+  user: AdminUser;
+};
+
+export function AdminSidebar({ canManageUsers, onLogout, user }: AdminSidebarProps) {
   const pathname = usePathname();
-  return <aside className="border-b bg-[#172033] text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r"><div className="flex items-center gap-3 border-b border-white/10 p-5"><BookOpenText className="text-[#d2b34d]" /><div><strong className="block text-sm">CMS Auto</strong><span className="text-xs text-white/55">Content workspace</span></div></div><nav className="grid gap-1 p-3 sm:grid-cols-3 lg:grid-cols-1">{navigation.filter((item) => item.href !== "/admin/users" || canManageUsers).map((item) => { const Icon = item.icon; const active = pathname === item.href || pathname.startsWith(`${item.href}/`); return <Link className={cn("flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white", active && "bg-white/12 text-white")} href={item.href} key={item.href}><Icon size={17} />{item.label}</Link>; })}</nav></aside>;
+  const items = navigation.filter((item) => item.href !== "/admin/users" || canManageUsers);
+
+  return (
+    <aside className="flex flex-col border-b bg-[#172033] text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r">
+      <div className="flex items-center gap-3 border-b border-white/10 p-5">
+        <BookOpenText className="text-[#d2b34d]" />
+        <div>
+          <strong className="block text-sm">CMS Auto</strong>
+          <span className="text-xs text-white/55">Content workspace</span>
+        </div>
+      </div>
+      <nav className="grid gap-1 p-3 sm:grid-cols-3 lg:grid-cols-1">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link className={cn("flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white", active && "bg-white/12 text-white")} href={item.href} key={item.href}>
+              <Icon size={17} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="border-t border-white/10 p-4 lg:mt-auto">
+        <div className="mb-3 rounded-lg bg-white/6 px-3 py-2.5">
+          <strong className="block truncate text-sm">{user.fullName}</strong>
+          <span className="block truncate text-xs text-white/55">{user.role}</span>
+        </div>
+        <Button aria-label="Đăng xuất" className="w-full justify-start border-white/12 bg-white/5 text-white hover:bg-white/10 hover:text-white" onClick={onLogout} size="sm" variant="ghost">
+          <LogOut size={16} />
+          Đăng xuất
+        </Button>
+      </div>
+    </aside>
+  );
 }
