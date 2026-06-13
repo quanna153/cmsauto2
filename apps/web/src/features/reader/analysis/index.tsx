@@ -592,8 +592,15 @@ function RecentAnalysisTable() {
         <table className="w-full min-w-[58rem] text-left text-sm">
           <thead className="border-b border-[#E5E7EB] text-xs text-[#64748B]">
             <tr>
-              {["", "Tiêu đề", "Chuyên mục", "Tác giả", "Cập nhật", ""].map((head) => (
-                <th className="px-5 py-3 font-semibold" key={head}>{head}</th>
+              {[
+                { id: "index", label: "" },
+                { id: "title", label: "Tiêu đề" },
+                { id: "category", label: "Chuyên mục" },
+                { id: "author", label: "Tác giả" },
+                { id: "updated", label: "Cập nhật" },
+                { id: "bookmark", label: "" }
+              ].map((column) => (
+                <th className="px-5 py-3 font-semibold" key={column.id}>{column.label}</th>
               ))}
             </tr>
           </thead>
