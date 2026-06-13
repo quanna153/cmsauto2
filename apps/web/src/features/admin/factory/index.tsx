@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,7 +139,6 @@ export function FactoryFeature() {
   const [outline, setOutline] = useState<Outline | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [links, setLinks] = useState<InternalLinkSuggestion[]>([]);
-  const [rejectedLinkHistory, setRejectedLinkHistory] = useState<InternalLinkSuggestion[]>([]);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplates>(fallbackPrompts);
   const [promptsHydrated, setPromptsHydrated] = useState(false);
   const [selectedStep, setSelectedStep] = useState<Step>("keywords");
@@ -281,22 +282,16 @@ export function FactoryFeature() {
   }
 
   async function generateLinks() {
-    if (!primary || !draft) return;
-    const currentRejectedLinks = links.filter((link) => link.status === "rejected");
-    const rejectedSuggestions = currentRejectedLinks.length > 0
-      ? mergeRejectedSuggestionHistory(rejectedLinkHistory, currentRejectedLinks)
-      : [];
+    if (!primary) return;
     const result = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.links,
-      draft,
-      existingSuggestions: links,
-      preservedSuggestions: links.filter((link) => link.status !== "rejected"),
-      rejectedSuggestions
+      draft: draft ?? undefined,
+      matchLibraryOnly: true
     });
-    setLinks(result.suggestions.map((link) => ({ ...link, status: link.status ?? (link.targetUrl ? "accepted" : "pending") })));
+    setLinks(result.suggestions);
   }
 
   async function runAutoArticle() {
@@ -393,7 +388,6 @@ export function FactoryFeature() {
       });
       const nextLinks = linksResult.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" as const : "pending" as const }));
       setLinks(nextLinks);
-      setRejectedLinkHistory([]);
 
       setSelectedStep("ready");
       setBusyLabel("07/07 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
@@ -438,7 +432,6 @@ export function FactoryFeature() {
     setOutline(article.outline);
     setDraft(article.draft);
     setLinks(article.linkSuggestions);
-    setRejectedLinkHistory([]);
     setSavedArticleId(article.id);
     setSavedRevision(article.revision);
     setSelectedStep(article.activeStep);
@@ -534,7 +527,6 @@ export function FactoryFeature() {
     if (startIndex <= workflowStages.findIndex((item) => item.key === "draft")) setDraft(null);
     if (startIndex <= workflowStages.findIndex((item) => item.key === "links")) {
       setLinks([]);
-      setRejectedLinkHistory([]);
     }
   }
 
@@ -548,7 +540,6 @@ export function FactoryFeature() {
     setOutline(null);
     setDraft(null);
     setLinks([]);
-    setRejectedLinkHistory([]);
     setSelectedStep("keywords");
     setSavedArticleId(null);
     setSavedRevision(null);
@@ -571,16 +562,18 @@ export function FactoryFeature() {
     resetFrom("brief");
   }
 
+  function updateOutline(nextOutline: Outline) {
+    setOutline(nextOutline);
+    setDraft(null);
+    setLinks([]);
+  }
+
   function setLinkStatus(id: string, status: InternalLinkSuggestion["status"]) {
-    if (status === "rejected") {
-      const rejectedLink = links.find((link) => link.id === id);
-      if (rejectedLink) {
-        setRejectedLinkHistory((current) =>
-          mergeRejectedSuggestionHistory(current, [{ ...rejectedLink, status: "rejected" }])
-        );
-      }
-    }
     setLinks((current) => current.map((link) => link.id === id ? { ...link, status } : link));
+  }
+
+  function updateLink(id: string, changes: Partial<Pick<InternalLinkSuggestion, "anchor" | "sourceContext">>) {
+    setLinks((current) => current.map((link) => link.id === id ? { ...link, ...changes } : link));
   }
 
   function isStepAvailable(step: Step) {
@@ -710,10 +703,12 @@ export function FactoryFeature() {
           onGenerateOutline={() => void run(generateOutline, "Đang ghép keyword, volume và insight để sinh outline...")}
           onLanguageChange={setLanguage}
           onKeywordSelectionConfirm={() => setSelectedStep("brief")}
+          onOutlineChange={updateOutline}
           onPrimaryChange={selectPrimaryKeyword}
           onSecondaryChange={toggleSecondaryKeyword}
           onSeedKeywordChange={setSeedKeyword}
           onSetLinkStatus={setLinkStatus}
+          onUpdateLink={updateLink}
           onSelect={setSelectedStep}
           outline={outline}
           primaryKeywordId={primaryKeywordId}
@@ -804,10 +799,12 @@ function WorkflowWorkspace(props: {
   onGenerateOutline: () => void;
   onLanguageChange: (language: "vi" | "en") => void;
   onKeywordSelectionConfirm: () => void;
+  onOutlineChange: (outline: Outline) => void;
   onPrimaryChange: (id: string) => void;
   onSecondaryChange: (id: string) => void;
   onSeedKeywordChange: (value: string) => void;
   onSetLinkStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
+  onUpdateLink: (id: string, changes: Partial<Pick<InternalLinkSuggestion, "anchor" | "sourceContext">>) => void;
   onSelect: (step: Step) => void;
   outline: Outline | null;
   primaryKeywordId: string | null;
@@ -825,10 +822,10 @@ function WorkflowWorkspace(props: {
     </div>
     {props.selectedStep === "keywords" ? <KeywordsWorkspace {...props} /> : null}
     {props.selectedStep === "brief" ? <BriefWorkspace brief={props.brief} busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("outline")} onGenerate={props.onGenerateBrief} /> : null}
-    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} busyLabel={props.busyLabel} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
+    {props.selectedStep === "outline" ? <OutlineWorkspace busy={props.busy} busyLabel={props.busyLabel} onChange={props.onOutlineChange} onConfirm={() => props.onSelect("draft")} onGenerate={props.onGenerateOutline} outline={props.outline} /> : null}
     {props.selectedStep === "draft" ? <DraftWorkspace busy={props.busy} busyLabel={props.busyLabel} draft={props.draft} keyword={props.keywords.find(k => k.id === props.primaryKeywordId)?.keyword} onConfirm={() => props.onSelect("links")} onGenerate={props.onGenerateDraft} onUpdateMarkdown={props.onUpdateMarkdown} onAddImage={props.onAddImage} onAddImages={props.onAddImages} onRemoveImage={props.onRemoveImage} /> : null}
     {props.selectedStep === "links"
-      ? <LinksWorkspace busy={props.busy} busyLabel={props.busyLabel} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} />
+      ? <LinksWorkspace busy={props.busy} busyLabel={props.busyLabel} draft={props.draft} links={props.links} onConfirm={() => props.onSelect("ready")} onGenerate={props.onGenerateLinks} onSetStatus={props.onSetLinkStatus} onUpdateLink={props.onUpdateLink} />
       : null}
     {props.selectedStep === "ready"
       ? <ReadyWorkspace brief={props.brief} busy={props.busy} draft={props.draft} links={props.links} onFinish={props.onFinish} outline={props.outline} />
@@ -976,7 +973,21 @@ function BriefWorkspace({ brief, busy, busyLabel, onGenerate, onConfirm }: { bri
   </ResultWorkspace>;
 }
 
-function OutlineWorkspace({ busy, busyLabel, onGenerate, onConfirm, outline }: { busy: boolean; busyLabel: string; onGenerate: () => void; onConfirm: () => void; outline: Outline | null }) {
+function OutlineWorkspace({
+  busy,
+  busyLabel,
+  onChange,
+  onGenerate,
+  onConfirm,
+  outline
+}: {
+  busy: boolean;
+  busyLabel: string;
+  onChange: (outline: Outline) => void;
+  onGenerate: () => void;
+  onConfirm: () => void;
+  outline: Outline | null;
+}) {
   return <ResultWorkspace
     actionLabel={outline ? "Sinh lại outline" : "Sinh outline"}
     busy={busy}
@@ -986,7 +997,26 @@ function OutlineWorkspace({ busy, busyLabel, onGenerate, onConfirm, outline }: {
     onGenerate={onGenerate}
   >
     {outline ? <div className="grid gap-3">
-      <ResultCard label="Tiêu đề dự kiến"><h3 className="font-bold break-words">{outline.title}</h3><p className="mt-2 text-sm text-[#687386] break-words">{outline.introDirection}</p></ResultCard>
+      <ResultCard label="H1">
+        <label className="grid gap-1 text-xs font-semibold text-[#687386]">
+          H1
+          <Input
+            aria-label="H1 outline"
+            className="font-semibold text-[#172033]"
+            onChange={(event) => onChange({ ...outline, title: event.target.value })}
+            value={outline.title}
+          />
+        </label>
+        <label className="mt-3 grid gap-1 text-xs font-semibold text-[#687386]">
+          Hướng mở bài
+          <Textarea
+            aria-label="Hướng mở bài"
+            onChange={(event) => onChange({ ...outline, introDirection: event.target.value })}
+            rows={2}
+            value={outline.introDirection}
+          />
+        </label>
+      </ResultCard>
       {outline.keywordCoverage && outline.keywordCoverage.length > 0 ? (
         <ResultCard label="Keyword coverage">
           <div className="grid gap-2">
@@ -1000,8 +1030,47 @@ function OutlineWorkspace({ busy, busyLabel, onGenerate, onConfirm, outline }: {
           </div>
         </ResultCard>
       ) : null}
-      {outline.sections.map((section, index) =>
-        <ResultCard key={`${section.heading}-${index}`} label={`${index + 1}. ${section.heading}`}><List items={section.bullets} /></ResultCard>
+      {outline.sections.map((section, sectionIndex) =>
+        <ResultCard key={`outline-section-${sectionIndex}`} label={`Nhóm nội dung ${sectionIndex + 1}`}>
+          <label className="grid gap-1 text-xs font-semibold text-[#687386]">
+            H2
+            <Input
+              aria-label={`H2 ${sectionIndex + 1}`}
+              className="font-semibold text-[#172033]"
+              onChange={(event) => onChange({
+                ...outline,
+                sections: outline.sections.map((item, index) =>
+                  index === sectionIndex ? { ...item, heading: event.target.value } : item
+                )
+              })}
+              value={section.heading}
+            />
+          </label>
+          <div className="mt-3 grid gap-2">
+            {section.bullets.map((bullet, bulletIndex) =>
+              <label className="grid gap-1 text-xs font-semibold text-[#687386]" key={`outline-section-${sectionIndex}-bullet-${bulletIndex}`}>
+                H3
+                <Input
+                  aria-label={`H3 ${sectionIndex + 1}.${bulletIndex + 1}`}
+                  onChange={(event) => onChange({
+                    ...outline,
+                    sections: outline.sections.map((item, index) =>
+                      index === sectionIndex
+                        ? {
+                            ...item,
+                            bullets: item.bullets.map((currentBullet, index) =>
+                              index === bulletIndex ? event.target.value : currentBullet
+                            )
+                          }
+                        : item
+                    )
+                  })}
+                  value={bullet}
+                />
+              </label>
+            )}
+          </div>
+        </ResultCard>
       )}
       <div className="mt-4 flex justify-end border-t pt-4">
         <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận dàn ý và tiếp tục</Button>
@@ -1411,18 +1480,25 @@ function stringFromMetadata(metadata: Record<string, unknown>, key: string) {
 function LinksWorkspace({
   busy,
   busyLabel,
+  draft,
   links,
   onGenerate,
   onSetStatus,
+  onUpdateLink,
   onConfirm
 }: {
   busy: boolean;
   busyLabel: string;
+  draft: Draft | null;
   links: InternalLinkSuggestion[];
   onGenerate: () => void;
   onSetStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
+  onUpdateLink: (id: string, changes: Partial<Pick<InternalLinkSuggestion, "anchor" | "sourceContext">>) => void;
   onConfirm: () => void;
 }) {
+  const placementOptions = draft ? extractDraftPlacementOptions(draft.markdown) : [];
+  const previewMarkdown = draft ? applyLinksForPreview(draft.markdown, links) : "";
+
   return <ResultWorkspace
     actionLabel={links.length ? "Gợi ý lại link" : "Gợi ý link"}
     busy={busy}
@@ -1437,14 +1513,42 @@ function LinksWorkspace({
           <article className="rounded-xl border bg-white p-4" key={link.id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-[#687386]">Anchor</p>
-                <h3 className="mt-1 font-bold">{link.anchor}</h3>
+                <p className="text-xs font-bold uppercase tracking-wide text-[#687386]">Từ khóa match</p>
+                <h3 className="mt-1 font-bold">{link.matchedKeyword || link.anchor}</h3>
                 <p className="mt-1 text-sm text-[#80640b]">{link.targetTitle || "Chưa match bài đích"}</p>
                 <p className="text-xs text-[#687386]">{link.targetUrl || "Cần bổ sung hashtag trong kho internal links"}</p>
               </div>
               <Badge>{link.confidence}% confidence</Badge>
             </div>
-            <p className="mt-3 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#566174]">{link.sourceContext}</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold text-[#687386]">
+                Anchor text khi gắn link
+                <Input
+                  aria-label={`Anchor text cho ${link.targetTitle}`}
+                  onChange={(event) => onUpdateLink(link.id, { anchor: event.target.value })}
+                  value={link.anchor}
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-[#687386]">
+                Vị trí gắn link
+                <Select
+                  aria-label={`Vị trí gắn link cho ${link.targetTitle}`}
+                  disabled={!draft}
+                  onChange={(event) => onUpdateLink(link.id, { sourceContext: event.target.value })}
+                  value={findSelectedPlacement(placementOptions, link.sourceContext)}
+                >
+                  <option value="">Chọn đoạn văn trong bản nháp</option>
+                  {placementOptions.map((paragraph, index) =>
+                    <option key={`${index}-${paragraph.slice(0, 40)}`} value={paragraph}>
+                      Đoạn {index + 1}: {shortPreviewText(paragraph)}
+                    </option>
+                  )}
+                </Select>
+              </label>
+            </div>
+            {draft && !anchorAppearsInPlacement(link.anchor, findSelectedPlacement(placementOptions, link.sourceContext))
+              ? <p className="mt-2 text-xs font-semibold text-red-700">Anchor text chưa xuất hiện trong đoạn đã chọn. Hãy sửa anchor hoặc chọn vị trí khác.</p>
+              : null}
             <p className="mt-3 text-xs text-[#687386]">{link.reason}</p>
             <div className="mt-3 flex gap-2">
               <Button onClick={() => onSetStatus(link.id, "accepted")} size="sm" variant={link.status === "accepted" ? "primary" : "secondary"}>
@@ -1457,9 +1561,18 @@ function LinksWorkspace({
           </article>
         )}
       </div>
-      <div className="mt-4 flex justify-end border-t pt-4">
-        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận Link và tới bước Bàn giao</Button>
-      </div>
+      {draft
+        ? <ResultCard label="Preview bản nháp sau khi gắn link">
+            <div className="max-h-[620px] overflow-auto rounded-lg bg-[#f7f7f4] p-5 text-sm leading-7 text-[#273247] [&_a]:rounded [&_a]:bg-[#fbf0bd] [&_a]:px-1 [&_a]:font-bold [&_a]:text-[#80640b] [&_a]:underline [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:font-bold [&_li]:ml-5 [&_ol]:list-decimal [&_p]:mb-4 [&_ul]:list-disc">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewMarkdown}</ReactMarkdown>
+            </div>
+          </ResultCard>
+        : null}
+      {draft
+        ? <div className="mt-4 flex justify-end border-t pt-4">
+            <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận Link và tới bước Bàn giao</Button>
+          </div>
+        : <p className="mt-4 rounded-lg border bg-white p-3 text-sm text-[#687386]">Sinh draft để có thể gắn và xác nhận các link đã chọn.</p>}
     </> : null}
   </ResultWorkspace>;
 }
@@ -1580,6 +1693,89 @@ function formatVolume(value: number | null | undefined) {
   return value == null ? "N/A" : value.toLocaleString("vi-VN");
 }
 
+function extractDraftPlacementOptions(markdown: string) {
+  return markdown
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter((block) => block && !isMarkdownHeading(block));
+}
+
+function normalizePreviewText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findSelectedPlacement(options: string[], sourceContext: string) {
+  const normalizedContext = normalizePreviewText(sourceContext);
+  return options.find((option) => {
+    const normalizedOption = normalizePreviewText(option);
+    return normalizedContext
+      && (normalizedOption.includes(normalizedContext) || normalizedContext.includes(normalizedOption));
+  }) ?? "";
+}
+
+function shortPreviewText(value: string) {
+  const text = value.replace(/[#*_>`[\]()]/g, "").replace(/\s+/g, " ").trim();
+  return text.length > 72 ? `${text.slice(0, 69)}...` : text;
+}
+
+function anchorAppearsInPlacement(anchor: string, placement: string) {
+  return Boolean(anchor.trim() && placement && previewAnchorMatcher(anchor).test(placement));
+}
+
+function previewAnchorMatcher(anchor: string) {
+  const escapedAnchor = anchor.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escapedAnchor}(?![\\p{L}\\p{N}])`, "iu");
+}
+
+function isMarkdownHeading(line: string) {
+  return /^\s{0,3}#{1,6}\s+\S/.test(line);
+}
+
+function applyLinksForPreview(markdown: string, suggestions: InternalLinkSuggestion[]) {
+  const lines = markdown.split("\n");
+  const appliedAnchors = new Set<string>();
+
+  for (const suggestion of suggestions) {
+    if (suggestion.status !== "accepted" || !suggestion.anchor.trim() || !suggestion.targetUrl.trim()) {
+      continue;
+    }
+    const normalizedAnchor = normalizePreviewText(suggestion.anchor);
+    if (appliedAnchors.has(normalizedAnchor)) {
+      continue;
+    }
+
+    const normalizedContext = normalizePreviewText(suggestion.sourceContext);
+    const preferredIndexes = lines
+      .map((line, index) => ({ index, normalizedLine: normalizePreviewText(line) }))
+      .filter(({ normalizedLine }) =>
+        normalizedContext
+        && normalizedLine
+        && (normalizedContext.includes(normalizedLine) || normalizedLine.includes(normalizedContext))
+      )
+      .map(({ index }) => index);
+    const remainingIndexes = lines.map((_, index) => index).filter((index) => !preferredIndexes.includes(index));
+    const matcher = previewAnchorMatcher(suggestion.anchor);
+
+    for (const index of [...preferredIndexes, ...remainingIndexes]) {
+      const line = lines[index];
+      if (!line.trim() || isMarkdownHeading(line) || line.includes("](") || !matcher.test(line)) {
+        continue;
+      }
+      lines[index] = line.replace(matcher, (matched) => `[${matched}](${suggestion.targetUrl})`);
+      appliedAnchors.add(normalizedAnchor);
+      break;
+    }
+  }
+
+  return lines.join("\n");
+}
+
 function ResultCard({ children, label }: { children: React.ReactNode; label: string }) {
   return <section className="rounded-xl border bg-white p-4 break-words whitespace-pre-wrap overflow-hidden">
     <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#687386] whitespace-normal">{label}</p>
@@ -1600,21 +1796,4 @@ function TagList({ items }: { items: string[] }) {
 
 function List({ items }: { items: string[] }) {
   return <ul className="list-disc space-y-1 pl-5 text-sm text-[#566174] break-words">{items.map((item) => <li key={item}>{item}</li>)}</ul>;
-}
-
-function mergeRejectedSuggestionHistory(
-  current: InternalLinkSuggestion[],
-  next: InternalLinkSuggestion[]
-) {
-  const merged = new Map(current.map((suggestion) => [rejectedSuggestionKey(suggestion), suggestion]));
-  for (const suggestion of next) {
-    if (suggestion.anchor.trim() && suggestion.targetUrl.trim()) {
-      merged.set(rejectedSuggestionKey(suggestion), suggestion);
-    }
-  }
-  return Array.from(merged.values());
-}
-
-function rejectedSuggestionKey(suggestion: InternalLinkSuggestion) {
-  return `${suggestion.anchor.trim().toLowerCase()}::${suggestion.targetUrl.trim().toLowerCase()}`;
 }

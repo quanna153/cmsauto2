@@ -31,6 +31,7 @@ import {
   buildBrief,
   buildDraft,
   buildInternalLinkMappingCsv,
+  buildKeywordMatchedLibrarySuggestions,
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildOutline,
   findInternalLinkAnchorCandidates,
@@ -779,14 +780,15 @@ const articleImageRequestSchema = z.object({
 });
 const linksRequestSchema = z.object({
   primaryKeyword: z.string().min(1),
-  secondaryKeywords: z.array(z.string()).min(1),
+  secondaryKeywords: z.array(z.string()).default([]),
   language: languageSchema,
   prompt: z.string().min(1),
-  draft: draftSchema,
+  draft: draftSchema.optional(),
   existingSuggestions: z.array(suggestionSchema).optional(),
   preservedSuggestions: z.array(suggestionSchema).optional(),
   rejectedSuggestions: z.array(suggestionSchema).optional(),
-  expandSuggestions: z.boolean().optional()
+  expandSuggestions: z.boolean().optional(),
+  matchLibraryOnly: z.boolean().optional()
 });
 const applyLinksRequestSchema = z.object({
   markdown: z.string().min(1),
@@ -1841,6 +1843,33 @@ app.post("/api/links/suggest", async (request, response, next) => {
       response.status(400).json({
         error: "Internal Link Library is empty. Cannot generate internal link suggestions yet."
       });
+      return;
+    }
+
+    if (payload.matchLibraryOnly) {
+      const suggestions = buildKeywordMatchedLibrarySuggestions(
+        payload.primaryKeyword,
+        payload.secondaryKeywords,
+        payload.language,
+        articleLibrary,
+        payload.draft
+      );
+      const record = await appendHistory("links", payload, {
+        mode: "keyword-matched-library",
+        articleLibraryCount: articleLibrary.length,
+        candidateLibraryCount: suggestions.length,
+        suggestions
+      }, getAuth(request).user.id);
+      response.json({
+        suggestions,
+        mappingCsv: buildInternalLinkMappingCsv(payload.draft?.title ?? payload.primaryKeyword, suggestions),
+        recordId: record.id
+      });
+      return;
+    }
+
+    if (!payload.draft) {
+      response.status(400).json({ error: "Draft is required for anchor-based internal link suggestions." });
       return;
     }
 
