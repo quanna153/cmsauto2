@@ -6,7 +6,7 @@ export function ArticleCard({ article }: { article: ReaderArticle }) {
   return (
     <Link
       className="group block rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_14px_34px_rgba(17,24,39,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[#C8A227] hover:shadow-[0_18px_42px_rgba(17,24,39,0.1)]"
-      href={`/${article.locale}/${article.slug}`}
+      href={article.livePath || `/${article.locale}/${article.slug}`}
     >
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#A88412]">{article.primaryKeyword || "Article"}</p>
       <h3 className="mt-2 line-clamp-3 text-lg font-bold leading-snug text-[#111827] transition group-hover:text-[#A88412]">{article.title}</h3>

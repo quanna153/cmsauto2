@@ -14,7 +14,7 @@ function FluidBackdrop() {
   );
 }
 
-export function HomeIntroSection() {
+export function HomeIntroSection({ locale = "vi-vn" }: { locale?: "vi-vn" | "en-us" }) {
   return (
     <section className="relative overflow-hidden border-b border-[#E5E7EB] bg-[#F5F5F2] font-sans text-[#111827]">
       <FluidBackdrop />
@@ -31,7 +31,7 @@ export function HomeIntroSection() {
             </p>
           </div>
           <div className="relative mx-auto h-[19rem] w-full max-w-[34rem] overflow-visible sm:h-[22rem] lg:h-[24rem]">
-            <CryptoSphere />
+            <CryptoSphere locale={locale} />
           </div>
         </div>
         <div className="relative left-1/2 mt-8 w-screen -translate-x-1/2 overflow-hidden">

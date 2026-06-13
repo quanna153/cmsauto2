@@ -1,41 +1,44 @@
 "use client";
 
+import type { Locale } from "@cmsauto/contracts";
 import { BarChart3, Bolt, Newspaper, Radio } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 const worldGeoJsonUrl = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson";
+const cardPositions = [
+  [0.16, 0.2],
+  [0.82, 0.22],
+  [0.84, 0.7],
+  [0.14, 0.72]
+] as const;
 
-const INFO_CARDS = [
-  {
-    icon: Newspaper,
-    title: "100+ nguồn tin",
-    description: "Tổng hợp tin tức, giá và dữ liệu thị trường chọn lọc.",
-    lat: 28,
-    lon: -92
+const globeCopy = {
+  "vi-vn": {
+    ariaLabel: "Quả cầu địa lý 3D, có thể kéo để xoay",
+    dragHint: "Kéo để xoay 360°",
+    cards: [
+      { icon: Newspaper, title: "100+ nguồn tin", description: "Tin tức và dữ liệu thị trường được chọn lọc.", lat: 28, lon: -92 },
+      { icon: BarChart3, title: "Toàn cảnh thị trường", description: "Theo dõi vĩ mô, ETF, DeFi và các hệ sinh thái.", lat: 38, lon: 82 },
+      { icon: Radio, title: "Cập nhật 24/7", description: "Bám sát giá, dòng tiền và diễn biến đáng chú ý.", lat: -18, lon: -58 },
+      { icon: Bolt, title: "Tín hiệu liên tục", description: "Kết nối dữ liệu với bối cảnh để đọc thị trường nhanh hơn.", lat: -25, lon: 135 }
+    ]
   },
-  {
-    icon: BarChart3,
-    title: "100+ chủ đề",
-    description: "Phân tích từ vĩ mô, ETF, DeFi đến từng dự án.",
-    lat: 38,
-    lon: 82
-  },
-  {
-    icon: Radio,
-    title: "24/7",
-    description: "Cập nhật giá, ETF, dòng tiền và tin tức thị trường.",
-    lat: -18,
-    lon: -58
-  },
-  {
-    icon: Bolt,
-    title: "Mỗi 10 giây",
-    description: "Làm mới tín hiệu đáng chú ý trên thị trường crypto.",
-    lat: -25,
-    lon: 135
+  "en-us": {
+    ariaLabel: "Interactive 3D globe, drag to rotate",
+    dragHint: "Drag to rotate 360°",
+    cards: [
+      { icon: Newspaper, title: "100+ sources", description: "Curated news and market data from across the industry.", lat: 28, lon: -92 },
+      { icon: BarChart3, title: "Market-wide view", description: "Follow macro, ETFs, DeFi and major ecosystems.", lat: 38, lon: 82 },
+      { icon: Radio, title: "Always current", description: "Track prices, capital flows and significant developments.", lat: -18, lon: -58 },
+      { icon: Bolt, title: "Continuous signals", description: "Connect live data with context to read markets faster.", lat: -25, lon: 135 }
+    ]
   }
-];
+} satisfies Record<Locale, {
+  ariaLabel: string;
+  dragHint: string;
+  cards: Array<{ icon: typeof Newspaper; title: string; description: string; lat: number; lon: number }>;
+}>;
 
 type GeoCoordinate = [number, number];
 type GeoRing = GeoCoordinate[];
@@ -228,12 +231,13 @@ function buildLandMassGeometry(isLand: (lat: number, lon: number) => boolean) {
   return geometry;
 }
 
-export function CryptoSphere() {
+export function CryptoSphere({ locale }: { locale: Locale }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const isHoveringRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const copy = globeCopy[locale];
 
   useEffect(() => {
     isHoveringRef.current = isHovering;
@@ -352,8 +356,7 @@ export function CryptoSphere() {
     scene.add(keyLight);
     scene.add(new THREE.AmbientLight(0xffffff, 1.75));
 
-    const cardAnchors = INFO_CARDS.map((card) => latLonToVector3(card.lat, card.lon, 1.68));
-    const projectedPoint = new THREE.Vector3();
+    const cardAnchors = copy.cards.map((card) => latLonToVector3(card.lat, card.lon, 1.68));
     const normalPoint = new THREE.Vector3();
 
     const dragState = {
@@ -375,20 +378,16 @@ export function CryptoSphere() {
           return;
         }
 
-        projectedPoint.copy(anchor).applyMatrix4(group.matrixWorld);
         normalPoint.copy(anchor).normalize().applyQuaternion(group.quaternion);
 
         const facing = normalPoint.z;
-        const projected = projectedPoint.clone().project(camera);
-        const insideViewport = Math.abs(projected.x) < 1.08 && Math.abs(projected.y) < 1.08;
-        const visible = shouldShow && facing > -0.55 && insideViewport;
+        const visible = shouldShow && facing > -0.55;
         const opacity = visible ? Math.min(1, Math.max(0, (facing + 0.55) / 0.7)) : 0;
-        const x = (projected.x * 0.5 + 0.5) * rect.width;
-        const y = (-projected.y * 0.5 + 0.5) * rect.height;
         const defaultOpacity = index < 2 ? 1 : 0;
         const finalOpacity = Math.max(opacity, defaultOpacity);
-        const cardX = THREE.MathUtils.clamp(x, 88, rect.width - 88);
-        const cardY = THREE.MathUtils.clamp(y, 58, rect.height - 58);
+        const [positionX, positionY] = cardPositions[index] ?? [0.5, 0.5];
+        const cardX = positionX * rect.width;
+        const cardY = positionY * rect.height;
 
         element.style.opacity = String(finalOpacity);
         element.style.transform = `translate(-50%, -50%) translate3d(${cardX}px, ${cardY}px, 0) scale(${finalOpacity > 0.15 ? 1 : 0.96})`;
@@ -477,6 +476,7 @@ export function CryptoSphere() {
       ringB.rotation.z -= 0.0011;
       updateCards();
       renderer.render(scene, camera);
+      canvas.dataset.rendered = "true";
       frameId = window.requestAnimationFrame(animate);
     };
     animate();
@@ -506,7 +506,7 @@ export function CryptoSphere() {
       ringB.geometry.dispose();
       ringB.material.dispose();
     };
-  }, []);
+  }, [copy.cards]);
 
   return (
     <div
@@ -517,7 +517,7 @@ export function CryptoSphere() {
     >
       <div className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(200,162,39,0.2),rgba(15,17,21,0.1)_42%,transparent_72%)] blur-2xl" />
       <canvas
-        aria-label="Quả cầu địa lý 3D, có thể kéo để xoay"
+        aria-label={copy.ariaLabel}
         className={`absolute inset-0 h-full w-full ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
         data-engine="three.js r184"
         height={700}
@@ -530,9 +530,9 @@ export function CryptoSphere() {
           isDragging || isHovering ? "opacity-100" : "opacity-0"
         }`}
       >
-        Kéo để xoay 360°
+        {copy.dragHint}
       </div>
-      {INFO_CARDS.map((card, index) => {
+      {copy.cards.map((card, index) => {
         const Icon = card.icon;
 
         return (

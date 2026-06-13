@@ -1,26 +1,23 @@
 "use client";
 
+import type { Locale } from "@cmsauto/contracts";
 import { useEffect, useMemo, useState } from "react";
 
+import { mergeReaderTickers, readerTickerPairs, type ReaderMarketTickerItem } from "@/features/reader/market-data";
 import { publicApiUrl } from "@/lib/api";
 
-type LiveMarketTicker = {
-  pair: string;
-  symbol: string;
-  price: number;
-  changePercent: number;
-  checkedAt: string;
-};
+const tickerPairs = readerTickerPairs.slice(0, 5);
 
-const tickerPairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"];
-
-const fallbackTickers: LiveMarketTicker[] = [
-  { checkedAt: new Date(0).toISOString(), changePercent: 1.26, pair: "BTCUSDT", price: 68245.12, symbol: "BTC" },
-  { checkedAt: new Date(0).toISOString(), changePercent: 0.85, pair: "ETHUSDT", price: 3782.45, symbol: "ETH" },
-  { checkedAt: new Date(0).toISOString(), changePercent: -0.23, pair: "BNBUSDT", price: 607.11, symbol: "BNB" },
-  { checkedAt: new Date(0).toISOString(), changePercent: 2.11, pair: "SOLUSDT", price: 175.34, symbol: "SOL" },
-  { checkedAt: new Date(0).toISOString(), changePercent: 0.61, pair: "XRPUSDT", price: 0.5123, symbol: "XRP" }
-];
+const labels = {
+  "vi-vn": {
+    sample: "Dữ liệu mẫu",
+    source: "Nguồn"
+  },
+  "en-us": {
+    sample: "Sample data",
+    source: "Source"
+  }
+} satisfies Record<Locale, Record<string, string>>;
 
 function formatUsd(value: number) {
   return `$${value.toLocaleString("en-US", {
@@ -29,23 +26,35 @@ function formatUsd(value: number) {
   })}`;
 }
 
-function formatCheckedAt(value: string | null) {
-  if (!value) return "Đang cập nhật";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Đang cập nhật";
-
-  return date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  });
+function coinIconUrl(symbol: string) {
+  return `https://assets.coincap.io/assets/icons/${symbol.toLowerCase()}@2x.png`;
 }
 
-export function ReaderMarketTicker() {
-  const [tickers, setTickers] = useState<LiveMarketTicker[]>(fallbackTickers);
-  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+function CoinLogo({ symbol }: { symbol: string }) {
+  return (
+    <span className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-[#E5E7EB]">
+      <img
+        alt={`${symbol} logo`}
+        className="h-full w-full object-contain"
+        loading="lazy"
+        onError={(event) => {
+          event.currentTarget.style.display = "none";
+          const fallback = event.currentTarget.nextElementSibling as HTMLElement | null;
+          if (fallback) fallback.style.display = "flex";
+        }}
+        src={coinIconUrl(symbol)}
+      />
+      <span className="hidden h-full w-full items-center justify-center bg-[#111827] text-xs font-semibold text-[#F5E7B3]">
+        {symbol.slice(0, 1)}
+      </span>
+    </span>
+  );
+}
+
+export function ReaderMarketTicker({ locale = "vi-vn" }: { locale?: Locale }) {
+  const [tickers, setTickers] = useState<ReaderMarketTickerItem[]>(() => mergeReaderTickers(tickerPairs));
+  const hasLiveData = tickers.some((ticker) => ticker.status !== "fallback");
+  const copy = labels[locale];
 
   useEffect(() => {
     let cancelled = false;
@@ -60,21 +69,18 @@ export function ReaderMarketTicker() {
           cache: "no-store"
         });
         if (response.ok) {
-          const payload = (await response.json()) as { tickers: LiveMarketTicker[] };
-          if (!cancelled) {
-            setTickers(payload.tickers);
-            setLastCheckedAt(payload.tickers.find((ticker) => ticker.checkedAt)?.checkedAt ?? new Date().toISOString());
-          }
+          const payload = (await response.json()) as { tickers: ReaderMarketTickerItem[] };
+          if (!cancelled) setTickers(mergeReaderTickers(tickerPairs, payload.tickers));
         }
       } catch {
-        // Keep the fallback row visible if the market API is temporarily unavailable.
+        if (!cancelled) setTickers(mergeReaderTickers(tickerPairs));
       } finally {
         requestInFlight = false;
       }
     }
 
     void loadTickerData();
-    const intervalId = window.setInterval(loadTickerData, 1_000);
+    const intervalId = window.setInterval(loadTickerData, 30_000);
 
     return () => {
       cancelled = true;
@@ -82,30 +88,40 @@ export function ReaderMarketTicker() {
     };
   }, []);
 
-  const orderedTickers = useMemo(() => {
-    const byPair = new Map(tickers.map((ticker) => [ticker.pair, ticker]));
-    return tickerPairs.map((pair) => byPair.get(pair) ?? fallbackTickers.find((ticker) => ticker.pair === pair)!).filter(Boolean);
-  }, [tickers]);
+  const marqueeItems = useMemo(() => [...tickers, ...tickers], [tickers]);
 
   return (
-    <section className="border-b border-[#E5E7EB] bg-white">
-      <div className="mx-auto flex max-w-7xl items-center gap-5 overflow-x-auto px-5 py-3 text-xs font-semibold text-[#64748B]">
-        {orderedTickers.map((ticker) => {
+    <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden border-y border-[#EFE7D6] bg-white">
+      <div className="reader-ticker-track flex h-14 w-max items-center gap-10 whitespace-nowrap text-sm">
+        {marqueeItems.map((ticker, index) => {
           const positive = ticker.changePercent >= 0;
 
           return (
-            <div className="flex shrink-0 items-center gap-2" key={ticker.pair}>
-              <span className="text-[#64748B]">{ticker.symbol}/USDT</span>
-              <span className="text-[#111827]">{formatUsd(ticker.price)}</span>
-              <span className={positive ? "text-[#15803D]" : "text-[#DC2626]"}>
+            <div className="flex shrink-0 items-center gap-3 border-r border-[#EFE7D6] pr-8" key={`${ticker.pair}-${index}`}>
+              <CoinLogo symbol={ticker.symbol} />
+              <span className="font-semibold text-[#4B5563]">{ticker.symbol}/USDT</span>
+              <span className="font-semibold text-[#111827]">{formatUsd(ticker.price)}</span>
+              <span className={`font-semibold ${positive ? "text-[#15803D]" : "text-[#DC2626]"}`}>
                 {positive ? "▲" : "▼"} {Math.abs(ticker.changePercent).toFixed(2)}%
               </span>
             </div>
           );
         })}
-        <span className="ml-auto shrink-0 rounded-md border border-[#E5E7EB] bg-[#FAFAF7] px-2 py-1 text-[11px] text-[#64748B]">VND</span>
-        <span className="shrink-0 text-[11px] text-[#94A3B8]">Cập nhật: {formatCheckedAt(lastCheckedAt)}</span>
+        <span className="shrink-0 rounded-md border border-[#E5E7EB] bg-[#FAFAF7] px-2 py-1 text-xs font-semibold text-[#64748B]">
+          {copy.source}: {hasLiveData ? "Binance/API" : copy.sample}
+        </span>
       </div>
+      <style>{`
+        .reader-ticker-track {
+          animation: reader-ticker-slide 92s linear infinite;
+          will-change: transform;
+        }
+
+        @keyframes reader-ticker-slide {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+      `}</style>
     </section>
   );
 }

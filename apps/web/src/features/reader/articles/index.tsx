@@ -3,11 +3,11 @@ import { BookOpen, Clock3, Filter, Flame, Search, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "@/features/reader/adapter";
+import { getFallbackReaderArticles } from "@/features/reader/fallback-articles";
 import { localeCopy } from "@/features/reader/locale";
 import type { ReaderArticle } from "@/features/reader/model";
 
 import { ArticlesMarketPulse } from "./articles-market-pulse";
-import { getMockArticles } from "./mock";
 
 const defaultCategories = {
   "vi-vn": ["Tất cả", "Thị trường", "Bitcoin", "Altcoin", "DeFi", "NFT & GameFi", "Web3", "Pháp lý", "Công nghệ", "Sự kiện"],
@@ -16,13 +16,14 @@ const defaultCategories = {
 
 export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
   const copy = localeCopy(locale);
-  let apiArticles: ReaderArticle[] = [];
+  let apiArticles: ReaderArticle[] = getFallbackReaderArticles(locale);
   try {
-    apiArticles = await getReaderArticles(locale);
+    const loadedArticles = await getReaderArticles(locale);
+    apiArticles = loadedArticles.length ? loadedArticles : getFallbackReaderArticles(locale);
   } catch {
-    apiArticles = [];
+    apiArticles = getFallbackReaderArticles(locale);
   }
-  const articles = sortNewestFirst(apiArticles.length > 0 ? apiArticles : getMockArticles(locale));
+  const articles = sortNewestFirst(apiArticles);
   const [featured, ...newsFeed] = articles;
   const latest = articles.slice(0, 5);
   const hotTopics = buildHotTopics(articles, locale);
@@ -75,14 +76,10 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
             </Link>
           </div>
 
-          {articles.length > 0 && featured ? (
-            <div className="mt-6 space-y-4">
-              <FeaturedArticle article={featured} isVi={isVi} />
-              <NewsList articles={newsFeed} isVi={isVi} locale={locale} />
-            </div>
-          ) : (
-            <EmptyState isVi={isVi} />
-          )}
+          <div className="mt-6 space-y-4">
+            {featured ? <FeaturedArticle article={featured} isVi={isVi} /> : null}
+            <NewsList articles={newsFeed} isVi={isVi} locale={locale} />
+          </div>
         </div>
 
         <aside className="space-y-5 lg:pt-[4.25rem]">
@@ -207,18 +204,6 @@ function HotTopicsPanel({ topics, isVi, locale }: { topics: string[]; isVi: bool
         ))}
       </div>
     </section>
-  );
-}
-
-function EmptyState({ isVi }: { isVi: boolean }) {
-  return (
-    <div className="mt-8 rounded-xl border border-[#E3E5E8] bg-white px-8 py-14 text-center shadow-sm">
-      <BookOpen className="mx-auto h-10 w-10 text-[#A88412]" />
-      <h2 className="mt-4 text-xl font-bold">{isVi ? "Chưa có bài viết" : "No articles yet"}</h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#647084]">
-        {isVi ? "Bài published sẽ xuất hiện tại đây sau khi đồng bộ từ CMS." : "Published articles will appear here after CMS sync."}
-      </p>
-    </div>
   );
 }
 

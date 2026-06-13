@@ -2,7 +2,7 @@ import type { Locale } from "@cmsauto/contracts";
 
 import type { ReaderArticle, ReaderListResponse } from "@/features/reader/model";
 import { publicApiUrl } from "../../../lib/api";
-import { searchMockArticles } from "./mock";
+import { getFallbackReaderArticles } from "../fallback-articles";
 import type { SearchResult } from "./model";
 
 const MAX_PAGE_SIZE = 50;
@@ -49,8 +49,7 @@ export async function searchArticles(
     const data = (await response.json()) as ReaderListResponse;
     articles = data.articles;
   } catch {
-    // Graceful fallback: filter mock so UI is never broken in dev
-    articles = searchMockArticles.filter((a) => a.locale === locale);
+    articles = getFallbackReaderArticles(locale);
   }
 
   return articles.filter((a) => matchesQuery(a, trimmed));
@@ -60,5 +59,5 @@ export async function searchArticles(
  * @deprecated Used only by the old scaffold. Prefer searchArticles().
  */
 export async function getSearchMock(): Promise<SearchResult[]> {
-  return searchMockArticles;
+  return getFallbackReaderArticles("vi-vn");
 }

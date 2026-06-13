@@ -1,5 +1,6 @@
 "use client";
 
+import type { Locale } from "@cmsauto/contracts";
 import {
   ArrowRight,
   BarChart3,
@@ -16,6 +17,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { ReaderMarketTicker } from "@/components/reader/reader-market-ticker";
+import { mergeReaderTickers, readerFallbackGlobalStats } from "@/features/reader/market-data";
 import { publicApiUrl } from "@/lib/api";
 
 type MarketCoin = {
@@ -33,8 +36,6 @@ type MarketCoin = {
   supply: number;
   volume: string;
 };
-
-type MarketTickerItem = Pick<MarketCoin, "change" | "color" | "name" | "price" | "symbol">;
 
 type LiveMarketTicker = {
   pair: string;
@@ -219,15 +220,7 @@ const searchTrends = [
 ];
 
 const marketPairs = Array.from(new Set(tableCoins.map((coin) => `${coin.symbol}USDT`)));
-const tickerPalette = ["#F59E0B", "#6B7280", "#F3BA2F", "#111827", "#2EA6E9", "#E84142", "#22A06B", "#7C3AED", "#DB2777", "#0F766E"];
-const fallbackGlobalStats: GlobalMarketStats = {
-  btcDominance: 53.1,
-  checkedAt: new Date(0).toISOString(),
-  ethDominance: 17.8,
-  stale: true,
-  totalMarketCapUsd: 2_560_000_000_000,
-  totalVolumeUsd: 98_420_000_000
-};
+const fallbackGlobalStats: GlobalMarketStats = readerFallbackGlobalStats;
 
 function finiteNumber(value: unknown, fallback: number) {
   const numberValue = Number(value);
@@ -243,6 +236,18 @@ function normalizeGlobalStats(payload: Partial<GlobalMarketStats>): GlobalMarket
     totalMarketCapUsd: finiteNumber(payload.totalMarketCapUsd, fallbackGlobalStats.totalMarketCapUsd),
     totalVolumeUsd: finiteNumber(payload.totalVolumeUsd, fallbackGlobalStats.totalVolumeUsd)
   };
+}
+
+function fallbackLiveTickers(pairs: string[]): LiveMarketTicker[] {
+  return mergeReaderTickers(pairs).map((ticker) => ({
+    checkedAt: ticker.checkedAt ?? new Date(0).toISOString(),
+    changePercent: ticker.changePercent,
+    pair: ticker.pair,
+    price: ticker.price,
+    status: ticker.status ?? "fallback",
+    symbol: ticker.symbol,
+    volume24h: ticker.volume24h ?? 0
+  }));
 }
 
 function formatUsd(value: number) {
@@ -269,19 +274,6 @@ function formatPercentValue(value: number) {
   return `${finiteNumber(value, 0).toFixed(1)}%`;
 }
 
-function formatCheckedAt(value: string | null) {
-  if (!value) return "Đang cập nhật";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Đang cập nhật";
-  return date.toLocaleString("vi-VN", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  });
-}
-
 function hydrateCoin(coin: MarketCoin, liveByPair: Map<string, LiveMarketTicker>): MarketCoin {
   const live = liveByPair.get(`${coin.symbol}USDT`);
   if (!live || !Number.isFinite(live.price) || live.price <= 0) return coin;
@@ -293,23 +285,6 @@ function hydrateCoin(coin: MarketCoin, liveByPair: Map<string, LiveMarketTicker>
     change: live.changePercent,
     price: formatUsd(live.price),
     volume: live.volume24h > 0 ? formatCompactUsd(live.volume24h) : coin.volume
-  };
-}
-
-function colorForSymbol(symbol: string) {
-  const index = symbol.split("").reduce((sum, letter) => sum + letter.charCodeAt(0), 0) % tickerPalette.length;
-  return tickerPalette[index];
-}
-
-function tickerToDisplayItem(ticker: LiveMarketTicker): MarketTickerItem {
-  const knownCoin = tableCoins.find((coin) => coin.symbol === ticker.symbol);
-
-  return {
-    change: ticker.changePercent,
-    color: knownCoin?.color ?? colorForSymbol(ticker.symbol),
-    name: knownCoin?.name ?? ticker.symbol,
-    price: formatUsd(ticker.price),
-    symbol: ticker.symbol
   };
 }
 
@@ -441,11 +416,9 @@ function DonutChart({ btcDominance, ethDominance }: { btcDominance: number; ethD
   );
 }
 
-export function CryptoDashboard() {
-  const [liveTickers, setLiveTickers] = useState<LiveMarketTicker[]>([]);
-  const [topTickers, setTopTickers] = useState<LiveMarketTicker[]>([]);
+export function CryptoDashboard({ locale }: { locale: Locale }) {
+  const [liveTickers, setLiveTickers] = useState<LiveMarketTicker[]>(() => fallbackLiveTickers(marketPairs));
   const [globalStats, setGlobalStats] = useState<GlobalMarketStats>(fallbackGlobalStats);
-  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -457,29 +430,13 @@ export function CryptoDashboard() {
       priceRequestInFlight = true;
 
       try {
-        const topTickerResponse = await fetch(publicApiUrl("/public/markets/top-tickers?limit=100"), {
-          cache: "no-store"
-        });
-        if (topTickerResponse.ok) {
-          const payload = (await topTickerResponse.json()) as { tickers: LiveMarketTicker[] };
-          if (!cancelled) {
-            setTopTickers(payload.tickers);
-            setLastCheckedAt(payload.tickers.find((ticker) => ticker.checkedAt)?.checkedAt ?? new Date().toISOString());
-          }
-        }
-      } catch {
-        // Keep the current ticker rail visible if Binance is temporarily unavailable.
-      }
-
-      try {
         const tickerResponse = await fetch(publicApiUrl(`/public/markets/tickers?pairs=${encodeURIComponent(marketPairs.join(","))}`), {
           cache: "no-store"
         });
         if (tickerResponse.ok) {
           const payload = (await tickerResponse.json()) as { tickers: LiveMarketTicker[] };
           if (!cancelled) {
-            setLiveTickers(payload.tickers);
-            setLastCheckedAt(payload.tickers.find((ticker) => ticker.checkedAt)?.checkedAt ?? new Date().toISOString());
+            setLiveTickers(payload.tickers.length ? fallbackLiveTickers(marketPairs).map((fallbackTicker) => payload.tickers.find((ticker) => ticker.pair === fallbackTicker.pair) ?? fallbackTicker) : fallbackLiveTickers(marketPairs));
           }
         }
       } catch {
@@ -510,7 +467,7 @@ export function CryptoDashboard() {
 
     void loadPriceData();
     void loadGlobalStats();
-    const priceIntervalId = window.setInterval(loadPriceData, 1_000);
+    const priceIntervalId = window.setInterval(loadPriceData, 30_000);
     const globalIntervalId = window.setInterval(loadGlobalStats, 60_000);
 
     return () => {
@@ -523,17 +480,6 @@ export function CryptoDashboard() {
   const liveByPair = useMemo(() => new Map(liveTickers.map((ticker) => [ticker.pair, ticker])), [liveTickers]);
   const liveTableCoins = useMemo(() => tableCoins.map((coin) => hydrateCoin(coin, liveByPair)), [liveByPair]);
   const liveCoins = liveTableCoins.slice(0, 4);
-  const liveTickerItems = useMemo(() => {
-    if (topTickers.length > 0) {
-      return topTickers.map(tickerToDisplayItem);
-    }
-
-    if (liveTickers.length > 0) {
-      return liveTickers.map(tickerToDisplayItem);
-    }
-
-    return liveTableCoins.slice(0, 8);
-  }, [liveTableCoins, liveTickers, topTickers]);
   const btcDominance = formatPercentValue(globalStats.btcDominance);
   const ethDominance = formatPercentValue(globalStats.ethDominance);
   const totalMarketCap = formatCompactUsd(globalStats.totalMarketCapUsd);
@@ -541,25 +487,7 @@ export function CryptoDashboard() {
 
   return (
     <main className="bg-[#F8F8F5] font-sans text-[#111827]">
-      <section className="border-b border-[#E5E7EB] bg-white">
-        <div aria-label="Dữ liệu giá coin cập nhật theo thời gian thực" className="market-live-marquee">
-          <div className="market-live-marquee-track">
-            {[0, 1].map((group) => (
-              <div className="market-live-marquee-group" key={group}>
-                {liveTickerItems.map((item) => (
-                  <div className="flex shrink-0 items-center gap-2" key={`${group}-${item.symbol}`}>
-                    <CoinLogo coin={item} size="sm" />
-                    <span className="font-semibold text-[#4B5563]">{item.symbol}/USDT</span>
-                    <span className="font-semibold">{item.price}</span>
-                    <Percent compact value={item.change} />
-                  </div>
-                ))}
-                <span className="shrink-0 text-[#64748B]">Cập nhật: {formatCheckedAt(lastCheckedAt)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <ReaderMarketTicker locale={locale} />
 
       <div className="mx-auto max-w-7xl px-5 py-8">
         <section className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -826,38 +754,6 @@ export function CryptoDashboard() {
           </div>
         </section>
       </div>
-      <style>{`
-        .market-live-marquee {
-          overflow: hidden;
-          width: 100%;
-        }
-
-        .market-live-marquee-track {
-          animation: market-live-marquee-slide 260s linear infinite;
-          display: flex;
-          width: max-content;
-          will-change: transform;
-        }
-
-        .market-live-marquee-group {
-          align-items: center;
-          display: flex;
-          flex-shrink: 0;
-          gap: 1.6rem;
-          padding: 0.75rem 1.25rem;
-          white-space: nowrap;
-        }
-
-        @keyframes market-live-marquee-slide {
-          from {
-            transform: translateX(0);
-          }
-
-          to {
-            transform: translateX(-50%);
-          }
-        }
-      `}</style>
     </main>
   );
 }

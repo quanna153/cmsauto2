@@ -201,7 +201,7 @@ function QuickView({ sections }: { sections: MarkdownSection[] }) {
 
 function SidebarArticle({ article, index }: { article: ReaderArticle; index: number }) {
   return (
-    <Link className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 px-4 py-4 transition hover:bg-[#FAFAF7]" href={`/${article.locale}/${article.slug}`}>
+    <Link className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 px-4 py-4 transition hover:bg-[#FAFAF7]" href={article.livePath || `/${article.locale}/${article.slug}`}>
       <span className="text-sm font-bold text-[#C8A227]">{String(index + 1).padStart(2, "0")}</span>
       <span className="min-w-0">
         <span className="line-clamp-2 text-[14px] font-bold leading-6 text-[#111827]">{article.title}</span>

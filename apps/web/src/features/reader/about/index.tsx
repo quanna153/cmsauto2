@@ -1,532 +1,283 @@
 import type { Locale } from "@cmsauto/contracts";
-import {
-  ArrowRight,
-  BarChart3,
-  Check,
-  CheckCircle2,
-  ClipboardCheck,
-  FileCheck2,
-  FileText,
-  Globe2,
-  Lightbulb,
-  Mail,
-  NotebookText,
-  Rocket,
-  Scale,
-  SearchCheck,
-  Shield,
-  Sparkles,
-  TrendingUp,
-  Users,
-  Zap
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowRight, CheckCircle2, FileCheck2, Layers3, Mail, Newspaper, ShieldCheck, Target, UsersRound } from "lucide-react";
+import Link from "next/link";
 
-import { ReaderMarketTicker } from "@/components/reader/reader-market-ticker";
-import type { AboutPageContent } from "./model";
-import { getAboutPage } from "./adapter";
+import { CryptoSphere } from "@/features/reader/home/crypto-sphere";
 
-type IconText = {
-  description: string;
-  icon: LucideIcon;
+const copy = {
+  "vi-vn": {
+    eyebrow: "Về CoinRadar",
+    title: "Một phòng tin crypto tập trung vào dữ liệu, bối cảnh và sự rõ ràng",
+    lead: "CoinRadar giúp người đọc theo dõi thị trường tài sản số bằng nội dung dễ đọc, có kiểm chứng và không chạy theo tín hiệu mua bán cảm tính.",
+    cta: "Đọc tin mới",
+    contact: "Liên hệ biên tập",
+    proofTitle: "Nguyên tắc biên tập",
+    workflowTitle: "Cách chúng tôi xử lý thông tin",
+    audienceTitle: "CoinRadar phục vụ ai",
+    pillarsTitle: "Nội dung chúng tôi tập trung",
+    guardrailsTitle: "Những điều chúng tôi không làm",
+    metrics: [["24/7", "Theo dõi thị trường"], ["2 ngôn ngữ", "Việt Nam và quốc tế"], ["0", "Tín hiệu mua bán ép buộc"]],
+    audience: [
+      ["Người mới", "Cần hiểu khái niệm, ví, sàn, rủi ro và cách đọc bảng giá trước khi ra quyết định."],
+      ["Nhà đầu tư theo dõi thị trường", "Cần một nơi tổng hợp giá, dòng tiền, tin tức và bối cảnh một cách dễ quét."],
+      ["Người làm nội dung crypto", "Cần nguồn tham khảo có cấu trúc, thuật ngữ nhất quán và góc nhìn có kiểm chứng."]
+    ],
+    pillars: [
+      ["Thị trường", "Giá, vốn hóa, volume, dominance và biến động đáng chú ý trong ngày."],
+      ["Kiến thức", "Bài nền tảng về Bitcoin, blockchain, DeFi, ví cá nhân và quản trị rủi ro."],
+      ["Phân tích", "Luận điểm dựa trên dữ liệu on-chain, dòng tiền, vĩ mô và các kịch bản có điều kiện."],
+      ["Tin tức", "Sự kiện quan trọng được viết lại ngắn gọn, có bối cảnh và tránh giật tít."]
+    ],
+    guardrails: [
+      "Không bán tín hiệu mua bán.",
+      "Không phóng đại lợi nhuận hoặc tạo cảm giác chắc thắng.",
+      "Không che giấu khi dữ liệu chỉ là fallback hoặc chưa được API xác nhận.",
+      "Không thay thế quyết định và trách nhiệm của người đọc."
+    ],
+    principles: [
+      ["Minh bạch", "Nêu rõ nguồn dữ liệu, bối cảnh và thời điểm cập nhật."],
+      ["Không thổi phồng", "Không biến headline thành lời khuyên đầu tư."],
+      ["Dễ kiểm chứng", "Ưu tiên thông tin có thể đối chiếu và đọc lại."]
+    ],
+    workflow: [
+      ["Thu thập", "Giá, tin tức, dòng tiền và thay đổi chính sách."],
+      ["Lọc nhiễu", "Loại bỏ tin chưa có nguồn hoặc không đủ tác động."],
+      ["Biên tập", "Viết lại bằng ngôn ngữ dễ hiểu và có ngữ cảnh."],
+      ["Cập nhật", "Điều chỉnh khi dữ liệu hoặc sự kiện thay đổi."]
+    ]
+  },
+  "en-us": {
+    eyebrow: "About CoinRadar",
+    title: "A crypto newsroom focused on data, context and clarity",
+    lead: "CoinRadar helps readers follow digital asset markets through clear, verifiable coverage without turning headlines into trading signals.",
+    cta: "Read latest",
+    contact: "Contact editors",
+    proofTitle: "Editorial principles",
+    workflowTitle: "How we process information",
+    audienceTitle: "Who CoinRadar serves",
+    pillarsTitle: "What we focus on",
+    guardrailsTitle: "What we do not do",
+    metrics: [["24/7", "Market monitoring"], ["2 languages", "Vietnam and global"], ["0", "Forced buy/sell signals"]],
+    audience: [
+      ["Beginners", "Need clear concepts, wallets, exchanges, risks and price-board reading before making decisions."],
+      ["Market followers", "Need one place for prices, capital flows, news and context that is easy to scan."],
+      ["Crypto content teams", "Need structured references, consistent terminology and verifiable angles."]
+    ],
+    pillars: [
+      ["Markets", "Prices, market cap, volume, dominance and notable daily moves."],
+      ["Knowledge", "Foundational explainers on Bitcoin, blockchain, DeFi, wallets and risk management."],
+      ["Analysis", "Data-led theses across on-chain activity, flows, macro and conditional scenarios."],
+      ["News", "Important events rewritten with context, clarity and no sensational framing."]
+    ],
+    guardrails: [
+      "No buy or sell signals.",
+      "No exaggerated profit claims or false certainty.",
+      "No hiding when data is fallback or not yet confirmed by API.",
+      "No replacement for the reader's own responsibility."
+    ],
+    principles: [
+      ["Transparent", "Show data sources, context and update timing."],
+      ["No hype", "Do not turn headlines into investment advice."],
+      ["Verifiable", "Prioritize information readers can check again."]
+    ],
+    workflow: [
+      ["Collect", "Prices, news, capital flows and policy changes."],
+      ["Filter", "Remove unsourced or low-impact noise."],
+      ["Edit", "Rewrite into clear language with context."],
+      ["Update", "Adjust when data or events change."]
+    ]
+  }
+} satisfies Record<Locale, {
+  contact: string;
+  cta: string;
+  audience: string[][];
+  audienceTitle: string;
+  eyebrow: string;
+  guardrails: string[];
+  guardrailsTitle: string;
+  lead: string;
+  metrics: string[][];
+  pillars: string[][];
+  pillarsTitle: string;
+  principles: string[][];
+  proofTitle: string;
   title: string;
-};
+  workflow: string[][];
+  workflowTitle: string;
+}>;
 
-type Principle = IconText & {
-  number: string;
-};
-
-type WorkflowStep = IconText & {
-  number: string;
-};
-
-type TeamMetric = {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-};
-
-const heroFeatures: IconText[] = [
-  { description: "Tin tức & dữ liệu mới nhất", icon: Zap, title: "Cập nhật mỗi ngày" },
-  { description: "Tiếng Việt & English", icon: Globe2, title: "Đa ngôn ngữ" },
-  { description: "Góc nhìn cho nhà đầu tư Việt", icon: Shield, title: "Tập trung thị trường Việt" }
-];
-
-const editorialPrinciples: Principle[] = [
-  {
-    description: "Không nhận tài trợ để đánh đổi nội dung.",
-    icon: Scale,
-    number: "01",
-    title: "Độc lập & khách quan"
-  },
-  {
-    description: "Dữ liệu từ nguồn uy tín, trích dẫn rõ ràng.",
-    icon: CheckCircle2,
-    number: "02",
-    title: "Chính xác & có kiểm chứng"
-  },
-  {
-    description: "Giải thích đơn giản, ví dụ thực tế, có ích.",
-    icon: NotebookText,
-    number: "03",
-    title: "Dễ hiểu & thực tiễn"
-  },
-  {
-    description: "Nêu rõ nguồn, thời gian cập nhật và phương pháp.",
-    icon: FileText,
-    number: "04",
-    title: "Minh bạch"
-  },
-  {
-    description: "Lắng nghe độc giả, không ngừng cải thiện.",
-    icon: Users,
-    number: "05",
-    title: "Ưu tiên cộng đồng"
-  }
-];
-
-const workflowSteps: WorkflowStep[] = [
-  {
-    description: "Theo dõi thị trường 24/7 từ các nguồn uy tín toàn cầu và trong nước.",
-    icon: ClipboardCheck,
-    number: "1",
-    title: "Thu thập dữ liệu"
-  },
-  {
-    description: "Xác minh thông tin, loại bỏ tin đồn và nhiễu, ưu tiên dữ liệu có bằng chứng.",
-    icon: SearchCheck,
-    number: "2",
-    title: "Lọc & xác minh"
-  },
-  {
-    description: "Đội ngũ phân tích đưa ra góc nhìn, bối cảnh và tác động đến thị trường.",
-    icon: BarChart3,
-    number: "3",
-    title: "Phân tích & diễn giải"
-  },
-  {
-    description: "Biên tập viên kiểm tra chất lượng, ngữ cảnh và tính nhất quán.",
-    icon: FileCheck2,
-    number: "4",
-    title: "Biên tập & kiểm duyệt"
-  },
-  {
-    description: "Xuất bản đúng thời điểm, cập nhật khi có diễn biến mới nhất.",
-    icon: Sparkles,
-    number: "5",
-    title: "Xuất bản & cập nhật"
-  }
-];
-
-const coreValues: IconText[] = [
-  { description: "Xây dựng lòng tin bằng sự chính xác và nhất quán.", icon: Shield, title: "Tin cậy" },
-  { description: "Nhanh nhưng không vội, đúng nhưng không chậm.", icon: Zap, title: "Tốc độ" },
-  { description: "Học hỏi không ngừng để giải thích sâu hơn.", icon: Lightbulb, title: "Hiểu biết" },
-  { description: "Chịu trách nhiệm với nội dung và cộng đồng.", icon: FileText, title: "Trách nhiệm" },
-  { description: "Phát triển cùng độc giả, vì lợi ích chung.", icon: Users, title: "Cộng đồng" },
-  { description: "Ứng dụng công nghệ để nâng tầm trải nghiệm.", icon: Rocket, title: "Đổi mới" }
-];
-
-const readerCommitments = [
-  "Không shill coin, không pump & dump.",
-  "Không viết theo yêu cầu dự án.",
-  "Không che giấu xung đột lợi ích.",
-  "Luôn nêu rủi ro cùng cơ hội.",
-  "Tôn trọng pháp luật Việt Nam và quốc tế."
-];
-
-const teamMetrics: TeamMetric[] = [
-  { icon: NotebookText, label: "Nhà báo & biên tập", value: "12+" },
-  { icon: TrendingUp, label: "Nhà phân tích", value: "8+" },
-  { icon: Sparkles, label: "Kỹ sư & sản phẩm", value: "6+" },
-  { icon: Users, label: "Cố vấn & đối tác", value: "15+" }
-];
-
-export async function AboutFeature({ locale }: { locale: Locale }) {
-  try {
-    const content = await getAboutPage(locale);
-
-    if (!content?.pillars.length || !content.principles.length) {
-      return <AboutEmptyState content={content} />;
-    }
-
-    return <AboutPage />;
-  } catch {
-    return <AboutErrorState locale={locale} />;
-  }
-}
-
-function AboutPage() {
-  return (
-    <main className="min-h-screen bg-[#FAFAF7] text-[#111827]">
-      <ReaderMarketTicker />
-      <HeroSection />
-      <div className="mx-auto max-w-7xl px-5 pb-10 md:pb-14">
-        <MissionSection />
-        <WorkflowSection />
-        <ValuesSection />
-        <TeamSection />
-        <NewsletterSection />
-      </div>
-    </main>
-  );
-}
-
-function HeroSection() {
-  return (
-    <section className="mx-auto grid max-w-7xl gap-9 px-5 py-10 md:grid-cols-[minmax(0,1fr)_560px] md:items-center md:py-12">
-      <div>
-        <SectionEyebrow>CoinRadar</SectionEyebrow>
-        <h1 className="mt-5 max-w-2xl text-4xl font-black leading-[1.08] tracking-normal text-[#111827] md:text-6xl">
-          Về CoinRadar
-          <span className="block text-[#B78F00]">và đội ngũ CoinRadar</span>
-        </h1>
-        <p className="mt-6 max-w-xl text-base leading-8 text-[#4B5563]">
-          CoinRadar biến dữ liệu thị trường, kiến thức và phân tích thành những bản tin dễ đọc, có ngữ cảnh
-          và hữu ích cho quyết định mỗi ngày của bạn.
-        </p>
-        <div className="mt-10 grid gap-5 sm:grid-cols-3">
-          {heroFeatures.map((feature) => {
-            const Icon = feature.icon;
-
-            return (
-              <article className="grid grid-cols-[28px_minmax(0,1fr)] gap-3" key={feature.title}>
-                <Icon aria-hidden="true" className="mt-0.5 text-[#B78F00]" size={24} strokeWidth={1.8} />
-                <div>
-                  <h2 className="text-sm font-black text-[#111827]">{feature.title}</h2>
-                  <p className="mt-1 text-xs leading-5 text-[#64748B]">{feature.description}</p>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </div>
-
-      <HeroStatsCard />
-    </section>
-  );
-}
-
-function HeroStatsCard() {
-  const stats = [
-    { label: "Năm hoạt động", value: "08+" },
-    { label: "Độc giả hằng tháng", value: "300K+" },
-    { label: "Lượt xem trang", value: "3.2M+" },
-    { label: "Bài viết & phân tích", value: "500+" }
-  ];
+export function AboutFeature({ locale }: { locale: Locale }) {
+  const c = copy[locale];
+  const metricNotes = locale === "vi-vn"
+    ? [
+        "Giá, tin tức và biến động lớn được rà soát theo nhịp thị trường.",
+        "Nội dung được biên tập để người đọc Việt vẫn theo dõi được dòng tin quốc tế.",
+        "CoinRadar chỉ cung cấp bối cảnh và dữ liệu, không ép người đọc mua bán."
+      ]
+    : [
+        "Prices, news and major moves are reviewed around the market clock.",
+        "Coverage is edited so Vietnamese readers can follow global crypto context.",
+        "CoinRadar provides data and context without pushing readers into trades."
+      ];
 
   return (
-    <aside className="rounded-lg border border-[#E5E7EB] bg-white p-7 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-      <div className="h-56 w-full">
-        <svg aria-label="Biểu đồ tăng trưởng CoinRadar" className="h-full w-full" role="img" viewBox="0 0 560 230">
-          <defs>
-            <linearGradient id="aboutBarGold" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#D6A900" stopOpacity="0.72" />
-              <stop offset="100%" stopColor="#D6A900" stopOpacity="0.06" />
-            </linearGradient>
-            <linearGradient id="aboutLineGold" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#F5E7B3" />
-              <stop offset="100%" stopColor="#C89700" />
-            </linearGradient>
-          </defs>
-          <g stroke="#E5E7EB" strokeDasharray="5 7" strokeWidth="1">
-            <path d="M24 48H536" />
-            <path d="M24 104H536" />
-            <path d="M24 160H536" />
-          </g>
-          <g fill="url(#aboutBarGold)">
-            {[
-              46, 40, 62, 54, 70, 67, 78, 91, 86, 104, 96, 112, 122, 118, 137, 128, 145, 151, 138, 166,
-              158, 171, 184, 205
-            ].map((height, index) => (
-              <rect height={height} key={index} rx="3" width="8" x={38 + index * 20} y={198 - height} />
-            ))}
-          </g>
-          <path
-            d="M36 158 C72 145, 94 160, 118 134 S168 126, 194 112 S244 92, 268 98 S318 72, 344 78 S392 90, 418 62 S464 62, 492 42 S520 32, 536 12"
-            fill="none"
-            stroke="url(#aboutLineGold)"
-            strokeLinecap="round"
-            strokeWidth="3"
-          />
-          {[36, 118, 194, 268, 344, 418, 492, 536].map((x, index) => {
-            const y = [158, 134, 112, 98, 78, 62, 42, 12][index]!;
-            return <circle cx={x} cy={y} fill="#FFF7D6" key={x} r="4" stroke="#D6A900" strokeWidth="2" />;
-          })}
-          <path d="M24 207H536" stroke="#E5E7EB" strokeWidth="1.5" />
-        </svg>
-      </div>
-      <div className="mt-6 grid grid-cols-2 gap-y-5 divide-x-0 border-t border-[#E5E7EB] pt-6 md:grid-cols-4 md:divide-x md:divide-[#E5E7EB]">
-        {stats.map((stat) => (
-          <div className="px-2 first:pl-0 md:px-6 md:first:pl-0 md:last:pr-0" key={stat.label}>
-            <p className="text-3xl font-black leading-none text-[#111827]">{stat.value}</p>
-            <p className="mt-2 text-xs leading-5 text-[#64748B]">{stat.label}</p>
+    <main className="overflow-hidden bg-[#FAFAF7] text-[#111827]">
+      <section className="relative mx-auto grid max-w-7xl gap-7 px-5 py-8 md:py-10 lg:grid-cols-[minmax(0,0.86fr)_minmax(23rem,0.72fr)] lg:items-center">
+        <div className="pointer-events-none absolute right-[-16rem] top-[-10rem] h-[32rem] w-[32rem] rounded-full bg-[#E8D391]/25 blur-3xl" />
+        <div className="relative">
+          <p className="text-xs font-bold uppercase text-[#A88412]">{c.eyebrow}</p>
+          <h1 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">{c.title}</h1>
+          <p className="mt-5 max-w-2xl text-base leading-8 text-[#4B5563]">{c.lead}</p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#B88400] px-5 text-sm font-bold text-white transition hover:bg-[#111827]" href={`/${locale}/articles`}>
+              {c.cta} <ArrowRight size={16} />
+            </Link>
+            <a className="inline-flex h-12 items-center gap-2 rounded-xl border border-[#E0D4B6] bg-white px-5 text-sm font-bold text-[#111827] transition hover:border-[#C8A227]" href="mailto:hello@coinradar.vn">
+              <Mail size={16} /> {c.contact}
+            </a>
           </div>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function MissionSection() {
-  return (
-    <section className="grid gap-6 md:grid-cols-2">
-      <article className="rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-        <SectionEyebrow>Sứ mệnh của chúng tôi</SectionEyebrow>
-        <h2 className="mt-8 max-w-lg text-3xl font-black leading-tight text-[#111827]">
-          Giúp bạn hiểu thị trường crypto dễ dàng hơn và hành động thông minh hơn
-        </h2>
-        <p className="mt-8 max-w-lg text-sm leading-8 text-[#4B5563]">
-          Chúng tôi tin rằng kiến thức đúng đắn là lợi thế. Sứ mệnh của CoinRadar là cung cấp thông tin
-          nhanh, chính xác và có chiều sâu, giúp cộng đồng đầu tư crypto tại Việt Nam tự tin hơn trong
-          mọi quyết định.
-        </p>
-        <a
-          className="mt-24 inline-flex items-center gap-2 rounded-md bg-[#B78F00] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#9F7B00]"
-          href="#team"
-        >
-          Tìm hiểu thêm về chúng tôi
-          <ArrowRight aria-hidden="true" size={16} />
-        </a>
-      </article>
-
-      <article className="rounded-lg border border-[#E5E7EB] bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-        <SectionEyebrow>Nguyên tắc biên tập</SectionEyebrow>
-        <div className="mt-5 space-y-2">
-          {editorialPrinciples.map((principle) => {
-            const Icon = principle.icon;
-
-            return (
-              <div
-                className="grid grid-cols-[44px_minmax(0,1fr)_34px] items-center gap-4 rounded-lg border border-[#E5E7EB] bg-white px-5 py-4"
-                key={principle.title}
-              >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#B78F00] text-sm font-black text-white">
-                  {principle.number}
-                </span>
-                <div>
-                  <h3 className="text-sm font-black text-[#111827]">{principle.title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-[#64748B]">{principle.description}</p>
-                </div>
-                <Icon aria-hidden="true" className="text-[#9CA3AF]" size={24} strokeWidth={1.8} />
-              </div>
-            );
-          })}
         </div>
-      </article>
-    </section>
-  );
-}
 
-function WorkflowSection() {
-  return (
-    <section className="mt-8 rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-      <SectionEyebrow>Quy trình sản xuất nội dung</SectionEyebrow>
-      <div className="mt-8 grid gap-8 lg:grid-cols-5">
-        {workflowSteps.map((step, index) => {
-          const Icon = step.icon;
-          const isLast = index === workflowSteps.length - 1;
-
-          return (
-            <article className="relative" key={step.title}>
-              <div className="flex items-center gap-5 lg:justify-center">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-[#B78F00]">
-                  <Icon aria-hidden="true" size={24} strokeWidth={1.7} />
-                </span>
-                {!isLast ? (
-                  <ArrowRight aria-hidden="true" className="hidden text-[#111827] lg:block" size={18} strokeWidth={1.5} />
-                ) : null}
-              </div>
-              <div className="mt-5 grid grid-cols-[24px_minmax(0,1fr)] gap-3">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#E6C86B] text-[11px] font-black text-[#B78F00]">
-                  {step.number}
-                </span>
-                <div>
-                  <h3 className="text-sm font-black text-[#111827]">{step.title}</h3>
-                  <p className="mt-2 text-xs leading-6 text-[#4B5563]">{step.description}</p>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function ValuesSection() {
-  return (
-    <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_460px]">
-      <article className="rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-        <SectionEyebrow>Giá trị cốt lõi</SectionEyebrow>
-        <div className="mt-9 grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
-          {coreValues.map((value) => {
-            const Icon = value.icon;
-
-            return (
-              <article className="grid grid-cols-[32px_minmax(0,1fr)] gap-4" key={value.title}>
-                <Icon aria-hidden="true" className="mt-1 text-[#B78F00]" size={26} strokeWidth={1.7} />
-                <div>
-                  <h3 className="text-sm font-black text-[#111827]">{value.title}</h3>
-                  <p className="mt-2 text-xs leading-6 text-[#4B5563]">{value.description}</p>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </article>
-
-      <article className="rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.04)]">
-        <SectionEyebrow>Cam kết với độc giả</SectionEyebrow>
-        <ul className="mt-8 space-y-5">
-          {readerCommitments.map((item) => (
-            <li className="flex gap-3 text-sm leading-6 text-[#111827]" key={item}>
-              <Check aria-hidden="true" className="mt-0.5 shrink-0 text-[#B78F00]" size={18} strokeWidth={2} />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-        <a
-          className="mt-12 grid grid-cols-[44px_minmax(0,1fr)_22px] items-center gap-4 rounded-lg bg-[#0F141B] p-5 text-white transition hover:bg-[#171E28]"
-          href="mailto:hello@coinradar.vn"
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded-md border border-[#B78F00]/50 text-[#D6A900]">
-            <Mail aria-hidden="true" size={25} strokeWidth={1.8} />
-          </span>
-          <span>
-            <span className="block text-base font-black">Góp ý & đồng hành cùng CoinRadar</span>
-            <span className="mt-1 block text-xs text-[#CBD5E1]">Mọi góp ý của bạn giúp chúng tôi phục vụ tốt hơn.</span>
-            <span className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#D6A900]">
-              Liên hệ với chúng tôi
-            </span>
-          </span>
-          <ArrowRight aria-hidden="true" className="text-[#D6A900]" size={20} />
-        </a>
-      </article>
-    </section>
-  );
-}
-
-function TeamSection() {
-  return (
-    <section
-      className="mt-8 grid gap-8 rounded-lg border border-[#E5E7EB] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.04)] lg:grid-cols-[minmax(0,1fr)_680px] lg:items-center"
-      id="team"
-    >
-      <div>
-        <SectionEyebrow>Đội ngũ CoinRadar</SectionEyebrow>
-        <h2 className="mt-8 max-w-md text-2xl font-black leading-tight text-[#111827]">
-          Nhà báo, nhà phân tích và builder đam mê thị trường crypto
-        </h2>
-        <p className="mt-5 max-w-lg text-sm leading-8 text-[#4B5563]">
-          Chúng tôi là một nhóm đa dạng với chung mục tiêu: mang đến nội dung có giá trị và trải nghiệm
-          tốt nhất cho nhà đầu tư Việt Nam.
-        </p>
-        <a className="mt-8 inline-flex items-center gap-2 text-sm font-black text-[#B78F00]" href="#newsletter">
-          Tìm hiểu về đội ngũ
-          <ArrowRight aria-hidden="true" size={16} />
-        </a>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {teamMetrics.map((metric) => {
-          const Icon = metric.icon;
-
-          return (
-            <article className="rounded-lg border border-[#E5E7EB] bg-white p-6 text-center shadow-sm" key={metric.label}>
-              <Icon aria-hidden="true" className="mx-auto text-[#9CA3AF]" size={33} strokeWidth={1.7} />
-              <h3 className="mt-5 min-h-10 text-sm font-black leading-5 text-[#111827]">{metric.label}</h3>
-              <p className="mt-3 text-4xl font-black text-[#111827]">{metric.value}</p>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function NewsletterSection() {
-  return (
-    <section
-      className="mt-8 grid gap-6 rounded-lg bg-[linear-gradient(110deg,#D2A300_0%,#B78F00_48%,#8C6A00_100%)] p-7 text-white shadow-[0_20px_45px_rgba(183,143,0,0.22)] md:grid-cols-[minmax(0,1fr)_620px] md:items-center"
-      id="newsletter"
-    >
-      <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-5">
-        <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-white/35 bg-white/10">
-          <Mail aria-hidden="true" size={31} strokeWidth={1.8} />
-        </span>
-        <div>
-          <h2 className="text-2xl font-black">Không bỏ lỡ cơ hội trong thị trường crypto</h2>
-          <p className="mt-2 max-w-xl text-sm leading-7 text-white/85">
-            Đăng ký nhận bản tin CoinRadar hằng ngày với tin tức nóng, phân tích chuyên sâu và cơ hội đầu tư.
-          </p>
-        </div>
-      </div>
-      <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
-        <label className="sr-only" htmlFor="about-newsletter-email">
-          Email
-        </label>
-        <input
-          className="h-12 rounded-md border border-white/30 bg-white px-5 text-sm text-[#111827] outline-none placeholder:text-[#9CA3AF] focus:border-[#111827] focus:ring-2 focus:ring-white/45"
-          id="about-newsletter-email"
-          placeholder="Nhập email của bạn"
-          type="email"
-        />
-        <button className="h-12 rounded-md bg-[#0F141B] px-6 text-sm font-black text-white transition hover:bg-[#1F2937]" type="submit">
-          Đăng ký ngay
-        </button>
-      </form>
-    </section>
-  );
-}
-
-function SectionEyebrow({ children }: { children: ReactNode }) {
-  return <p className="text-xs font-black uppercase tracking-[0.18em] text-[#B78F00]">{children}</p>;
-}
-
-export function AboutLoadingState() {
-  return (
-    <main className="min-h-screen bg-[#FAFAF7] px-5 py-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="h-64 animate-pulse rounded-lg bg-[#E5E7EB]" />
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <div className="h-80 animate-pulse rounded-lg bg-[#E5E7EB]" />
-          <div className="h-80 animate-pulse rounded-lg bg-[#E5E7EB]" />
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function AboutEmptyState({ content }: { content: AboutPageContent }) {
-  return (
-    <main className="min-h-screen bg-[#FAFAF7] px-5 py-10">
-      <section className="mx-auto max-w-3xl rounded-lg border border-[#E5E7EB] bg-white p-6 shadow-sm">
-        <p className="text-xs font-bold uppercase text-[#B78F00]">{content?.eyebrow ?? "CoinRadar"}</p>
-        <h1 className="mt-2 text-2xl font-black">{content?.emptyTitle ?? "Chưa có nội dung"}</h1>
-        <p className="mt-3 leading-7 text-[#4B5563]">
-          {content?.emptyDescription ?? "Trang giới thiệu chưa có dữ liệu để hiển thị."}
-        </p>
+        <aside className="relative h-[22rem] overflow-visible rounded-2xl border border-[#E7DFCF] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)] [transform:perspective(900px)_rotateX(1deg)_rotateY(-3deg)] md:h-[24rem] lg:h-[25rem]">
+          <CryptoSphere locale={locale} />
+        </aside>
       </section>
-    </main>
-  );
-}
 
-function AboutErrorState({ locale }: { locale: Locale }) {
-  const isVietnamese = locale === "vi-vn";
+      <section className="mx-auto max-w-7xl px-5 pb-10">
+        <div className="grid border-y border-[#D8D2C4] bg-white/75 backdrop-blur md:grid-cols-3">
+          {c.metrics.map(([value, label], index) => (
+            <div className="group relative overflow-hidden px-6 py-5 md:border-r md:border-[#E5DDCA] last:md:border-r-0" key={label}>
+              <span className="pointer-events-none absolute inset-x-6 bottom-0 h-px origin-left scale-x-0 bg-[#C8A227] transition duration-500 group-hover:scale-x-100" />
+              <p className="text-4xl font-semibold tracking-tight text-[#A88412]">{value}</p>
+              <p className="mt-2 text-sm font-semibold text-[#111827]">{label}</p>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-[#667085]">{metricNotes[index]}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-  return (
-    <main className="min-h-screen bg-[#FAFAF7] px-5 py-10">
-      <section className="mx-auto max-w-3xl rounded-lg border border-[#F3C6C6] bg-white p-6 shadow-sm">
-        <p className="text-xs font-bold uppercase text-[#C2410C]">About</p>
-        <h1 className="mt-2 text-2xl font-black">
-          {isVietnamese ? "Không tải được trang giới thiệu" : "Could not load the about page"}
-        </h1>
-        <p className="mt-3 leading-7 text-[#4B5563]">
-          {isVietnamese
-            ? "Vui lòng thử lại sau hoặc kiểm tra adapter của feature reader/about."
-            : "Please try again later or check the reader/about adapter."}
-        </p>
+      <section className="mx-auto max-w-7xl px-5 pb-10">
+        <div className="grid overflow-hidden border-y border-[#D8D2C4] bg-white lg:grid-cols-[19rem_minmax(0,1fr)]">
+          <header className="border-b border-[#D8D2C4] p-6 lg:border-b-0 lg:border-r">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A88412]">Editorial system</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight">{c.proofTitle}</h2>
+            <p className="mt-4 text-sm leading-7 text-[#667085]">{c.workflowTitle}</p>
+          </header>
+          <div className="divide-y divide-[#E7DFCF]">
+            {c.principles.map(([title, text], index) => {
+              const icons = [ShieldCheck, Newspaper, CheckCircle2];
+              const Icon = icons[index] ?? ShieldCheck;
+              return (
+                <article className="group relative grid gap-4 px-6 py-5 transition duration-300 hover:bg-[#111827] hover:text-white md:grid-cols-[3rem_10rem_minmax(0,1fr)] md:items-center" key={title}>
+                  <span className="pointer-events-none absolute inset-y-0 left-0 w-1 origin-top scale-y-0 bg-[#C8A227] transition duration-300 group-hover:scale-y-100" />
+                  <span className="text-xs font-bold tracking-[0.18em] text-[#A88412] transition group-hover:text-[#F5E7B3]">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="inline-flex items-center gap-3 font-semibold">
+                    <Icon className="size-5 text-[#A88412] transition group-hover:text-[#F5E7B3]" />
+                    {title}
+                  </span>
+                  <span className="text-sm leading-7 text-[#667085] transition group-hover:text-white/72">{text}</span>
+                </article>
+              );
+            })}
+            {c.workflow.map(([title, text], index) => {
+              const icons = [Layers3, FileCheck2, UsersRound, CheckCircle2];
+              const Icon = icons[index] ?? CheckCircle2;
+              return (
+                <article className="group relative grid gap-4 px-6 py-5 transition duration-300 hover:bg-[#F8F3E4] md:grid-cols-[3rem_10rem_minmax(0,1fr)] md:items-center" key={title}>
+                  <span className="pointer-events-none absolute inset-y-0 left-0 w-1 origin-top scale-y-0 bg-[#111827] transition duration-300 group-hover:scale-y-100" />
+                  <span className="text-xs font-bold tracking-[0.18em] text-[#A88412]">{String(index + c.principles.length + 1).padStart(2, "0")}</span>
+                  <span className="inline-flex items-center gap-3 font-semibold">
+                    <Icon className="size-5 text-[#111827]" />
+                    {title}
+                  </span>
+                  <span className="text-sm leading-7 text-[#667085]">{text}</span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-12 px-5 pb-12">
+        <div className="relative overflow-hidden border border-[#111827] bg-[#0B111C] p-6 text-white shadow-[0_28px_72px_rgba(17,24,39,0.2)] md:p-8">
+          <div className="pointer-events-none absolute -left-24 top-0 size-72 rounded-full bg-[#C8A227]/20 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-[-8rem] right-[-6rem] size-80 rounded-full bg-white/10 blur-3xl" />
+          <div className="relative grid gap-8 lg:grid-cols-[19rem_minmax(0,1fr)]">
+            <header>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F5E7B3]">Audience map</p>
+              <h2 className="mt-3 text-3xl font-semibold leading-tight">{c.audienceTitle}</h2>
+              <p className="mt-4 text-sm leading-7 text-white/62">Ba nhóm độc giả chính được tách thành các dải ưu tiên để nội dung phục vụ đúng nhu cầu đọc.</p>
+            </header>
+            <div className="grid gap-4">
+              {c.audience.map(([title, text], index) => (
+                <article className="group relative overflow-hidden border border-white/10 bg-white/[0.035] px-5 py-5 transition duration-300 hover:-translate-y-0.5 hover:border-[#F5E7B3]/60 hover:bg-white/[0.075] hover:shadow-[0_20px_54px_rgba(0,0,0,0.22)]" key={title}>
+                  <span className="pointer-events-none absolute right-5 top-2 text-7xl font-semibold leading-none text-white/[0.035] transition group-hover:text-[#F5E7B3]/10">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="relative grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-center">
+                    <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#F5E7B3]">Segment {String(index + 1).padStart(2, "0")}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold">{title}</h3>
+                      <p className="mt-2 max-w-3xl text-sm leading-7 text-white/68">{text}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-px overflow-hidden border border-[#D8D2C4] bg-[#D8D2C4] md:grid-cols-4 md:auto-rows-[12rem]">
+          <header className="bg-white p-6 md:col-span-2">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#A88412]">Coverage mosaic</p>
+            <h2 className="mt-3 max-w-md text-3xl font-semibold leading-tight">{c.pillarsTitle}</h2>
+          </header>
+          {c.pillars.map(([title, text], index) => (
+            <article
+              className={`group relative overflow-hidden p-6 transition duration-300 hover:-translate-y-0.5 ${
+                index === 0
+                  ? "bg-[#111827] text-white md:col-span-2 md:row-span-3"
+                  : index === 1
+                    ? "bg-[#F7F2E4]"
+                    : index === 3
+                      ? "bg-white md:col-span-2"
+                      : "bg-white"
+              }`}
+              key={title}
+            >
+              <span className={`absolute right-5 top-4 text-5xl font-semibold leading-none ${index === 0 ? "text-white/10" : "text-[#C8A227]/18"}`}>{String(index + 1).padStart(2, "0")}</span>
+              <Target className={`relative size-6 ${index === 0 ? "text-[#F5E7B3]" : "text-[#A88412]"}`} />
+              <h3 className={`relative mt-6 text-xl font-semibold ${index === 0 ? "max-w-md text-3xl leading-tight" : ""}`}>{title}</h3>
+              <p className={`relative mt-3 text-sm leading-7 ${index === 0 ? "max-w-xl text-white/68" : "text-[#667085]"}`}>{text}</p>
+              <span className={`absolute inset-x-6 bottom-5 h-px origin-left scale-x-0 transition duration-500 group-hover:scale-x-100 ${index === 0 ? "bg-[#F5E7B3]" : "bg-[#C8A227]"}`} />
+            </article>
+          ))}
+        </div>
+
+        <div className="grid overflow-hidden border border-[#111827] bg-[#080B12] text-white lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <header className="border-b border-white/10 p-6 lg:border-b-0 lg:border-r">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F5E7B3]">Command rail</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight">{c.guardrailsTitle}</h2>
+            <div className="mt-6 h-px bg-gradient-to-r from-[#F5E7B3] to-transparent" />
+          </header>
+          <div className="p-4 md:p-6">
+            <div className="border border-white/10 bg-black/30 font-mono text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-xs text-white/50">
+                <span className="size-2 rounded-full bg-[#F87171]" />
+                <span className="size-2 rounded-full bg-[#FBBF24]" />
+                <span className="size-2 rounded-full bg-[#34D399]" />
+                <span className="ml-2">coinradar/editorial-guardrails</span>
+              </div>
+              <ul className="divide-y divide-white/10">
+                {c.guardrails.map((item, index) => (
+                  <li className="group grid gap-3 px-4 py-4 transition duration-300 hover:bg-[#F5E7B3]/8 md:grid-cols-[5.5rem_minmax(0,1fr)_2rem] md:items-center" key={item}>
+                    <span className="text-[#F5E7B3]">$ rule:{String(index + 1).padStart(2, "0")}</span>
+                    <span className="leading-7 text-white/72 transition group-hover:text-white">{item}</span>
+                    <CheckCircle2 className="size-5 text-[#F5E7B3]" />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   );

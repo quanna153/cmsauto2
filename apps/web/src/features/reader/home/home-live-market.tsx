@@ -53,9 +53,22 @@ const coinIconOverrides: Record<string, string> = {
   MKR: "mkr"
 };
 
+const fallbackMarketData: Record<string, Pick<MarketTicker, "price" | "changePercent">> = {
+  BTCUSDT: { price: 63_702.12, changePercent: 0.19 },
+  ETHUSDT: { price: 3_487.64, changePercent: 1.28 },
+  BNBUSDT: { price: 604.38, changePercent: 0.74 },
+  SOLUSDT: { price: 148.72, changePercent: 2.43 },
+  XRPUSDT: { price: 0.5234, changePercent: -0.61 },
+  ARBUSDT: { price: 0.8124, changePercent: 1.16 },
+  FETUSDT: { price: 1.284, changePercent: 3.08 },
+  OPUSDT: { price: 1.742, changePercent: -0.37 },
+  SUIUSDT: { price: 1.103, changePercent: 2.05 },
+  MKRUSDT: { price: 2_341.8, changePercent: 0.92 }
+};
+
 const marketCopy = {
   "vi-vn": {
-    loading: "Đang cập nhật",
+    unavailable: "N/A",
     readArticle: "Đọc bài đầy đủ",
     viewMarket: "Xem thị trường",
     switchArticle: "Chuyển sang bài",
@@ -64,6 +77,7 @@ const marketCopy = {
     source: "Nguồn",
     refresh: "Cập nhật",
     refreshValue: "30 giây",
+    sampleSource: "Dữ liệu mẫu",
     details: "Xem chi tiết",
     topGainers: "Top tăng giá (24h)",
     viewAllMarket: "Xem toàn bộ thị trường",
@@ -73,7 +87,7 @@ const marketCopy = {
     searchCoin: "Tìm coin..."
   },
   "en-us": {
-    loading: "Updating",
+    unavailable: "N/A",
     readArticle: "Read full article",
     viewMarket: "View markets",
     switchArticle: "Switch to article",
@@ -82,6 +96,7 @@ const marketCopy = {
     source: "Source",
     refresh: "Refresh",
     refreshValue: "30 seconds",
+    sampleSource: "Sample data",
     details: "View details",
     topGainers: "Top gainers (24h)",
     viewAllMarket: "View all markets",
@@ -96,7 +111,7 @@ const HomeMarketContext = createContext<MarketState | null>(null);
 
 function formatPrice(price: number | undefined, locale: Locale) {
   if (typeof price !== "number" || Number.isNaN(price)) {
-    return marketCopy[locale].loading;
+    return marketCopy[locale].unavailable;
   }
 
   return price.toLocaleString("en-US", {
@@ -107,10 +122,27 @@ function formatPrice(price: number | undefined, locale: Locale) {
 
 function formatChange(change: number | undefined, locale: Locale) {
   if (typeof change !== "number" || Number.isNaN(change)) {
-    return marketCopy[locale].loading;
+    return marketCopy[locale].unavailable;
   }
 
   return `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+}
+
+function createFallbackTickers(coins: LiveCoin[]) {
+  return Object.fromEntries(coins.map((coin, index) => {
+    const fallback = fallbackMarketData[coin.pair] ?? {
+      price: Math.max(0.01, 100 / (index + 1)),
+      changePercent: index % 3 === 0 ? 1.2 : index % 3 === 1 ? 0.45 : -0.35
+    };
+
+    return [coin.pair, {
+      pair: coin.pair,
+      symbol: coin.symbol,
+      price: fallback.price,
+      changePercent: fallback.changePercent,
+      status: "fallback" as const
+    }];
+  }));
 }
 
 function coinIconUrl(symbol: string) {
@@ -142,8 +174,9 @@ function CoinLogo({ symbol, size = "md" }: { symbol: string; size?: "sm" | "md" 
 }
 
 function useTickerFeed(coins: LiveCoin[], enabled = true) {
-  const [tickers, setTickers] = useState<Record<string, MarketTicker>>({});
-  const [isStale, setIsStale] = useState(false);
+  const fallbackTickers = useMemo(() => createFallbackTickers(coins), [coins]);
+  const [tickers, setTickers] = useState<Record<string, MarketTicker>>(fallbackTickers);
+  const [isStale, setIsStale] = useState(true);
   const pairs = useMemo(
     () => Array.from(new Set(coins.map((coin) => coin.pair))).sort().join(","),
     [coins]
@@ -151,6 +184,8 @@ function useTickerFeed(coins: LiveCoin[], enabled = true) {
 
   useEffect(() => {
     if (!enabled || !pairs) return;
+
+    setTickers((current) => ({ ...fallbackTickers, ...current }));
 
     let cancelled = false;
     let requestInFlight = false;
@@ -168,8 +203,9 @@ function useTickerFeed(coins: LiveCoin[], enabled = true) {
         const payload = (await response.json()) as MarketResponse;
         if (cancelled) return;
 
-        setTickers(Object.fromEntries(payload.tickers.map((ticker) => [ticker.pair, ticker])));
-        setIsStale(Boolean(payload.stale));
+        const liveTickers = Object.fromEntries(payload.tickers.map((ticker) => [ticker.pair, ticker]));
+        setTickers({ ...fallbackTickers, ...liveTickers });
+        setIsStale(Boolean(payload.stale) || payload.tickers.length === 0);
       } catch {
         if (!cancelled) setIsStale(true);
       } finally {
@@ -184,7 +220,7 @@ function useTickerFeed(coins: LiveCoin[], enabled = true) {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [enabled, pairs]);
+  }, [enabled, fallbackTickers, pairs]);
 
   return { tickers, isStale };
 }
@@ -233,7 +269,7 @@ export function HeroPriceCard({ coin, locale }: { coin: LiveCoin; locale: Locale
         {[
           [copy.currentPrice, `$${formatPrice(ticker?.price, locale)}`],
           [copy.change24h, formatChange(ticker?.changePercent, locale)],
-          [copy.source, isStale ? "Cache/API" : "Binance/API"],
+          [copy.source, isStale || ticker?.status === "fallback" ? copy.sampleSource : "Binance/API"],
           [copy.refresh, copy.refreshValue]
         ].map(([label, value]) => (
           <div className="p-4" key={label}>

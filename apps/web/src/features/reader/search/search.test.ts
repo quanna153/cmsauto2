@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 import { searchArticles } from "./adapter";
-import { searchMockArticles } from "./mock";
+import { getFallbackReaderArticles } from "../fallback-articles";
 
 // Stub global fetch so unit tests run without a real API server.
 // The adapter falls back to mock data when fetch throws.
@@ -9,7 +9,7 @@ function mockFetchFail() {
   vi.stubGlobal("fetch", () => Promise.reject(new Error("no server")));
 }
 
-function mockFetchSuccess(articles = searchMockArticles) {
+function mockFetchSuccess(articles = getFallbackReaderArticles("vi-vn")) {
   vi.stubGlobal(
     "fetch",
     () =>
@@ -66,7 +66,7 @@ describe("searchArticles — adapter", () => {
 
   it("filters by locale — en-us results do not appear in vi-vn search", async () => {
     // API returns only vi-vn articles for this locale
-    const viArticles = searchMockArticles.filter((a) => a.locale === "vi-vn");
+    const viArticles = getFallbackReaderArticles("vi-vn");
     mockFetchSuccess(viArticles);
     const results = await searchArticles("bitcoin", "vi-vn");
     expect(results.every((r) => r.locale === "vi-vn")).toBe(true);

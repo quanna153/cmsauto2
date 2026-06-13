@@ -3,6 +3,7 @@ import { ArrowRight, BookOpenText, Mail, ShieldCheck, TrendingUp, WalletCards } 
 import Link from "next/link";
 
 import { getReaderArticles } from "../adapter";
+import { getFallbackReaderArticles } from "../fallback-articles";
 import type { ReaderArticle } from "../model";
 import {
   HeroArticleCarousel,
@@ -13,6 +14,7 @@ import {
   TopGainers,
   type LiveCoin
 } from "./home-live-market";
+import { CryptoSphere } from "./crypto-sphere";
 
 type FeatureArticle = {
   title: string;
@@ -51,7 +53,10 @@ const homeCopy = {
     bulletinText: "Đọc bài mới nhất về thị trường, phân tích và kiến thức trên CoinRadar.",
     bulletinAction: "Xem bài mới",
     readMinutes: "phút đọc",
-    noUpdates: "Chưa có bài viết mới."
+    globeEyebrow: "Dữ liệu không biên giới",
+    globeTitle: "Một góc nhìn toàn cầu cho thị trường luôn chuyển động",
+    globeText: "CoinRadar kết nối giá, dòng tiền và tin tức từ nhiều khu vực để mỗi biến động được đặt đúng trong bối cảnh của nó.",
+    globePoints: ["Nguồn tin được chọn lọc", "Dữ liệu thị trường cập nhật", "Bối cảnh rõ ràng, dễ đọc"]
   },
   "en-us": {
     fallbackTitle: "Follow crypto markets with clear data and context",
@@ -69,9 +74,12 @@ const homeCopy = {
     bulletinText: "Read the latest market coverage, analysis and explainers on CoinRadar.",
     bulletinAction: "Browse latest articles",
     readMinutes: "min read",
-    noUpdates: "No new articles yet."
+    globeEyebrow: "Borderless intelligence",
+    globeTitle: "A global view of a market that never stops",
+    globeText: "CoinRadar connects prices, capital flows and news across regions so every market move appears in the context that shaped it.",
+    globePoints: ["Curated industry sources", "Current market data", "Clear, readable context"]
   }
-} satisfies Record<Locale, Record<string, string>>;
+} satisfies Record<Locale, Record<string, string | string[]>>;
 
 const topicCopy = {
   "vi-vn": [
@@ -133,7 +141,7 @@ function HeroSection({ slides, locale }: { slides: FeatureArticle[]; locale: Loc
   return (
     <section className="relative overflow-hidden bg-[#FAFAF7]">
       <InlineMarketTicker coins={coreCoins.slice(0, 6)} locale={locale} />
-      <div className="relative mx-auto grid max-w-7xl gap-8 px-5 py-10 md:py-14 lg:grid-cols-[minmax(0,0.86fr)_minmax(26rem,0.9fr)] lg:items-center">
+      <div className="relative mx-auto grid max-w-7xl gap-8 px-5 py-8 md:py-10 lg:grid-cols-[minmax(0,0.86fr)_minmax(26rem,0.9fr)] lg:items-center">
         <HeroArticleCarousel locale={locale} marketHref={href(locale, "/markets")} slides={slides} />
         <HeroPriceCard coin={coreCoins[0]} locale={locale} />
       </div>
@@ -152,7 +160,6 @@ function LatestUpdates({ articles, locale }: { articles: ReaderArticle[]; locale
         </Link>
       </div>
       <div className="space-y-4">
-        {articles.length === 0 ? <p className="text-sm text-[#6B7280]">{copy.noUpdates}</p> : null}
         {articles.slice(0, 4).map((article) => (
           <Link className="grid grid-cols-[3.6rem_4.8rem_minmax(0,1fr)] gap-3 text-sm transition hover:text-[#A97900]" href={articleHref(locale, article)} key={article.id}>
             <span className="text-[#6B7280]">{formatTime(article.publishedAt, locale)}</span>
@@ -191,6 +198,35 @@ function TopicsSection({ locale }: { locale: Locale }) {
             </span>
           </Link>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function GlobalMarketSection({ locale }: { locale: Locale }) {
+  const copy = homeCopy[locale];
+  const points = copy.globePoints as string[];
+
+  return (
+    <section className="relative scroll-mt-20 overflow-hidden border-y border-[#E7DFCF] bg-white md:scroll-mt-24">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_50%,rgba(213,163,25,0.12),transparent_34%)]" />
+      <div className="relative mx-auto grid max-w-7xl items-center gap-6 px-5 py-10 lg:grid-cols-[minmax(20rem,0.72fr)_minmax(32rem,1.18fr)] lg:py-12">
+        <div className="max-w-xl">
+          <p className="text-xs font-semibold uppercase text-[#A97900]">{copy.globeEyebrow}</p>
+          <h2 className="mt-3 text-3xl font-semibold leading-tight text-[#111111] md:text-4xl">{copy.globeTitle}</h2>
+          <p className="mt-4 text-sm leading-7 text-[#5F6673] md:text-base">{copy.globeText}</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            {points.map((point, index) => (
+              <div className="flex items-center gap-3 border-t border-[#EFE7D6] pt-3" key={point}>
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#111111] text-xs font-semibold text-[#F5D98A]">{index + 1}</span>
+                <span className="text-sm font-semibold text-[#303642]">{point}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="relative h-[22rem] min-w-0 sm:h-[27rem] lg:h-[31rem]">
+          <CryptoSphere locale={locale} />
+        </div>
       </div>
     </section>
   );
@@ -284,11 +320,12 @@ function readingTime(article: ReaderArticle) {
 }
 
 export async function ReaderHomeFeature({ locale }: { locale: Locale }) {
-  let articles: ReaderArticle[] = [];
+  let articles = getFallbackReaderArticles(locale);
   try {
-    articles = await getReaderArticles(locale);
+    const apiArticles = await getReaderArticles(locale);
+    articles = apiArticles.length ? apiArticles : getFallbackReaderArticles(locale);
   } catch {
-    articles = [];
+    articles = getFallbackReaderArticles(locale);
   }
 
   const heroSlides = mapHeroSlides(locale, articles);
@@ -296,6 +333,7 @@ export async function ReaderHomeFeature({ locale }: { locale: Locale }) {
     <main className="bg-[#FAFAF7] font-sans text-[#111111]">
       <HomeMarketProvider coins={coreCoins}>
         <HeroSection locale={locale} slides={heroSlides} />
+        <GlobalMarketSection locale={locale} />
         <DashboardSection articles={articles} locale={locale} />
       </HomeMarketProvider>
       <TopicsSection locale={locale} />

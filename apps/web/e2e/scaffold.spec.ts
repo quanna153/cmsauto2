@@ -1,5 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
 
+async function readCanvasFrame(page: Page) {
+  return page.locator('[data-home-globe-scene="true"] canvas').evaluate((canvasElement) => {
+    const canvas = canvasElement as HTMLCanvasElement;
+    const context = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (!context) return { checksum: 0, visibleSamples: 0 };
+
+    const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+    context.readPixels(0, 0, canvas.width, canvas.height, context.RGBA, context.UNSIGNED_BYTE, pixels);
+    let checksum = 0;
+    let visibleSamples = 0;
+    for (let index = 0; index < pixels.length; index += 64) {
+      if (pixels[index + 3] > 0) visibleSamples += 1;
+      checksum = (checksum * 31 + pixels[index] + pixels[index + 1] * 3 + pixels[index + 2] * 7) % 2_147_483_647;
+    }
+    return { checksum, visibleSamples };
+  });
+}
+
 const user = {
   id: "playwright-superadmin",
   username: "admin",
@@ -47,7 +65,7 @@ test("renders reader scaffold routes in both locales", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Thị trường crypto hôm nay" })).toBeVisible();
 
   await page.goto("/en-us/about");
-  await expect(page.getByRole("heading", { level: 1, name: /CoinRadar/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /crypto newsroom focused on data/i })).toBeVisible();
 });
 
 test("shares one homepage ticker request and renders English reader copy", async ({ page }) => {
@@ -73,6 +91,37 @@ test("shares one homepage ticker request and renders English reader copy", async
   await expect(page.getByText("Latest updates", { exact: true })).toBeVisible();
   await expect.poll(() => tickerRequests).toBe(1);
   await expect(page.getByText("Binance/API", { exact: true })).toBeVisible();
+
+  const globe = page.locator('[data-home-globe-scene="true"] canvas');
+  await globe.scrollIntoViewIfNeeded();
+  await expect(globe).toBeVisible();
+  await expect(globe).toHaveAttribute("data-rendered", "true");
+  const box = await globe.boundingBox();
+  expect(box?.width).toBeGreaterThan(300);
+  expect(box?.height).toBeGreaterThan(300);
+
+  const firstFrame = await readCanvasFrame(page);
+  expect(firstFrame.visibleSamples).toBeGreaterThan(100);
+  await page.waitForTimeout(250);
+  const secondFrame = await readCanvasFrame(page);
+  expect(secondFrame.checksum).not.toBe(firstFrame.checksum);
+});
+
+test("shows complete homepage fallback data when the market API is unavailable", async ({ page }) => {
+  await page.route("**/public/markets/tickers?*", async (route) => {
+    await route.fulfill({ status: 503, json: { error: "Market provider unavailable" } });
+  });
+  await page.route("**/public/articles?*", async (route) => {
+    await route.fulfill({ status: 503, json: { error: "Article provider unavailable" } });
+  });
+
+  await page.goto("/vi-vn");
+  await expect(page.getByText("Dữ liệu mẫu", { exact: true })).toBeVisible();
+  await expect(page.getByText("$63,702.12", { exact: true }).first()).toBeVisible();
+  const latestUpdates = page.locator("article").filter({ has: page.getByText("Cập nhật mới nhất", { exact: true }) });
+  await expect(latestUpdates.locator("a").nth(1)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("Đang cập nhật");
+  await expect(page.locator("body")).not.toContainText("Chưa có bài viết mới");
 });
 
 test("renders the article index in both locales", async ({ page }) => {

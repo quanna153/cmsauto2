@@ -12,37 +12,51 @@ type FooterLink = {
   path: string;
 };
 
-const aboutLinks: FooterLink[] = [
-  { label: "Về CoinRadar", path: "/about" },
-  { label: "Điều Khoản Sử Dụng", path: "/about" },
-  { label: "Chính Sách Bảo Mật", path: "/about" },
-  { label: "Miễn Trừ Trách Nhiệm", path: "/about" },
-  { label: "Chính Sách Kiểm Chứng Thông Tin", path: "/about" },
-  { label: "Chính Sách Biên Tập", path: "/about" },
-  { label: "Chính Sách Chỉnh Sửa", path: "/about" },
-  { label: "Liên hệ", path: "/about" }
-];
-
-const newsLinks: FooterLink[] = [
-  { label: "Bitcoin", path: "/articles" },
-  { label: "Altcoin", path: "/articles" },
-  { label: "Blockchain", path: "/articles" },
-  { label: "DeFi", path: "/articles" },
-  { label: "Pháp Lý", path: "/articles" },
-  { label: "Cảnh Báo Lừa Đảo", path: "/articles" }
-];
-const marketLinks: FooterLink[] = [
-  { label: "Dự Đoán Thị Trường", path: "/markets" },
-  { label: "Phân Tích Thị Trường", path: "/analysis" }
-];
-const knowledgeLinks: FooterLink[] = [
-  { label: "Cho Người Mới", path: "/knowledge" },
-  { label: "Cho Nhà Giao Dịch", path: "/knowledge" },
-  { label: "Người Nổi Tiếng", path: "/knowledge" }
-];
+const footerCopy = {
+  "vi-vn": {
+    description: "CoinRadar mang đến góc nhìn rõ ràng về thị trường crypto cho người đọc Việt. Dữ liệu, kiến thức và phân tích được trình bày ngắn gọn để bạn theo dõi biến động mỗi ngày.",
+    emailLabel: "Địa chỉ email của bạn",
+    emailPlaceholder: "Địa chỉ email của bạn",
+    contact: "Liên hệ",
+    copyright: "Copyright © CoinRadar Việt Nam 2026. All Rights Reserved",
+    down: "Xuống cuối trang",
+    up: "Lên đầu trang",
+    columns: [
+      { title: "Về chúng tôi", links: [{ label: "Về CoinRadar", path: "/about" }, { label: "Nguyên tắc biên tập", path: "/about" }, { label: "Liên hệ", path: "/about" }] },
+      { title: "Kiến thức", links: [{ label: "Cho người mới", path: "/knowledge" }, { label: "DeFi", path: "/knowledge" }, { label: "Quản trị rủi ro", path: "/knowledge" }] },
+      { title: "Tin tức", links: [{ label: "Bitcoin", path: "/articles" }, { label: "Altcoin", path: "/articles" }, { label: "Blockchain", path: "/articles" }] },
+      { title: "Thị trường", links: [{ label: "Bảng giá", path: "/markets" }, { label: "Phân tích", path: "/analysis" }] }
+    ]
+  },
+  "en-us": {
+    description: "CoinRadar delivers clear crypto market context for global readers. Data, explainers and analysis are presented in a focused format for daily market tracking.",
+    emailLabel: "Your email address",
+    emailPlaceholder: "Your email address",
+    contact: "Contact",
+    copyright: "Copyright © CoinRadar Global 2026. All Rights Reserved",
+    down: "Go to footer",
+    up: "Back to top",
+    columns: [
+      { title: "About", links: [{ label: "About CoinRadar", path: "/about" }, { label: "Editorial principles", path: "/about" }, { label: "Contact", path: "/about" }] },
+      { title: "Knowledge", links: [{ label: "Beginners", path: "/knowledge" }, { label: "DeFi", path: "/knowledge" }, { label: "Risk management", path: "/knowledge" }] },
+      { title: "News", links: [{ label: "Bitcoin", path: "/articles" }, { label: "Altcoins", path: "/articles" }, { label: "Blockchain", path: "/articles" }] },
+      { title: "Markets", links: [{ label: "Prices", path: "/markets" }, { label: "Analysis", path: "/analysis" }] }
+    ]
+  }
+} satisfies Record<Locale, {
+  columns: Array<{ links: FooterLink[]; title: string }>;
+  contact: string;
+  copyright: string;
+  description: string;
+  down: string;
+  emailLabel: string;
+  emailPlaceholder: string;
+  up: string;
+}>;
 
 export function ReaderFooter({ locale }: { locale: Locale }) {
   const homeHref = `/${locale}`;
+  const c = footerCopy[locale];
   const [isNearTop, setIsNearTop] = useState(true);
 
   useEffect(() => {
@@ -96,36 +110,34 @@ export function ReaderFooter({ locale }: { locale: Locale }) {
         <section>
           <CoinRadarLogo href={homeHref} tone="dark" />
           <p className="mt-5 max-w-md text-sm font-medium leading-6 text-white/76">
-            CoinRadar mang đến góc nhìn toàn diện về thị trường Crypto dành cho nhà đầu tư Việt. Dữ liệu được cập nhật liên tục, trình bày trực
-            quan, giúp bạn theo dõi biến động, nhận diện xu hướng và đưa ra quyết định chủ động hơn.
+            {c.description}
           </p>
           <form className="mt-6 flex max-w-md overflow-hidden rounded-lg border border-[#C8A227]/35 bg-white/6">
             <label className="sr-only" htmlFor="footer-email">
-              Địa chỉ email của bạn
+              {c.emailLabel}
             </label>
             <input
               className="min-w-0 flex-1 bg-transparent px-5 py-3 text-sm text-white placeholder:text-white/58 focus:outline-none"
               id="footer-email"
-              placeholder="Địa chỉ email của bạn"
+              placeholder={c.emailPlaceholder}
               type="email"
             />
             <button className="bg-[#C8A227] px-5 py-3 text-sm font-bold text-[#0F1115] transition hover:bg-[#F5E7B3]" type="button">
-              Liên Hệ Ngay
+              {c.contact}
             </button>
           </form>
         </section>
 
-        <FooterColumn links={aboutLinks} locale={locale} title="Về chúng tôi" />
-        <FooterColumn links={knowledgeLinks} locale={locale} title="Kiến Thức" />
-        <FooterColumn links={newsLinks} locale={locale} title="Tin Tức" />
-        <FooterColumn links={marketLinks} locale={locale} title="Thị Trường" />
+        {c.columns.map((column) => (
+          <FooterColumn key={column.title} links={column.links} locale={locale} title={column.title} />
+        ))}
       </div>
 
       <div className="border-t border-white/10 bg-[#111827] px-5 py-4">
         <div className="relative mx-auto max-w-7xl text-center text-xs font-semibold text-white/70">
-          Copyright © CoinRadar Việt Nam 2026. All Rights Reserved
+          {c.copyright}
           <a
-            aria-label={isNearTop ? "Xuống cuối trang" : "Lên đầu trang"}
+            aria-label={isNearTop ? c.down : c.up}
             className="fixed bottom-5 right-5 z-40 flex size-11 items-center justify-center rounded-lg bg-[#C8A227] text-[#0F1115] shadow-lg shadow-slate-950/20 transition hover:bg-[#F5E7B3] focus:outline-none focus:ring-2 focus:ring-[#C8A227] focus:ring-offset-2 focus:ring-offset-[#111827]"
             href={isNearTop ? "#site-footer" : "#top"}
             onClick={handleScrollToggle}

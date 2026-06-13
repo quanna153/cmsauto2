@@ -4,6 +4,7 @@ import type { Locale } from "@cmsauto/contracts";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { formatReaderCompactUsd, readerFallbackGlobalStats } from "@/features/reader/market-data";
 import { publicApiUrl } from "@/lib/api";
 
 type GlobalMarketStats = {
@@ -22,8 +23,7 @@ const copy = {
     volume: "Khối lượng 24h",
     btcDominance: "BTC dominance",
     ethDominance: "ETH dominance",
-    loading: "Đang tải dữ liệu thị trường...",
-    fallback: "Dữ liệu dự phòng"
+    fallback: "Dữ liệu mẫu"
   },
   "en-us": {
     viewAll: "View markets",
@@ -31,13 +31,12 @@ const copy = {
     volume: "24h volume",
     btcDominance: "BTC dominance",
     ethDominance: "ETH dominance",
-    loading: "Loading market data...",
-    fallback: "Fallback data"
+    fallback: "Sample data"
   }
 } satisfies Record<Locale, Record<string, string>>;
 
 export function ArticlesMarketPulse({ locale }: { locale: Locale }) {
-  const [stats, setStats] = useState<GlobalMarketStats | null>(null);
+  const [stats, setStats] = useState<GlobalMarketStats>(readerFallbackGlobalStats);
   const labels = copy[locale];
 
   useEffect(() => {
@@ -82,27 +81,21 @@ export function ArticlesMarketPulse({ locale }: { locale: Locale }) {
         <h2 className="text-lg font-bold text-[#080B11]">Market pulse</h2>
         <Link className="text-xs font-bold text-[#A36F00]" href={`/${locale}/markets`}>{labels.viewAll} →</Link>
       </div>
-      {!stats ? <p className="mt-5 text-sm text-[#667085]">{labels.loading}</p> : null}
-      {stats ? (
-        <>
-          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-[#E6E9EE]">
-            {items.map(([label, value]) => (
-              <div className="bg-white p-4" key={label}>
-                <p className="text-xs font-semibold text-[#667085]">{label}</p>
-                <p className="mt-2 text-xl font-bold text-[#080B11]">{value}</p>
-              </div>
-            ))}
+      <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-[#E6E9EE]">
+        {items.map(([label, value]) => (
+          <div className="bg-white p-4" key={label}>
+            <p className="text-xs font-semibold text-[#667085]">{label}</p>
+            <p className="mt-2 text-xl font-bold text-[#080B11]">{value}</p>
           </div>
-          {stats.stale ? <p className="mt-3 text-xs font-semibold text-[#A36F00]">{labels.fallback}</p> : null}
-        </>
-      ) : null}
+        ))}
+      </div>
+      {stats.stale ? <p className="mt-3 text-xs font-semibold text-[#A36F00]">{labels.fallback}</p> : null}
     </section>
   );
 }
 
 function formatCompactUsd(value: number) {
-  if (!Number.isFinite(value)) return "-";
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2, style: "currency", currency: "USD" }).format(value);
+  return formatReaderCompactUsd(value);
 }
 
 function formatPercent(value: number) {
