@@ -3,7 +3,7 @@
 import { useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
-import { Bold, CalendarClock, ChevronDown, ChevronRight, ExternalLink, Eye, FilePenLine, Highlighter, Image as ImageIcon, Italic, Link2, List, Redo2, Save, Table2, Trash2, Underline, Undo2 } from "lucide-react";
+import { Bold, CalendarClock, ChevronDown, ChevronRight, ExternalLink, Eye, Highlighter, Image as ImageIcon, Italic, Link2, List, Redo2, Save, Table2, Trash2, Underline, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,6 @@ export function ManualPostFeature() {
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
   const [attemptedAction, setAttemptedAction] = useState<"draft" | "preview" | "publish" | "schedule" | null>(null);
   const [previewError, setPreviewError] = useState("");
-  const [publishMenuOpen, setPublishMenuOpen] = useState(false);
   const [schedulePanelOpen, setSchedulePanelOpen] = useState(false);
   const [publishAtLocal, setPublishAtLocal] = useState(() => toDatetimeLocalValue(new Date(Date.now() + 30 * 60 * 1000).toISOString()));
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
@@ -79,20 +78,16 @@ export function ManualPostFeature() {
     });
   }
 
-  function submit() {
-    setAttemptedAction("publish");
-    setPublishMenuOpen(false);
-    const currentContent = commitEditorContent();
-    if (title.trim().length === 0 || currentContent.trim().length === 0) return;
-    create.mutate();
-  }
-
   function schedulePost() {
     setAttemptedAction("schedule");
-    setPublishMenuOpen(false);
     const currentContent = commitEditorContent();
     if (title.trim().length === 0 || currentContent.trim().length === 0 || !isValidDatetimeLocal(publishAtLocal)) return;
     schedule.mutate();
+  }
+
+  function openSchedulePanel() {
+    setSchedulePanelOpen(true);
+    setAttemptedAction(null);
   }
 
   function save() {
@@ -108,7 +103,6 @@ export function ManualPostFeature() {
     setUploadedImages({});
     setAttemptedAction(null);
     setPreviewError("");
-    setPublishMenuOpen(false);
     setSchedulePanelOpen(false);
     setTablePickerOpen(false);
     setListMenuOpen(false);
@@ -333,7 +327,7 @@ export function ManualPostFeature() {
   const busy = saveDraft.isPending || create.isPending || schedule.isPending;
 
   return <>
-    <PageHeader description="Nhập tiêu đề và nội dung, có thể lưu nháp, xem trước hoặc publish ngay ra Reader." eyebrow="Admin" title="Đăng bài thủ công" />
+    <PageHeader description="Nhập tiêu đề và nội dung, có thể lưu nháp, xem trước hoặc đặt lịch đăng bài." eyebrow="Admin" title="Đăng bài thủ công" />
     <section className="grid gap-4 rounded-xl border bg-white p-5">
       <style>{manualPostEditorTypography}</style>
       <label className="grid gap-1 text-sm font-semibold">
@@ -558,33 +552,7 @@ export function ManualPostFeature() {
         <div className="flex flex-wrap justify-end gap-3">
           <Button disabled={busy} onClick={save} variant="secondary">{saveDraft.isPending ? "Đang lưu..." : <><Save size={16} />Lưu nháp</>}</Button>
           <Button disabled={busy} onClick={preview} type="button" variant="secondary"><Eye size={16} />Xem trước</Button>
-          <div className="relative flex">
-            <Button className="rounded-r-none" disabled={busy} onClick={submit} type="button">{create.isPending ? "Đang đăng..." : <><FilePenLine size={16} />Đăng bài thủ công</>}</Button>
-            <button
-              aria-expanded={publishMenuOpen}
-              aria-label="Mở menu đăng bài"
-              className="inline-flex items-center justify-center rounded-r-lg border-l border-[#80640b] bg-[#a88412] px-2 text-white transition hover:bg-[#80640b] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2"
-              disabled={busy}
-              onClick={() => setPublishMenuOpen((current) => !current)}
-              type="button"
-            >
-              <ChevronDown size={16} />
-            </button>
-            {publishMenuOpen ? <div className="absolute right-0 top-full z-10 mt-2 min-w-48 rounded-lg border bg-white p-1 text-sm font-semibold shadow-lg">
-              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[#273247] hover:bg-[#f7f7f4]" onClick={submit} type="button"><FilePenLine size={16} />Xuất bản ngay</button>
-              <button
-                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[#273247] hover:bg-[#f7f7f4]"
-                onClick={() => {
-                  setSchedulePanelOpen(true);
-                  setPublishMenuOpen(false);
-                  setAttemptedAction(null);
-                }}
-                type="button"
-              >
-                <CalendarClock size={16} />Đặt lịch đăng bài
-              </button>
-            </div> : null}
-          </div>
+          <Button disabled={busy} onClick={openSchedulePanel} type="button"><CalendarClock size={16} />Đặt lịch đăng bài</Button>
           {create.data?.article.id || saveDraft.data?.article.id || schedule.data?.article.id ? <Link href="/admin/articles"><Button type="button" variant="secondary">Về danh sách</Button></Link> : null}
         </div>
       </div>
