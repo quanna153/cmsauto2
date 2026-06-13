@@ -115,10 +115,12 @@ function getFallbackChartUrl(symbol: string) {
 
 export function TradingViewChart({
   symbol,
-  heightClass = "h-[420px] md:h-[520px] lg:h-[600px]"
+  heightClass = "h-[420px] md:h-[520px] lg:h-[600px]",
+  theme = "dark"
 }: {
   symbol: string;
   heightClass?: string;
+  theme?: "dark" | "light";
 }) {
   const reactId = useId();
   const containerId = useMemo(() => `tradingview-${reactId.replace(/:/g, "")}`, [reactId]);
@@ -160,7 +162,7 @@ export function TradingViewChart({
           symbol,
           interval: "D",
           timezone: "Asia/Ho_Chi_Minh",
-          theme: "dark",
+          theme,
           style: "1",
           locale: "vi_VN",
           enable_publishing: false,
@@ -194,13 +196,13 @@ export function TradingViewChart({
   }, [containerId, symbol]);
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-[#2B313D] bg-[#0F1115]">
+    <div className={`relative overflow-hidden rounded-lg border ${theme === "light" ? "border-[#E9DDBF] bg-white" : "border-[#2B313D] bg-[#0F1115]"}`}>
       <div className={heightClass} id={containerId} ref={containerRef} />
       {useFallback ? (
         <iframe
           className="absolute inset-0 h-full w-full border-0"
           loading="lazy"
-          src={getFallbackChartUrl(symbol)}
+          src={getFallbackChartUrl(symbol).replace("theme=dark", `theme=${theme}`)}
           title={`${symbol} fallback chart`}
         />
       ) : null}
