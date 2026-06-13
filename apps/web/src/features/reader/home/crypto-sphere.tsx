@@ -285,18 +285,34 @@ export function CryptoSphere() {
         transparent: true
       })
     );
+    sphere.renderOrder = 0;
     group.add(sphere);
+
+    const oceanGrid = new THREE.Mesh(
+      new THREE.SphereGeometry(1.492, 48, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0xc8a227,
+        depthTest: true,
+        depthWrite: false,
+        opacity: 0.1,
+        transparent: true,
+        wireframe: true
+      })
+    );
+    oceanGrid.renderOrder = 1;
+    group.add(oceanGrid);
 
     let landGeometry = buildLandMassGeometry(isLandPoint);
     const landMaterial = new THREE.MeshBasicMaterial({
       color: 0x0f1115,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
       opacity: 0.76,
       side: THREE.DoubleSide,
       transparent: true
     });
     const land = new THREE.Mesh(landGeometry, landMaterial);
+    land.renderOrder = 2;
     group.add(land);
     let disposed = false;
 
@@ -481,6 +497,8 @@ export function CryptoSphere() {
       atmosphere.material.dispose();
       sphere.geometry.dispose();
       sphere.material.dispose();
+      oceanGrid.geometry.dispose();
+      oceanGrid.material.dispose();
       landGeometry.dispose();
       landMaterial.dispose();
       ringA.geometry.dispose();

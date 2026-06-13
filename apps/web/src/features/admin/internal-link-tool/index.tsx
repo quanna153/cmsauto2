@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Link2, RotateCcw, WandSparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
@@ -38,7 +38,6 @@ export function InternalLinkToolFeature() {
   const [suggestions, setSuggestions] = useState<InternalLinkSuggestion[]>([]);
   const [manualRematchSuggestionIds, setManualRematchSuggestionIds] = useState<Set<string>>(() => new Set());
   const [rejectedSuggestionHistory, setRejectedSuggestionHistory] = useState<InternalLinkSuggestion[]>([]);
-  const [outputMarkdown, setOutputMarkdown] = useState("");
   const historyQuery = useQuery({
     queryKey: ["history"],
     queryFn: () => getJson<{ records: HistoryRecord[] }>("/history")
@@ -77,7 +76,6 @@ export function InternalLinkToolFeature() {
     onSuccess: async (result) => {
       setSuggestions(result.suggestions);
       setManualRematchSuggestionIds(new Set());
-      setOutputMarkdown("");
       await client.invalidateQueries({ queryKey: ["history"] });
     }
   });
@@ -88,15 +86,10 @@ export function InternalLinkToolFeature() {
       suggestions
     }),
     onSuccess: async (result) => {
-      setOutputMarkdown(result.markdown);
+      setContent(result.markdown);
       await client.invalidateQueries({ queryKey: ["history"] });
     }
   });
-
-  useEffect(() => {
-    if (!outputMarkdown) return;
-    setContent(outputMarkdown);
-  }, [outputMarkdown]);
 
   const acceptedCount = suggestions.filter((suggestion) => suggestion.status === "accepted").length;
   const busy = suggest.isPending || apply.isPending;
@@ -135,7 +128,6 @@ export function InternalLinkToolFeature() {
     setSuggestions(response?.suggestions ?? []);
     setManualRematchSuggestionIds(new Set());
     setRejectedSuggestionHistory([]);
-    setOutputMarkdown(response?.markdown ?? "");
   }
 
   return <>
@@ -204,10 +196,6 @@ export function InternalLinkToolFeature() {
                 </div>}
         </section>
 
-        {outputMarkdown ? <section className="rounded-xl border bg-white p-4">
-          <h2 className="font-semibold text-[#172033]">Output đã chèn link</h2>
-          <Textarea className="mt-3 min-h-[300px] font-mono" onChange={(event) => setOutputMarkdown(event.target.value)} value={outputMarkdown} />
-        </section> : null}
       </div>
 
       <aside className="space-y-4">
@@ -238,7 +226,6 @@ export function InternalLinkToolFeature() {
           setSuggestions([]);
           setManualRematchSuggestionIds(new Set());
           setRejectedSuggestionHistory([]);
-          setOutputMarkdown("");
         }} type="button" variant="secondary">
           <RotateCcw size={16} />Làm bài khác
         </Button>
