@@ -252,6 +252,17 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS image_library (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  url TEXT NOT NULL,
+  metadata_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_image_library_created_at ON image_library(created_at DESC);
 `;
 
 let database: SqlDatabase | null = null;
