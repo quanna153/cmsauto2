@@ -9,6 +9,7 @@ import {
   ImagePlus,
   Link2,
   ListTree,
+  Loader2,
   RotateCcw,
   Save,
   Search,
@@ -25,9 +26,9 @@ import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states"
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
-import { getJson, patchJson, postJson } from "@/lib/api";
-import { ImagePickerModal, ImageGeneratorModal } from "./image-modals";
+import type { ArticleImageAspectRatio, ArticleImageKind, ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
+import { getJson, patchJson, postJson, publicApiUrl } from "@/lib/api";
+import { ImagePickerModal } from "./image-modals";
 
 type Keyword = ArticleSession["keywordIdeas"][number];
 type Brief = NonNullable<ArticleSession["brief"]>;
@@ -38,6 +39,14 @@ type AiStep = Exclude<Step, "ready">;
 type PromptTemplates = Record<AiStep, string>;
 type PromptRecord = { key: AiStep; value: string; revision: number; updatedAt: string };
 type CompletedSteps = Record<Step, boolean>;
+type ImageLibraryItem = {
+  id: string;
+  createdAt: string;
+  provider: string;
+  prompt: string;
+  url: string;
+  metadataJson: string;
+};
 type FactorySessionValues = {
   language: "vi" | "en";
   seedKeyword: string;
@@ -304,7 +313,7 @@ export function FactoryFeature() {
 
     try {
       setSelectedStep("keywords");
-      setBusyLabel("01/06 Đang lấy keyword và volume từ Semrush...");
+      setBusyLabel("01/07 Đang lấy keyword và volume từ Semrush...");
       const keywordResult = await apiPost<{ keywordIdeas: Keyword[] }>("/keywords/suggest", {
         seedKeyword: nextSeedKeyword,
         language,
@@ -327,7 +336,7 @@ export function FactoryFeature() {
       setLinks([]);
 
       setSelectedStep("brief");
-      setBusyLabel("02/06 Đang đọc top 10 kết quả và rút insight đối thủ...");
+      setBusyLabel("02/07 Đang đọc top 10 kết quả và rút insight đối thủ...");
       const briefResult = await apiPost<{ brief: Brief }>("/brief/generate", {
         primaryKeyword: nextPrimary.keyword,
         secondaryKeywords: nextSecondary.map((item) => item.keyword),
@@ -338,7 +347,7 @@ export function FactoryFeature() {
       setBrief(nextBrief);
 
       setSelectedStep("outline");
-      setBusyLabel("03/06 Đang ghép keyword, volume và insight để sinh outline...");
+      setBusyLabel("03/07 Đang ghép keyword, volume và insight để sinh outline...");
       const outlineResult = await apiPost<{ outline: Outline }>("/outline/generate", {
         primaryKeyword: nextPrimary.keyword,
         secondaryKeywords: nextSecondary.map((item) => item.keyword),
@@ -351,7 +360,7 @@ export function FactoryFeature() {
       setOutline(nextOutline);
 
       setSelectedStep("draft");
-      setBusyLabel("04/06 Đang viết bản nháp bằng Gemini...");
+      setBusyLabel("04/07 Đang viết bản nháp bằng Gemini...");
       const draftResult = await apiPost<{ draft: Draft }>("/draft/generate", {
         primaryKeyword: nextPrimary.keyword,
         secondaryKeywords: nextSecondary.map((item) => item.keyword),
@@ -362,23 +371,34 @@ export function FactoryFeature() {
       const nextDraft = draftResult.draft;
       setDraft(nextDraft);
 
+      setBusyLabel("05/07 Đang tạo ảnh bìa và ảnh minh họa tự động...");
+      const generatedImages = await Promise.all([
+        generateArticleImageFromDraft({ draft: nextDraft, keyword: nextPrimary.keyword, kind: "hero" }),
+        generateArticleImageFromDraft({ draft: nextDraft, keyword: nextPrimary.keyword, kind: "inline" })
+      ]);
+      const nextDraftWithImages: Draft = {
+        ...nextDraft,
+        generatedImages: [...generatedImages, ...(nextDraft.generatedImages ?? [])]
+      };
+      setDraft(nextDraftWithImages);
+
       setSelectedStep("links");
-      setBusyLabel("05/06 Đang phân tích bản nháp và so khớp kho internal links...");
+      setBusyLabel("06/07 Đang phân tích bản nháp và so khớp kho internal links...");
       const linksResult = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
         primaryKeyword: nextPrimary.keyword,
         secondaryKeywords: nextSecondary.map((item) => item.keyword),
         language,
         prompt: promptTemplates.links,
-        draft: nextDraft
+        draft: nextDraftWithImages
       });
       const nextLinks = linksResult.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" as const : "pending" as const }));
       setLinks(nextLinks);
       setRejectedLinkHistory([]);
 
       setSelectedStep("ready");
-      setBusyLabel("06/06 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
+      setBusyLabel("07/07 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
       const applied = await apiPost<{ markdown: string }>("/links/apply", {
-        markdown: nextDraft.markdown,
+        markdown: nextDraftWithImages.markdown,
         suggestions: nextLinks
       });
       const savedArticle = await persistFactorySession({
@@ -390,7 +410,7 @@ export function FactoryFeature() {
         secondaryKeywordIds: nextSecondary.map((item) => item.id),
         brief: nextBrief,
         outline: nextOutline,
-        draft: nextDraft,
+        draft: nextDraftWithImages,
         linkSuggestions: nextLinks,
         finalMarkdown: applied.markdown
       }, { ready: true });
@@ -1057,7 +1077,7 @@ export function ArticleImagesPanel({
   onRemoveImage: (id: string) => void;
 }) {
   const [pickerModal, setPickerModal] = useState<{ isOpen: boolean; kind: "hero" | "inline" }>({ isOpen: false, kind: "hero" });
-  const [generatorModal, setGeneratorModal] = useState<{ isOpen: boolean; kind: "hero" | "inline" | "thumbnail", initialPrompt?: string, planId?: string }>({ isOpen: false, kind: "hero" });
+  const [generatingImageKey, setGeneratingImageKey] = useState<string | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
 
   const handleSuggestPrompts = async () => {
@@ -1073,6 +1093,25 @@ export function ArticleImagesPanel({
     }
   };
 
+  const generateImage = async (kind: "hero" | "inline", source?: GeneratedArticleImage) => {
+    if (!draft) return;
+    const imageKey = source?.id ?? `${kind}-new`;
+
+    try {
+      setGeneratingImageKey(imageKey);
+      const image = await generateArticleImageFromDraft({ draft, keyword, kind });
+
+      if (source) {
+        onRemoveImage(source.id);
+      }
+      onAddImage(image);
+    } catch (error) {
+      alert(`Lỗi tạo ảnh: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setGeneratingImageKey(null);
+    }
+  };
+
   const renderImages = (kind: "hero" | "inline") => {
     const filtered = images.filter(i => i.kind === kind);
     if (filtered.length === 0) return <p className="mt-2 rounded-lg bg-[#f7f7f4] p-3 text-sm text-[#687386]">Chưa có ảnh {kind === "hero" ? "bìa" : "chèn bài"}.</p>;
@@ -1080,10 +1119,12 @@ export function ArticleImagesPanel({
     return <div className="mt-2 grid gap-3">
       {filtered.map((image) => {
         const src = image.url || (image.base64 ? `data:${image.mimeType ?? "image/png"};base64,${image.base64}` : "");
+        const isGeneratingThisImage = generatingImageKey === image.id;
         return <article className="group relative grid gap-3 rounded-lg border p-3 md:grid-cols-[220px_minmax(0,1fr)]" key={image.id}>
           <Button 
             variant="danger" 
             className="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full p-0 group-hover:flex"
+            disabled={isGeneratingThisImage}
             onClick={() => onRemoveImage(image.id)}
           >
             <XCircle size={12} />
@@ -1097,26 +1138,40 @@ export function ArticleImagesPanel({
               <Badge>{image.status}</Badge>
               {image.status === "planned" && (
                 <Button
+                  disabled={busy || isGeneratingThisImage || Boolean(generatingImageKey)}
                   size="sm"
                   className="ml-2 h-6 px-2 text-xs"
-                  onClick={() => setGeneratorModal({ isOpen: true, kind: image.kind, initialPrompt: image.prompt, planId: image.id })}
+                  onClick={() => void generateImage(kind, image)}
                 >
-                  <Wand2 size={12} className="mr-1" /> Tạo ảnh ngay
+                  {isGeneratingThisImage ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Wand2 size={12} className="mr-1" />}
+                  {isGeneratingThisImage ? "Đang tạo..." : "Tạo ảnh ngay"}
                 </Button>
               )}
               {image.status !== "planned" && src && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="ml-2 h-6 px-2 text-xs"
-                  onClick={() => {
-                    const md = `![${image.altText || "Minh họa bài viết"}](${src})`;
-                    navigator.clipboard.writeText(md);
-                    alert("Đã copy mã Markdown! Bạn có thể dán vào nội dung bên dưới.");
-                  }}
-                >
-                  <FileText size={12} className="mr-1" /> Copy Markdown
-                </Button>
+                <>
+                  <Button
+                    disabled={busy || isGeneratingThisImage || Boolean(generatingImageKey)}
+                    size="sm"
+                    variant="secondary"
+                    className="ml-2 h-6 px-2 text-xs"
+                    onClick={() => void generateImage(kind, image)}
+                  >
+                    {isGeneratingThisImage ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Wand2 size={12} className="mr-1" />}
+                    {isGeneratingThisImage ? "Đang tạo..." : "Tạo lại"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      const md = `![${image.altText || "Minh họa bài viết"}](${src})`;
+                      navigator.clipboard.writeText(md);
+                      alert("Đã copy mã Markdown! Bạn có thể dán vào nội dung bên dưới.");
+                    }}
+                  >
+                    <FileText size={12} className="mr-1" /> Copy Markdown
+                  </Button>
+                </>
               )}
             </div>
             <p className="mt-3 text-sm font-semibold text-[#273247]">{image.altText}</p>
@@ -1133,7 +1188,7 @@ export function ArticleImagesPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#273247]">1. Ảnh bìa (Hero Image)</p>
-          <p className="mt-1 text-xs text-[#687386]">Dùng làm cover/thumbnail cho bài viết.</p>
+          <p className="mt-1 text-xs text-[#687386]">Dùng làm cover/thumbnail. Prompt được sinh tự động từ metadata và nội dung bài.</p>
         </div>
         <div className="flex gap-2">
           {draft && onAddImages && (
@@ -1144,8 +1199,9 @@ export function ArticleImagesPanel({
           <Button disabled={busy} onClick={() => setPickerModal({ isOpen: true, kind: "hero" })} size="sm" variant="secondary">
             <ImagePlus size={15} className="mr-2" />Chọn từ thư viện
           </Button>
-          <Button disabled={busy} onClick={() => setGeneratorModal({ isOpen: true, kind: "hero" })} size="sm" variant="secondary">
-            <Wand2 size={15} className="mr-2" />Tạo ảnh bìa
+          <Button disabled={busy || !draft || Boolean(generatingImageKey)} onClick={() => void generateImage("hero")} size="sm" variant="secondary">
+            {generatingImageKey === "hero-new" ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Wand2 size={15} className="mr-2" />}
+            {generatingImageKey === "hero-new" ? "Đang tạo..." : "Tạo ảnh bìa"}
           </Button>
         </div>
       </div>
@@ -1156,14 +1212,15 @@ export function ArticleImagesPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#273247]">2. Ảnh chèn trong bài (Inline Images)</p>
-          <p className="mt-1 text-xs text-[#687386]">Sử dụng prompt để sinh hình minh họa cho bài viết.</p>
+          <p className="mt-1 text-xs text-[#687386]">Tự tạo hình minh họa liên quan đến bài, không cần nhập prompt thủ công.</p>
         </div>
         <div className="flex gap-2">
           <Button disabled={busy} onClick={() => setPickerModal({ isOpen: true, kind: "inline" })} size="sm" variant="secondary">
             <ImagePlus size={15} className="mr-2" />Chọn từ thư viện
           </Button>
-          <Button disabled={busy} onClick={() => setGeneratorModal({ isOpen: true, kind: "inline" })} size="sm" variant="secondary">
-            <Wand2 size={15} className="mr-2" />Tạo ảnh chèn bài
+          <Button disabled={busy || !draft || Boolean(generatingImageKey)} onClick={() => void generateImage("inline")} size="sm" variant="secondary">
+            {generatingImageKey === "inline-new" ? <Loader2 size={15} className="mr-2 animate-spin" /> : <Wand2 size={15} className="mr-2" />}
+            {generatingImageKey === "inline-new" ? "Đang tạo..." : "Tạo ảnh chèn bài"}
           </Button>
         </div>
       </div>
@@ -1174,22 +1231,181 @@ export function ArticleImagesPanel({
       isOpen={pickerModal.isOpen} 
       kind={pickerModal.kind} 
       onClose={() => setPickerModal({ isOpen: false, kind: pickerModal.kind })} 
-    onPick={onAddImage} 
-    />
-    <ImageGeneratorModal 
-      isOpen={generatorModal.isOpen} 
-      kind={generatorModal.kind} 
-      initialPrompt={generatorModal.initialPrompt}
-      onClose={() => setGeneratorModal({ isOpen: false, kind: generatorModal.kind })} 
-      onGenerate={(img) => {
-        if (generatorModal.planId) {
-          onRemoveImage(generatorModal.planId);
-        }
-        onAddImage(img);
-        setGeneratorModal({ isOpen: false, kind: generatorModal.kind });
-      }}
+      onPick={onAddImage}
     />
   </ResultCard>;
+}
+
+const ARTICLE_IMAGE_NEGATIVE_PROMPT = [
+  "readable text",
+  "typography",
+  "font",
+  "letters",
+  "words",
+  "glyphs",
+  "numbers",
+  "ticker symbols",
+  "article title text",
+  "printed text",
+  "signage",
+  "labels",
+  "captions",
+  "subtitles",
+  "logo",
+  "watermark",
+  "brand mark",
+  "official coin logo",
+  "bitcoin logo",
+  "protocol logo",
+  "UI screenshot",
+  "fake trading interface",
+  "fake chart numbers",
+  "people",
+  "person",
+  "human",
+  "humanoid",
+  "man",
+  "woman",
+  "face",
+  "portrait",
+  "character",
+  "avatar",
+  "statue",
+  "monk",
+  "trader",
+  "investor",
+  "hands",
+  "body",
+  "low quality",
+  "blurry",
+  "distorted"
+].join(", ");
+
+function imageDimensionsForKind(kind: "hero" | "inline"): { width: number; height: number; aspectRatio: ArticleImageAspectRatio } {
+  return kind === "hero"
+    ? { width: 1200, height: 630, aspectRatio: "16:9" }
+    : { width: 900, height: 600, aspectRatio: "4:3" };
+}
+
+async function generateArticleImageFromDraft({
+  draft,
+  keyword,
+  kind
+}: {
+  draft: Draft;
+  keyword?: string;
+  kind: "hero" | "inline";
+}) {
+  const dimensions = imageDimensionsForKind(kind);
+  const prompt = buildAutomaticArticleImagePrompt({ draft, keyword, kind });
+  const newItem = await postJson<ImageLibraryItem>("/admin/images/generate", {
+    provider: "modelslab",
+    prompt,
+    negativePrompt: ARTICLE_IMAGE_NEGATIVE_PROMPT,
+    width: dimensions.width,
+    height: dimensions.height,
+    filename: `${draft.slug || "article"}-${kind}`
+  });
+  const metadata = parseImageMetadata(newItem.metadataJson);
+
+  return {
+    id: newItem.id,
+    kind,
+    provider: newItem.provider,
+    model: stringFromMetadata(metadata, "model") || (newItem.provider === "modelslab" ? "modelslab" : "unknown"),
+    status: "generated",
+    prompt: newItem.prompt,
+    url: publicApiUrl(newItem.url),
+    width: dimensions.width,
+    height: dimensions.height,
+    aspectRatio: dimensions.aspectRatio,
+    altText: buildArticleImageAltText({ draft, keyword, kind }),
+    createdAt: newItem.createdAt
+  } satisfies GeneratedArticleImage;
+}
+
+function buildAutomaticArticleImagePrompt({
+  draft,
+  keyword,
+  kind
+}: {
+  draft: Draft;
+  keyword?: string;
+  kind: ArticleImageKind;
+}) {
+  const topic = buildShortVisualTopic(keyword || draft.title || draft.metaTitle || draft.excerpt || "crypto market");
+  const format = kind === "hero" ? "wide hero image" : "inline article image";
+
+  return `Create a simple abstract ${format} related to: ${topic}. Minimal 3D icon-style crypto/finance illustration: symbol-free circular tokens, blockchain node dots, glowing connection lines, wallet cube, abstract market line shapes without labels. No people, no humanoids, no faces, no hands, no characters, no text, no numbers, no logos, no watermarks.`;
+}
+
+function buildArticleImageAltText({
+  draft,
+  keyword,
+  kind
+}: {
+  draft: Draft;
+  keyword?: string;
+  kind: "hero" | "inline";
+}) {
+  const subject = cleanPromptText(keyword || draft.title || "bài viết").slice(0, 120);
+  return kind === "hero"
+    ? `Ảnh bìa minh họa cho bài viết ${subject}`
+    : `Ảnh minh họa trong bài về ${subject}`;
+}
+
+function cleanPromptText(value: string) {
+  return value
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+    .replace(/\[[^\]]+\]\([^)]+\)/g, " ")
+    .replace(/[`*_>#-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildShortVisualTopic(value: string) {
+  const cleaned = cleanPromptText(value).toLowerCase();
+
+  if (/giá|price|tỷ giá|bảng giá|market/.test(cleaned) && /coin|crypto|bitcoin|altcoin|token/.test(cleaned)) {
+    return "crypto market prices today, symbol-free tokens, abstract market movement, blockchain data network";
+  }
+
+  if (/chainlink|oracle|\blink\b/.test(cleaned)) {
+    return "oracle network connecting blockchain data feeds to real world data";
+  }
+
+  if (/avalanche|avax|layer 1|subnet/.test(cleaned)) {
+    return "layer one blockchain ecosystem, subnet network, DeFi infrastructure";
+  }
+
+  if (/defi|staking|yield/.test(cleaned)) {
+    return "DeFi staking system, liquidity flows, secure wallet infrastructure";
+  }
+
+  if (/wallet|bảo mật|security|hack|leak|risk|rủi ro/.test(cleaned)) {
+    return "crypto wallet security, encrypted data shield, blockchain risk signals";
+  }
+
+  return cleanPromptText(value)
+    .replace(/\([A-Z0-9]{2,12}\)/g, "")
+    .replace(/\b[A-Z0-9]{2,12}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "crypto finance concept";
+}
+
+function parseImageMetadata(metadataJson: string) {
+  try {
+    const parsed = JSON.parse(metadataJson || "{}");
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringFromMetadata(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === "string" ? value : "";
 }
 
 function LinksWorkspace({

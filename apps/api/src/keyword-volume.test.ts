@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-volume.js";
+import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth, parseSemrushJsonText } from "./keyword-volume.js";
 import type { KeywordIdea } from "./types.js";
 
 const originalEnv = { ...process.env };
@@ -75,5 +75,10 @@ describe("keyword volume provider", () => {
         Cookie: "proxy_token=test-semrush-token"
       })
     }));
+  });
+
+  it("reports expired Semrush proxy sessions without leaking a JSON parse error", () => {
+    expect(() => parseSemrushJsonText("Session expired", 3)).toThrow(/Semrush proxy token\/session đã hết hạn/);
+    expect(() => parseSemrushJsonText("Session expired", 3)).not.toThrow(/Unexpected token/);
   });
 });

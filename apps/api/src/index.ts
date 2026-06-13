@@ -43,7 +43,13 @@ import {
   slugify
 } from "./factory.js";
 import { generateStructuredJson, hasGeminiConfig } from "./gemini.js";
-import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-volume.js";
+import {
+  enrichKeywordIdeasWithVolumes,
+  isSemrushSessionExpiredError,
+  keywordVolumeHealth,
+  parseSemrushJsonText,
+  semrushResponseErrorMessage
+} from "./keyword-volume.js";
 import {
   appendHistory,
   createArticleLibraryItem,
@@ -1407,6 +1413,7 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
     availableServers.sort(() => Math.random() - 0.5);
 
     let lastError: Error | null = null;
+    let sessionExpiredError: Error | null = null;
     let dataResult: any = null;
 
     for (const serverId of availableServers) {
@@ -1427,11 +1434,12 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
           body: JSON.stringify(semrushPayload)
         });
 
+        const semrushResponseText = await semrushResponse.text();
         if (!semrushResponse.ok) {
-          throw new Error(`Semrush API lỗi ${semrushResponse.status} (server ${serverId}): ${await semrushResponse.text()}`);
+          throw new Error(semrushResponseErrorMessage(serverId, semrushResponseText, semrushResponse.status));
         }
 
-        const data = await semrushResponse.json() as any;
+        const data = parseSemrushJsonText<any>(semrushResponseText, serverId);
         if (data.error) {
           throw new Error(`Semrush error (server ${serverId}): ${JSON.stringify(data.error)}`);
         }
@@ -1440,12 +1448,15 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
         break; // Thành công, thoát vòng lặp
       } catch (err: any) {
         lastError = err instanceof Error ? err : new Error(String(err));
+        if (!sessionExpiredError && isSemrushSessionExpiredError(lastError)) {
+          sessionExpiredError = lastError;
+        }
         console.warn(`[Semrush Suggest] Failed on server ${serverId}`, lastError.message);
       }
     }
 
     if (!dataResult) {
-      throw lastError || new Error("All Semrush servers failed.");
+      throw sessionExpiredError || lastError || new Error("All Semrush servers failed.");
     }
 
     const keywords = dataResult.keywords || [];
@@ -2100,10 +2111,10 @@ app.post("/api/admin/article-images/suggest-prompts", async (request, response, 
   try {
     const { draft, keyword } = request.body;
     
-    const systemPrompt = `You are an expert AI image prompt engineer. 
-Based on the following article draft, suggest 1 hero image (cover) and 1 to 3 inline images to be inserted within the article.
-The image prompts must be written in English. They should describe visually striking, professional editorial illustrations or photography suitable for a high-quality blog or news site.
-Do NOT include any text, logos, or UI elements in the image descriptions. Keep the prompts highly descriptive of the visual elements, lighting, style, and atmosphere.`;
+    const systemPrompt = `Suggest short image prompts for a crypto article.
+Each prompt must be one sentence only, in English, starting with: "Create a simple abstract image related to:".
+Use symbolic crypto/finance visuals only: symbol-free circular tokens, blockchain node dots, glowing connection lines, wallet cubes, abstract market line shapes without labels, clean 3D icons.
+Never include people, humanoids, faces, hands, characters, avatars, statues, text, numbers, labels, logos, watermarks, or UI screens.`;
 
     const contextLines = [
       `Keyword: ${keyword}`,
