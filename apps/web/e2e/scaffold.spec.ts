@@ -44,7 +44,7 @@ async function login(page: Page) {
 
 test("renders reader scaffold routes in both locales", async ({ page }) => {
   await page.goto("/vi-vn/markets");
-  await expect(page.getByRole("heading", { name: "Thị trường Crypto" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Thị trường crypto hôm nay" })).toBeVisible();
 
   await page.goto("/en-us/about");
   await expect(page.getByRole("heading", { level: 1, name: /CoinRadar/ })).toBeVisible();
