@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Plus, Save, Trash2, Upload } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -128,7 +128,7 @@ export function InternalLinksFeature() {
   const [url, setUrl] = useState("");
   const [language, setLanguage] = useState<"vi" | "en">("vi");
   const [librarySearch, setLibrarySearch] = useState("");
-  const [libraryLanguage, setLibraryLanguage] = useState<"all" | "vi" | "en">("all");
+  const [libraryLanguage, setLibraryLanguage] = useState<"vi" | "en">("vi");
   const [libraryPage, setLibraryPage] = useState(1);
   const [importError, setImportError] = useState("");
   const [importResult, setImportResult] = useState<ArticleLibraryImportResult | null>(null);
@@ -138,7 +138,7 @@ export function InternalLinksFeature() {
     const normalizedSearch = librarySearch.trim().toLocaleLowerCase();
 
     return articles.filter((article) => {
-      const matchesLanguage = libraryLanguage === "all" || article.language === libraryLanguage;
+      const matchesLanguage = article.language === libraryLanguage;
       const matchesSearch = !normalizedSearch
         || [article.title, article.url].join(" ").toLocaleLowerCase().includes(normalizedSearch);
 
@@ -244,6 +244,7 @@ export function InternalLinksFeature() {
     {importError ? <div className="mb-5"><ErrorState message={importError} /></div> : null}
     {importLibrary.error ? <div className="mb-5"><ErrorState message={importLibrary.error.message} /></div> : null}
     <section className="mb-5 grid gap-3 rounded-xl border bg-white p-4 lg:grid-cols-[1fr_1fr_140px_auto]">
+      <h2 className="font-semibold lg:col-span-4">Thêm link mới</h2>
       <Input onChange={(event) => setTitle(event.target.value)} placeholder="Article title" value={title} />
       <Input onChange={(event) => setUrl(event.target.value)} placeholder="/vi-vn/slug" value={url} />
       <Select onChange={(event) => setLanguage(event.target.value as "vi" | "en")} value={language}>
@@ -264,6 +265,7 @@ export function InternalLinksFeature() {
           ? <EmptyState description="Import article URLs and titles to seed automated internal link suggestions." title="The library is empty" />
           : <>
               <section className="mb-4 grid gap-3 rounded-xl border bg-white p-4 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-center">
+                <h2 className="font-semibold lg:col-span-3">Danh sách link</h2>
                 <Input
                   onChange={(event) => {
                     setLibrarySearch(event.target.value);
@@ -274,17 +276,16 @@ export function InternalLinksFeature() {
                 />
                 <Select
                   onChange={(event) => {
-                    setLibraryLanguage(event.target.value as "all" | "vi" | "en");
+                    setLibraryLanguage(event.target.value as "vi" | "en");
                     setLibraryPage(1);
                   }}
                   value={libraryLanguage}
                 >
-                  <option value="all">All languages</option>
-                  <option value="vi">Vietnamese</option>
-                  <option value="en">English</option>
+                  <option value="vi">Tiếng Việt</option>
+                  <option value="en">Tiếng Anh</option>
                 </Select>
                 <p className="text-sm font-semibold text-[#566174] lg:text-right">
-                  {filteredArticles.length} / {query.data.articles.length} links
+                  {filteredArticles.length} links
                 </p>
               </section>
               {visibleArticles.length === 0
@@ -296,7 +297,7 @@ export function InternalLinksFeature() {
                         isPending={updateArticle.isPending}
                         key={article.id}
                         onRemove={() => remove.mutate(article.id)}
-                        onSave={(changes) => updateArticle.mutate({ article, changes })}
+                        onSave={(changes) => updateArticle.mutateAsync({ article, changes })}
                       />
                     )}
                   </div>}
@@ -320,41 +321,76 @@ function ArticleLibraryCard({
   article: ArticleLibraryItem;
   isPending: boolean;
   onRemove: () => void;
-  onSave: (changes: Pick<ArticleLibraryItem, "title" | "url">) => void;
+  onSave: (changes: Pick<ArticleLibraryItem, "title" | "url">) => Promise<unknown>;
 }) {
   const [title, setTitle] = useState(article.title);
   const [url, setUrl] = useState(article.url);
+  const [isEditing, setIsEditing] = useState(false);
+
+  function startEditing() {
+    setTitle(article.title);
+    setUrl(article.url);
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setTitle(article.title);
+    setUrl(article.url);
+    setIsEditing(false);
+  }
+
+  async function saveChanges() {
+    await onSave({ title: title.trim(), url: url.trim() });
+    setIsEditing(false);
+  }
+
+  const urlPreview = article.url.length > 60 ? `${article.url.slice(0, 57)}...` : article.url;
 
   return <article className="rounded-xl border bg-white p-4">
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <strong>{article.language === "vi" ? "Vietnamese" : "English"}</strong>
-        <p className="mt-1 text-xs text-[#687386]">Imported {new Date(article.createdAt).toLocaleDateString()}</p>
+    {!isEditing
+      ? <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <strong className="block truncate text-[#172033]" title={article.url}>{urlPreview}</strong>
+          <p className="mt-1 text-sm text-[#566174]">{article.title}</p>
+          <p className="mt-2 text-xs text-[#687386]">Cập nhật {new Date(article.createdAt).toLocaleDateString("vi-VN")}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button aria-label={`Sửa link ${article.title}`} onClick={startEditing} size="sm" variant="secondary">
+            <Pencil size={14} />Sửa
+          </Button>
+          <Button aria-label={`Xóa link ${article.title}`} onClick={onRemove} size="sm" variant="danger">
+            <Trash2 size={14} />Xóa
+          </Button>
+        </div>
       </div>
-      <Button aria-label="Delete link" onClick={onRemove} size="sm" variant="ghost"><Trash2 size={16} /></Button>
-    </div>
-    <div className="mt-3 grid gap-2">
-      <Input
-        aria-label={`Title for ${article.title}`}
-        onChange={(event) => setTitle(event.target.value)}
-        placeholder="Article title"
-        value={title}
-      />
-      <Input
-        aria-label={`URL for ${article.title}`}
-        onChange={(event) => setUrl(event.target.value)}
-        placeholder="/vi-vn/slug or https://..."
-        value={url}
-      />
-      <div><Button
-        aria-label={`Save changes for ${article.title}`}
-        disabled={!title.trim() || !url.trim() || isPending}
-        onClick={() => onSave({ title: title.trim(), url: url.trim() })}
-        size="sm"
-        variant="secondary"
-      >
-        <Save size={15} />Save changes
-      </Button></div>
-    </div>
+      : <div className="grid gap-2">
+        <Input
+          aria-label={`URL for ${article.title}`}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="/vi-vn/slug or https://..."
+          value={url}
+        />
+        <Input
+          aria-label={`Title for ${article.title}`}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Article title"
+          value={title}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            aria-label={`Lưu thay đổi cho ${article.title}`}
+            disabled={!title.trim() || !url.trim() || isPending}
+            onClick={() => void saveChanges()}
+            size="sm"
+            variant="secondary"
+          >
+            <Save size={15} />Lưu
+          </Button>
+          <Button disabled={isPending} onClick={cancelEditing} size="sm" variant="ghost">
+            <X size={15} />Hủy
+          </Button>
+        </div>
+      </div>
+    }
   </article>;
 }

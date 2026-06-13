@@ -1161,6 +1161,63 @@ export function selectInternalLinkCandidates(
   return scored.length > 0 ? scored : articleLibrary.slice(0, limit);
 }
 
+export function buildKeywordMatchedLibrarySuggestions(
+  primaryKeyword: string,
+  secondaryKeywords: string[],
+  language: Language,
+  articleLibrary: ArticleLibraryItem[],
+  draft?: Draft
+): InternalLinkSuggestion[] {
+  const focusKeywords = [primaryKeyword, ...secondaryKeywords]
+    .map((keyword) => keyword.trim())
+    .filter(Boolean);
+
+  return articleLibrary
+    .flatMap((article) => {
+      const searchableFields = [
+        ...article.keywords.map((value) => ({ label: "từ khóa", value, score: 0.98 })),
+        { label: "tiêu đề", value: article.title, score: 0.92 },
+        { label: "URL", value: article.url.replace(/[-_/]+/g, " "), score: 0.86 },
+        { label: "mô tả", value: article.summary, score: 0.8 }
+      ].filter((field) => field.value.trim());
+      const match = focusKeywords
+        .flatMap((keyword) => searchableFields
+          .filter((field) => anchorMatchesKeyword(field.value, keyword))
+          .map((field) => ({ keyword, ...field })))
+        .sort((left, right) => right.score - left.score)[0];
+
+      if (!match) {
+        return [];
+      }
+
+      const sourceContext = draft
+        ? extractSourceContext(draft.markdown, match.keyword) || `Từ khóa bài hiện tại: ${match.keyword}`
+        : `Từ khóa bài hiện tại: ${match.keyword}`;
+
+      return [{
+        id: `${article.id}-${slugify(match.keyword)}`,
+        sourceContext,
+        anchor: match.keyword,
+        targetArticleId: article.id,
+        targetTitle: article.title,
+        targetUrl: article.url,
+        matchedKeyword: match.keyword,
+        matchStatus: "matched" as const,
+        reason: `Từ khóa "${match.keyword}" khớp với ${match.label} của link trong kho.`,
+        confidence: Math.round(match.score * 100),
+        matchScore: match.score,
+        relevanceScore: match.score,
+        intentScore: match.score,
+        expectationScore: match.score,
+        status: "pending" as const
+      }];
+    })
+    .filter((suggestion, index, suggestions) =>
+      suggestions.findIndex((item) => item.targetUrl.toLowerCase() === suggestion.targetUrl.toLowerCase()) === index
+    )
+    .sort((left, right) => right.confidence - left.confidence || left.targetTitle.localeCompare(right.targetTitle, language));
+}
+
 export function selectInternalLinkCandidatesForAnchorCandidates(
   draft: Draft,
   language: Language,
@@ -1793,8 +1850,20 @@ export function applyInternalLinks(markdown: string, suggestions: InternalLinkSu
 
     const matcher = anchorBoundaryMatcher(anchor);
     let inserted = false;
+    const normalizedContext = normalizeComparable(suggestion.sourceContext);
+    const preferredLineIndexes = lines
+      .map((line, index) => ({ index, normalizedLine: normalizeComparable(line) }))
+      .filter(({ normalizedLine }) =>
+        normalizedContext
+        && normalizedLine
+        && (normalizedContext.includes(normalizedLine) || normalizedLine.includes(normalizedContext))
+      )
+      .map(({ index }) => index);
+    const remainingLineIndexes = lines
+      .map((_, index) => index)
+      .filter((index) => !preferredLineIndexes.includes(index));
 
-    for (let index = 0; index < currentLines.length; index += 1) {
+    for (const index of [...preferredLineIndexes, ...remainingLineIndexes]) {
       const line = currentLines[index];
       const trimmed = line.trim();
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyInternalLinks,
+  buildKeywordMatchedLibrarySuggestions,
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildInternalLinkMappingCsv,
   findAnchorTextCandidates,
@@ -53,6 +54,33 @@ function normalizeTestText(value: string) {
 }
 
 describe("internal link matching", () => {
+  it("lists library links whose keywords, titles, or URLs match the current article keywords", () => {
+    const suggestions = buildKeywordMatchedLibrarySuggestions("bitcoin mining", ["blockchain"], "en", [
+      libraryItem({
+        id: "bitcoin",
+        title: "Inside Bitcoin",
+        url: "/en-us/inside-bitcoin",
+        keywords: ["bitcoin"]
+      }),
+      libraryItem({
+        id: "blockchain",
+        title: "Technology guide",
+        url: "/en-us/blockchain-guide",
+        keywords: []
+      }),
+      libraryItem({
+        id: "unmatched",
+        title: "Risk management",
+        url: "/en-us/risk-management",
+        keywords: []
+      })
+    ]);
+
+    expect(suggestions.map((suggestion) => suggestion.targetArticleId)).toEqual(["bitcoin", "blockchain"]);
+    expect(suggestions.map((suggestion) => suggestion.matchedKeyword)).toEqual(["bitcoin mining", "blockchain"]);
+    expect(suggestions.every((suggestion) => suggestion.status === "pending")).toBe(true);
+  });
+
   it("matches title-only library records without inventing URLs", () => {
     const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(draft, "bitcoin", [], "en", [
       libraryItem({ title: "blockchain", url: "/en-us/blockchain" })
@@ -874,6 +902,29 @@ describe("internal link matching", () => {
 
     expect(markdown.match(/\]\(\/en-us\/blockchain\)/g)).toHaveLength(1);
     expect(markdown).not.toContain("/en-us/risk");
+  });
+
+  it("applies a link at the selected source context when an anchor appears more than once", () => {
+    const markdown = applyInternalLinks([
+      "Proof of Stake appears in the introduction.",
+      "",
+      "This selected paragraph explains how Proof of Stake works."
+    ].join("\n"), [{
+      id: "proof-of-stake-selected-position",
+      sourceContext: "This selected paragraph explains how Proof of Stake works.",
+      anchor: "Proof of Stake",
+      targetTitle: "Proof of Stake guide",
+      targetUrl: "/en-us/proof-of-stake-guide",
+      matchedKeyword: "Proof of Stake",
+      matchStatus: "matched",
+      reason: "Selected position",
+      confidence: 99,
+      status: "accepted"
+    }]);
+
+    expect(markdown).toContain("Proof of Stake appears in the introduction.");
+    expect(markdown).toContain("This selected paragraph explains how [Proof of Stake](/en-us/proof-of-stake-guide) works.");
+    expect(markdown).not.toContain("[Proof of Stake](/en-us/proof-of-stake-guide) appears in the introduction.");
   });
 
   it("does not insert internal links inside another word", () => {
