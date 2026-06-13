@@ -1,11 +1,12 @@
 import type { Locale } from "@cmsauto/contracts";
-import { Bookmark, BookOpen, ChevronDown, Clock3, Filter, Flame, Search, Zap } from "lucide-react";
+import { BookOpen, Clock3, Filter, Flame, Search, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "@/features/reader/adapter";
 import { localeCopy } from "@/features/reader/locale";
 import type { ReaderArticle } from "@/features/reader/model";
 
+import { ArticlesMarketPulse } from "./articles-market-pulse";
 import { getMockArticles } from "./mock";
 
 const defaultCategories = {
@@ -13,19 +14,17 @@ const defaultCategories = {
   "en-us": ["All", "Markets", "Bitcoin", "Altcoin", "DeFi", "NFT & GameFi", "Web3", "Legal", "Technology", "Events"]
 } satisfies Record<Locale, string[]>;
 
-const marketPulse = [
-  { label: "Tổng vốn hóa thị trường", value: "$2.56T", trend: "+1.32%", tone: "up" },
-  { label: "BTC Dominance", value: "53.1%", trend: "-0.42%", tone: "down" },
-  { label: "Fear & Greed Index", value: "72", trend: "Tham lam", tone: "up" },
-  { label: "Altcoin Season Index", value: "43", trend: "Trung lập", tone: "flat" }
-];
-
 export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
   const copy = localeCopy(locale);
-  const apiArticles = await getReaderArticles(locale);
+  let apiArticles: ReaderArticle[] = [];
+  try {
+    apiArticles = await getReaderArticles(locale);
+  } catch {
+    apiArticles = [];
+  }
   const articles = sortNewestFirst(apiArticles.length > 0 ? apiArticles : getMockArticles(locale));
   const [featured, ...newsFeed] = articles;
-  const popular = articles.slice(0, 5);
+  const latest = articles.slice(0, 5);
   const hotTopics = buildHotTopics(articles, locale);
   const isVi = locale === "vi-vn";
 
@@ -35,7 +34,7 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
         <div className="min-w-0">
           <div className="flex flex-col gap-5 border-b border-[#E3E5E8] pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-[#080B11] sm:text-4xl lg:text-[42px]">
+              <h1 className="text-3xl font-bold text-[#080B11] sm:text-4xl lg:text-[42px]">
                 {isVi ? "Tin tức crypto mới nhất" : "Latest crypto news"}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[#647084] sm:text-base">
@@ -87,9 +86,9 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
         </div>
 
         <aside className="space-y-5 lg:pt-[4.25rem]">
-          <PopularPanel articles={popular} isVi={isVi} />
-          <HotTopicsPanel topics={hotTopics} isVi={isVi} />
-          <MarketPulsePanel isVi={isVi} />
+          <LatestPanel articles={latest} isVi={isVi} />
+          <HotTopicsPanel isVi={isVi} locale={locale} topics={hotTopics} />
+          <ArticlesMarketPulse locale={locale} />
         </aside>
       </section>
     </main>
@@ -104,13 +103,12 @@ function FeaturedArticle({ article, isVi }: { article: ReaderArticle; isVi: bool
     >
       <div className="p-5 sm:p-7">
         <div className="flex items-center justify-between gap-4">
-          <span className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] text-[#B98200]">
+          <span className="inline-flex items-center gap-3 text-xs font-bold uppercase text-[#B98200]">
             <span className="flex size-10 items-center justify-center rounded-full bg-[#C8950B] text-white">
               <Zap className="h-5 w-5 fill-current" />
             </span>
             {isVi ? "Tin nổi bật" : "Featured"}
           </span>
-          <Bookmark className="h-5 w-5 text-[#B98200]" />
         </div>
         <h2 className="mt-5 text-2xl font-bold leading-tight text-[#080B11] transition group-hover:text-[#A88412] sm:text-[28px]">
           {article.title}
@@ -120,13 +118,12 @@ function FeaturedArticle({ article, isVi }: { article: ReaderArticle; isVi: bool
       </div>
 
       <div className="border-t border-[#E7E1D0] bg-[#FCFBF7] p-5 sm:p-7 lg:border-l lg:border-t-0">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6D778B]">{isVi ? "Thống kê nổi bật" : "Key stats"}</p>
+        <p className="text-xs font-bold uppercase text-[#6D778B]">{isVi ? "Thông tin bài viết" : "Article information"}</p>
         <div className="mt-4 divide-y divide-[#E5E7EB]">
           {featuredStats(article, isVi).map((stat) => (
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-4 text-sm" key={stat.label}>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 text-sm" key={stat.label}>
               <span className="min-w-0 text-[#667085]">{stat.label}</span>
-              <span className="font-bold text-[#080B11]">{stat.value}</span>
-              <span className={`text-xs font-bold ${stat.tone === "up" ? "text-[#079455]" : "text-[#E23B45]"}`}>{stat.trend}</span>
+              <span className="max-w-44 truncate text-right font-bold text-[#080B11]">{stat.value}</span>
             </div>
           ))}
         </div>
@@ -150,7 +147,7 @@ function NewsList({ articles, isVi, locale }: { articles: ReaderArticle[]; isVi:
   return (
     <section className="overflow-hidden rounded-xl border border-[#E3E5E8] bg-white shadow-[0_16px_44px_rgba(17,24,39,0.04)]">
       <div className="divide-y divide-[#E6E9EE]">
-        {articles.slice(0, 7).map((article) => (
+        {articles.map((article) => (
           <Link className="group grid gap-3 px-4 py-5 transition hover:bg-[#FAF8EF] sm:grid-cols-[minmax(0,1fr)_auto] sm:px-6" href={articleHref(article)} key={article.id}>
             <div className="grid min-w-0 grid-cols-[10px_minmax(0,1fr)] gap-4">
               <span className="mt-2 size-1.5 rounded-full bg-[#080B11]" />
@@ -164,26 +161,18 @@ function NewsList({ articles, isVi, locale }: { articles: ReaderArticle[]; isVi:
               <span>{formatTime(article.publishedAt, locale)}</span>
               <span>•</span>
               <span>{readingTime(article, isVi)}</span>
-              <Bookmark className="h-4 w-4 text-[#8B95A5]" />
             </div>
           </Link>
         ))}
       </div>
-      <Link
-        className="m-5 flex items-center justify-center gap-2 rounded-lg border border-[#C8950B] px-4 py-3 text-sm font-bold text-[#A36F00] transition hover:bg-[#FFF8E1]"
-        href={`/${locale}/search`}
-      >
-        {isVi ? "Xem thêm tin tức" : "Load more news"}
-        <ChevronDown className="h-4 w-4" />
-      </Link>
     </section>
   );
 }
 
-function PopularPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: boolean }) {
+function LatestPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: boolean }) {
   return (
     <section className="rounded-xl border border-[#E3E5E8] bg-white p-5 shadow-[0_16px_42px_rgba(17,24,39,0.04)]">
-      <h2 className="text-lg font-bold text-[#080B11]">{isVi ? "Đọc nhiều" : "Most read"}</h2>
+      <h2 className="text-lg font-bold text-[#080B11]">{isVi ? "Bài mới" : "Latest articles"}</h2>
       <div className="mt-4 divide-y divide-[#E6E9EE]">
         {articles.map((article, index) => (
           <Link className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 py-4 first:pt-0 last:pb-0" href={articleHref(article)} key={article.id}>
@@ -199,7 +188,7 @@ function PopularPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: boo
   );
 }
 
-function HotTopicsPanel({ topics, isVi }: { topics: string[]; isVi: boolean }) {
+function HotTopicsPanel({ topics, isVi, locale }: { topics: string[]; isVi: boolean; locale: Locale }) {
   return (
     <section className="rounded-xl border border-[#E3E5E8] bg-white p-5 shadow-[0_16px_42px_rgba(17,24,39,0.04)]">
       <h2 className="inline-flex items-center gap-2 text-lg font-bold text-[#080B11]">
@@ -210,36 +199,11 @@ function HotTopicsPanel({ topics, isVi }: { topics: string[]; isVi: boolean }) {
         {topics.map((topic) => (
           <Link
             className="rounded-md border border-[#E1E5EC] bg-[#FBFCFE] px-3 py-1.5 text-xs font-semibold text-[#475467] transition hover:border-[#C8A227] hover:text-[#A88412]"
-            href="#"
+            href={`/${locale}/search?q=${encodeURIComponent(topic)}`}
             key={topic}
           >
             #{topic}
           </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function MarketPulsePanel({ isVi }: { isVi: boolean }) {
-  return (
-    <section className="rounded-xl border border-[#E3E5E8] bg-white p-5 shadow-[0_16px_42px_rgba(17,24,39,0.04)]">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-bold text-[#080B11]">Market pulse</h2>
-        <Link className="text-xs font-bold text-[#A36F00]" href="#">{isVi ? "Xem toàn bộ" : "View all"} →</Link>
-      </div>
-      <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg bg-[#E6E9EE]">
-        {marketPulse.map((item) => (
-          <div className="bg-white p-4" key={item.label}>
-            <p className="text-xs font-semibold text-[#667085]">{item.label}</p>
-            <p className="mt-2 text-2xl font-bold text-[#080B11]">{item.value}</p>
-            <p className={`mt-1 text-xs font-bold ${item.tone === "down" ? "text-[#E23B45]" : item.tone === "up" ? "text-[#079455]" : "text-[#B98200]"}`}>
-              {item.trend}
-            </p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#E8EBEF]">
-              <div className={`h-full rounded-full ${item.tone === "down" ? "w-2/5 bg-[#E23B45]" : item.tone === "up" ? "w-3/4 bg-[#C8950B]" : "w-1/2 bg-[#C8950B]"}`} />
-            </div>
-          </div>
         ))}
       </div>
     </section>
@@ -276,10 +240,11 @@ function ArticleMeta({ article, className, isVi }: { article: ReaderArticle; cla
 
 function featuredStats(article: ReaderArticle, isVi: boolean) {
   return [
-    { label: isVi ? "Dòng vốn ETF (tuần qua)" : "ETF inflow (week)", value: "$1.24B", trend: "▲ 38.6%", tone: "up" },
-    { label: article.primaryKeyword || (isVi ? "Chủ đề chính" : "Primary topic"), value: article.primaryKeyword || "Crypto", trend: "▲ 1.26%", tone: "up" },
-    { label: "BTC Dominance", value: "53.1%", trend: "▼ 0.42%", tone: "down" }
-  ] as const;
+    { label: isVi ? "Chủ đề chính" : "Primary topic", value: article.primaryKeyword || "Crypto" },
+    { label: isVi ? "Tác giả" : "Author", value: article.authorName || "CoinRadar" },
+    { label: isVi ? "Thời gian đọc" : "Reading time", value: readingTime(article, isVi) },
+    { label: isVi ? "Ngày đăng" : "Published", value: formatDate(article.publishedAt, article.locale) }
+  ];
 }
 
 function buildHotTopics(articles: ReaderArticle[], locale: Locale) {
@@ -304,6 +269,10 @@ function formatDateTime(value: string, locale: Locale) {
 
 function formatTime(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatDate(value: string, locale: Locale) {
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
 function readingTime(article: ReaderArticle, isVi: boolean) {

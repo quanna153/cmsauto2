@@ -50,6 +50,40 @@ test("renders reader scaffold routes in both locales", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: /CoinRadar/ })).toBeVisible();
 });
 
+test("shares one homepage ticker request and renders English reader copy", async ({ page }) => {
+  let tickerRequests = 0;
+  await page.route("**/public/markets/tickers?*", async (route) => {
+    tickerRequests += 1;
+    const pairs = new URL(route.request().url()).searchParams.get("pairs")?.split(",") ?? [];
+    await route.fulfill({
+      json: {
+        stale: false,
+        tickers: pairs.map((pair) => ({
+          pair,
+          symbol: pair.replace("USDT", ""),
+          price: 100,
+          changePercent: 1.25,
+          status: "verified"
+        }))
+      }
+    });
+  });
+
+  await page.goto("/en-us");
+  await expect(page.getByText("Latest updates", { exact: true })).toBeVisible();
+  await expect.poll(() => tickerRequests).toBe(1);
+  await expect(page.getByText("Binance/API", { exact: true })).toBeVisible();
+});
+
+test("renders the article index in both locales", async ({ page }) => {
+  await page.goto("/vi-vn/articles");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bài mới" })).toBeVisible();
+
+  await page.goto("/en-us/articles");
+  await expect(page.getByRole("heading", { name: "Latest articles" })).toBeVisible();
+});
+
 test("clears the admin shell after logout", async ({ page }) => {
   await mockAdminSession(page);
 

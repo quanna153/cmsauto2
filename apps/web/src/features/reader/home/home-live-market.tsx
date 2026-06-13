@@ -1,8 +1,9 @@
 "use client";
 
+import type { Locale } from "@cmsauto/contracts";
 import { ArrowRight, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { publicApiUrl } from "@/lib/api";
 
@@ -27,6 +28,11 @@ type MarketResponse = {
   stale?: boolean;
 };
 
+type MarketState = {
+  tickers: Record<string, MarketTicker>;
+  isStale: boolean;
+};
+
 export type HeroSlide = {
   title: string;
   excerpt: string;
@@ -47,9 +53,50 @@ const coinIconOverrides: Record<string, string> = {
   MKR: "mkr"
 };
 
-function formatPrice(price?: number) {
+const marketCopy = {
+  "vi-vn": {
+    loading: "Đang cập nhật",
+    readArticle: "Đọc bài đầy đủ",
+    viewMarket: "Xem thị trường",
+    switchArticle: "Chuyển sang bài",
+    currentPrice: "Giá hiện tại",
+    change24h: "Biến động 24h",
+    source: "Nguồn",
+    refresh: "Cập nhật",
+    refreshValue: "30 giây",
+    details: "Xem chi tiết",
+    topGainers: "Top tăng giá (24h)",
+    viewAllMarket: "Xem toàn bộ thị trường",
+    liveChart: "Biểu đồ giá coin theo thời gian thực",
+    openMarket: "Mở trang thị trường",
+    chooseCoin: "Chọn coin",
+    searchCoin: "Tìm coin..."
+  },
+  "en-us": {
+    loading: "Updating",
+    readArticle: "Read full article",
+    viewMarket: "View markets",
+    switchArticle: "Switch to article",
+    currentPrice: "Current price",
+    change24h: "24h change",
+    source: "Source",
+    refresh: "Refresh",
+    refreshValue: "30 seconds",
+    details: "View details",
+    topGainers: "Top gainers (24h)",
+    viewAllMarket: "View all markets",
+    liveChart: "Live crypto price chart",
+    openMarket: "Open market page",
+    chooseCoin: "Choose coin",
+    searchCoin: "Search coins..."
+  }
+} satisfies Record<Locale, Record<string, string>>;
+
+const HomeMarketContext = createContext<MarketState | null>(null);
+
+function formatPrice(price: number | undefined, locale: Locale) {
   if (typeof price !== "number" || Number.isNaN(price)) {
-    return "Đang cập nhật";
+    return marketCopy[locale].loading;
   }
 
   return price.toLocaleString("en-US", {
@@ -58,9 +105,9 @@ function formatPrice(price?: number) {
   });
 }
 
-function formatChange(change?: number) {
+function formatChange(change: number | undefined, locale: Locale) {
   if (typeof change !== "number" || Number.isNaN(change)) {
-    return "Đang cập nhật";
+    return marketCopy[locale].loading;
   }
 
   return `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
@@ -94,18 +141,29 @@ function CoinLogo({ symbol, size = "md" }: { symbol: string; size?: "sm" | "md" 
   );
 }
 
-export function useLiveTickers(coins: LiveCoin[]) {
+function useTickerFeed(coins: LiveCoin[], enabled = true) {
   const [tickers, setTickers] = useState<Record<string, MarketTicker>>({});
   const [isStale, setIsStale] = useState(false);
+  const pairs = useMemo(
+    () => Array.from(new Set(coins.map((coin) => coin.pair))).sort().join(","),
+    [coins]
+  );
 
   useEffect(() => {
+    if (!enabled || !pairs) return;
+
     let cancelled = false;
+    let requestInFlight = false;
 
     async function loadTickers() {
+      if (requestInFlight) return;
+      requestInFlight = true;
       try {
-        const pairs = Array.from(new Set(coins.map((coin) => coin.pair))).join(",");
         const response = await fetch(publicApiUrl(`/public/markets/tickers?pairs=${encodeURIComponent(pairs)}`));
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (!cancelled) setIsStale(true);
+          return;
+        }
 
         const payload = (await response.json()) as MarketResponse;
         if (cancelled) return;
@@ -113,7 +171,9 @@ export function useLiveTickers(coins: LiveCoin[]) {
         setTickers(Object.fromEntries(payload.tickers.map((ticker) => [ticker.pair, ticker])));
         setIsStale(Boolean(payload.stale));
       } catch {
-        setIsStale(true);
+        if (!cancelled) setIsStale(true);
+      } finally {
+        requestInFlight = false;
       }
     }
 
@@ -124,15 +184,27 @@ export function useLiveTickers(coins: LiveCoin[]) {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [coins]);
+  }, [enabled, pairs]);
 
   return { tickers, isStale };
 }
 
-export function HeroPriceCard({ coin }: { coin: LiveCoin }) {
+export function HomeMarketProvider({ children, coins }: { children: ReactNode; coins: LiveCoin[] }) {
+  const marketState = useTickerFeed(coins);
+  return <HomeMarketContext.Provider value={marketState}>{children}</HomeMarketContext.Provider>;
+}
+
+export function useLiveTickers(coins: LiveCoin[]) {
+  const sharedState = useContext(HomeMarketContext);
+  const localState = useTickerFeed(coins, !sharedState);
+  return sharedState ?? localState;
+}
+
+export function HeroPriceCard({ coin, locale }: { coin: LiveCoin; locale: Locale }) {
   const { tickers, isStale } = useLiveTickers([coin]);
   const ticker = tickers[coin.pair];
   const changePositive = (ticker?.changePercent ?? 0) >= 0;
+  const copy = marketCopy[locale];
 
   return (
     <article className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_20px_55px_rgba(17,17,17,0.06)]">
@@ -140,9 +212,9 @@ export function HeroPriceCard({ coin }: { coin: LiveCoin }) {
         <div>
           <p className="text-sm font-semibold text-[#111111]">{coin.pair.replace("USDT", "/USDT")}</p>
           <div className="mt-2 flex flex-wrap items-end gap-3">
-            <h2 className="text-2xl font-semibold tracking-tight text-[#111111] md:text-3xl">${formatPrice(ticker?.price)}</h2>
+            <h2 className="text-2xl font-semibold text-[#111111] md:text-3xl">${formatPrice(ticker?.price, locale)}</h2>
             <span className={`pb-1 text-sm font-semibold ${changePositive ? "text-[#009A61]" : "text-[#D92D20]"}`}>
-              {formatChange(ticker?.changePercent)} (24h)
+              {formatChange(ticker?.changePercent, locale)} (24h)
             </span>
           </div>
         </div>
@@ -155,14 +227,14 @@ export function HeroPriceCard({ coin }: { coin: LiveCoin }) {
         </div>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border border-[#EFE7D6] bg-white">
-        <TradingViewChart heightClass="h-[13rem] md:h-[15rem]" symbol="BINANCE:BTCUSDT" theme="light" />
+        <TradingViewChart heightClass="h-[13rem] md:h-[15rem]" locale={locale} symbol="BINANCE:BTCUSDT" theme="light" />
       </div>
       <div className="mt-4 grid divide-y divide-[#EFE7D6] overflow-hidden rounded-xl border border-[#EFE7D6] md:grid-cols-4 md:divide-x md:divide-y-0">
         {[
-          ["Giá hiện tại", `$${formatPrice(ticker?.price)}`],
-          ["Biến động 24h", formatChange(ticker?.changePercent)],
-          ["Nguồn", isStale ? "Cache/API" : "TradingView"],
-          ["Cập nhật", "30 giây"]
+          [copy.currentPrice, `$${formatPrice(ticker?.price, locale)}`],
+          [copy.change24h, formatChange(ticker?.changePercent, locale)],
+          [copy.source, isStale ? "Cache/API" : "Binance/API"],
+          [copy.refresh, copy.refreshValue]
         ].map(([label, value]) => (
           <div className="p-4" key={label}>
             <p className="text-xs text-[#6B7280]">{label}</p>
@@ -174,9 +246,10 @@ export function HeroPriceCard({ coin }: { coin: LiveCoin }) {
   );
 }
 
-export function HeroArticleCarousel({ slides, marketHref }: { slides: HeroSlide[]; marketHref: string }) {
+export function HeroArticleCarousel({ slides, marketHref, locale }: { slides: HeroSlide[]; marketHref: string; locale: Locale }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeSlide = slides[activeIndex] ?? slides[0];
+  const copy = marketCopy[locale];
 
   useEffect(() => {
     if (slides.length <= 1) return;
@@ -192,25 +265,25 @@ export function HeroArticleCarousel({ slides, marketHref }: { slides: HeroSlide[
 
   return (
     <div>
-      <span className="inline-flex rounded-lg bg-[#F4E4B5] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#8A6500]">
+      <span className="inline-flex rounded-lg bg-[#F4E4B5] px-3 py-1 text-xs font-semibold uppercase text-[#8A6500]">
         {activeSlide.tag}
       </span>
-      <h1 className="mt-5 max-w-2xl text-[clamp(2rem,4vw,3.45rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-[#111111]">
+      <h1 className="mt-5 max-w-2xl text-4xl font-semibold leading-[1.08] text-[#111111] md:text-5xl">
         {activeSlide.title}
       </h1>
       <p className="mt-6 max-w-xl text-base leading-7 text-[#5F6673]">{activeSlide.excerpt}</p>
       <div className="mt-7 flex flex-wrap gap-3">
         <Link className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#B88400] px-5 text-sm font-semibold text-white transition hover:bg-[#111111]" href={activeSlide.href}>
-          Đọc phân tích đầy đủ <ArrowRight size={17} />
+          {copy.readArticle} <ArrowRight size={17} />
         </Link>
         <Link className="inline-flex h-12 items-center justify-center rounded-xl border border-[#E7DFCF] bg-white px-5 text-sm font-semibold text-[#111111] transition hover:bg-[#FFF6DD]" href={marketHref}>
-          Xem thị trường
+          {copy.viewMarket}
         </Link>
       </div>
       <div className="mt-8 flex gap-4">
         {slides.slice(0, 5).map((slide, index) => (
           <button
-            aria-label={`Chuyển sang bài ${index + 1}: ${slide.title}`}
+            aria-label={`${copy.switchArticle} ${index + 1}: ${slide.title}`}
             className={`size-2.5 rounded-full transition ${index === activeIndex ? "bg-[#B88400]" : "bg-[#D1D5DB] hover:bg-[#B88400]/60"}`}
             key={`${slide.href}-${index}`}
             onClick={() => setActiveIndex(index)}
@@ -222,15 +295,16 @@ export function HeroArticleCarousel({ slides, marketHref }: { slides: HeroSlide[
   );
 }
 
-export function MarketPulse({ coins, marketHref }: { coins: LiveCoin[]; marketHref: string }) {
+export function MarketPulse({ coins, marketHref, locale }: { coins: LiveCoin[]; marketHref: string; locale: Locale }) {
   const { tickers } = useLiveTickers(coins);
+  const copy = marketCopy[locale];
 
   return (
     <article className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_16px_44px_rgba(17,17,17,0.05)]">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#111111]">Market Pulse</h2>
+        <h2 className="text-sm font-semibold uppercase text-[#111111]">Market Pulse</h2>
         <Link className="inline-flex items-center gap-1 text-xs font-semibold text-[#A97900]" href={marketHref}>
-          Xem chi tiết <ArrowRight size={14} />
+          {copy.details} <ArrowRight size={14} />
         </Link>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -241,9 +315,9 @@ export function MarketPulse({ coins, marketHref }: { coins: LiveCoin[]; marketHr
           return (
             <div className="rounded-xl border border-[#EFE7D6] bg-[#FFFDF8] p-4" key={coin.pair}>
               <p className="text-xs text-[#6B7280]">{coin.symbol}/USDT</p>
-              <p className="mt-2 text-xl font-semibold text-[#111111]">${formatPrice(ticker?.price)}</p>
+              <p className="mt-2 text-xl font-semibold text-[#111111]">${formatPrice(ticker?.price, locale)}</p>
               <p className={`mt-1 text-xs font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>
-                {formatChange(ticker?.changePercent)}
+                {formatChange(ticker?.changePercent, locale)}
               </p>
               <svg aria-hidden="true" className="mt-3 h-9 w-full" preserveAspectRatio="none" viewBox="0 0 160 42">
                 <path
@@ -262,8 +336,9 @@ export function MarketPulse({ coins, marketHref }: { coins: LiveCoin[]; marketHr
   );
 }
 
-export function TopGainers({ coins, marketHref }: { coins: LiveCoin[]; marketHref: string }) {
+export function TopGainers({ coins, marketHref, locale }: { coins: LiveCoin[]; marketHref: string; locale: Locale }) {
   const { tickers } = useLiveTickers(coins);
+  const copy = marketCopy[locale];
   const sortedCoins = useMemo(
     () =>
       [...coins]
@@ -276,7 +351,7 @@ export function TopGainers({ coins, marketHref }: { coins: LiveCoin[]; marketHre
 
   return (
     <aside className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_16px_44px_rgba(17,17,17,0.05)]">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-[#111111]">Top tăng giá (24h)</h2>
+      <h2 className="text-sm font-semibold uppercase text-[#111111]">{copy.topGainers}</h2>
       <div className="mt-5 space-y-2">
         {visibleCoins.map((coin) => {
           const ticker = tickers[coin.pair];
@@ -287,39 +362,40 @@ export function TopGainers({ coins, marketHref }: { coins: LiveCoin[]; marketHre
               <CoinLogo size="sm" symbol={coin.symbol} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-[#111111]">{coin.symbol}</p>
-                <p className="text-xs text-[#6B7280]">${formatPrice(ticker?.price)}</p>
+                <p className="text-xs text-[#6B7280]">${formatPrice(ticker?.price, locale)}</p>
               </div>
               <span className={`text-xs font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>
-                {formatChange(ticker?.changePercent)}
+                {formatChange(ticker?.changePercent, locale)}
               </span>
             </div>
           );
         })}
       </div>
       <Link className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#E7DFCF] text-sm font-semibold text-[#A97900] transition hover:bg-[#FFF6DD]" href={marketHref}>
-        Xem toàn bộ thị trường <ArrowRight size={16} />
+        {copy.viewAllMarket} <ArrowRight size={16} />
       </Link>
     </aside>
   );
 }
 
-export function CompactTradeSection({ coins, marketHref }: { coins: LiveCoin[]; marketHref: string }) {
+export function CompactTradeSection({ coins, marketHref, locale }: { coins: LiveCoin[]; marketHref: string; locale: Locale }) {
   const [selectedPair, setSelectedPair] = useState("BTCUSDT");
   const [query, setQuery] = useState("");
   const { tickers } = useLiveTickers(coins);
   const filteredCoins = coins.filter((coin) => `${coin.name} ${coin.symbol}`.toLowerCase().includes(query.trim().toLowerCase()));
   const selectedCoin = coins.find((coin) => coin.pair === selectedPair) ?? coins[0];
   const selectedTicker = tickers[selectedCoin.pair];
+  const copy = marketCopy[locale];
 
   return (
     <section className="mx-auto max-w-7xl px-5">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A97900]">Trade</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#111111] md:text-3xl">Biểu đồ giá coin theo thời gian thực</h2>
+          <p className="text-xs font-semibold uppercase text-[#A97900]">Trade</p>
+          <h2 className="mt-2 text-2xl font-semibold text-[#111111] md:text-3xl">{copy.liveChart}</h2>
         </div>
         <Link className="inline-flex items-center gap-2 text-sm font-semibold text-[#A97900]" href={marketHref}>
-          Mở trang thị trường <ArrowRight size={16} />
+          {copy.openMarket} <ArrowRight size={16} />
         </Link>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_21rem]">
@@ -329,24 +405,24 @@ export function CompactTradeSection({ coins, marketHref }: { coins: LiveCoin[]; 
               <CoinLogo symbol={selectedCoin.symbol} />
               <div>
                 <p className="text-sm text-[#6B7280]">{selectedCoin.name} {selectedCoin.symbol}</p>
-                <h3 className="text-2xl font-semibold text-[#111111]">${formatPrice(selectedTicker?.price)}</h3>
+                <h3 className="text-2xl font-semibold text-[#111111]">${formatPrice(selectedTicker?.price, locale)}</h3>
               </div>
             </div>
             <span className={`${(selectedTicker?.changePercent ?? 0) >= 0 ? "text-[#159A55]" : "text-[#D92D20]"} text-sm font-semibold`}>
-              {formatChange(selectedTicker?.changePercent)}
+              {formatChange(selectedTicker?.changePercent, locale)}
             </span>
           </div>
-          <TradingViewChart heightClass="h-[24rem] md:h-[30rem]" symbol={`BINANCE:${selectedCoin.pair}`} />
+          <TradingViewChart heightClass="h-[24rem] md:h-[30rem]" locale={locale} symbol={`BINANCE:${selectedCoin.pair}`} />
         </article>
         <aside className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_16px_44px_rgba(17,17,17,0.05)]">
-          <label className="text-sm font-semibold text-[#111111]" htmlFor="home-coin-search">Chọn coin</label>
+          <label className="text-sm font-semibold text-[#111111]" htmlFor="home-coin-search">{copy.chooseCoin}</label>
           <div className="relative mt-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={17} />
             <input
               className="h-11 w-full rounded-xl border border-[#E7DFCF] bg-white pl-10 pr-3 text-sm outline-none transition placeholder:text-[#9CA3AF] focus:border-[#D5A319] focus:ring-4 focus:ring-[#D5A319]/15"
               id="home-coin-search"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm coin..."
+              placeholder={copy.searchCoin}
               value={query}
             />
           </div>
@@ -369,7 +445,7 @@ export function CompactTradeSection({ coins, marketHref }: { coins: LiveCoin[]; 
                     <span className="block truncate text-sm font-semibold text-[#111111]">{coin.name}</span>
                     <span className="block text-xs text-[#6B7280]">{coin.symbol}</span>
                   </span>
-                  <span className={`text-xs font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>{formatChange(ticker?.changePercent)}</span>
+                  <span className={`text-xs font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>{formatChange(ticker?.changePercent, locale)}</span>
                 </button>
               );
             })}
@@ -380,7 +456,7 @@ export function CompactTradeSection({ coins, marketHref }: { coins: LiveCoin[]; 
   );
 }
 
-export function InlineMarketTicker({ coins }: { coins: LiveCoin[] }) {
+export function InlineMarketTicker({ coins, locale }: { coins: LiveCoin[]; locale: Locale }) {
   const { tickers } = useLiveTickers(coins);
 
   return (
@@ -394,8 +470,8 @@ export function InlineMarketTicker({ coins }: { coins: LiveCoin[] }) {
             <span className="inline-flex items-center gap-3 border-r border-[#EFE7D6] pr-8" key={`${coin.pair}-${index}`}>
               <CoinLogo size="sm" symbol={coin.symbol} />
               <span className="text-sm font-semibold text-[#111111]">{coin.name}</span>
-              <span className="text-sm text-[#111111]">{formatPrice(ticker?.price)}</span>
-              <span className={`text-sm font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>{formatChange(ticker?.changePercent)}</span>
+              <span className="text-sm text-[#111111]">{formatPrice(ticker?.price, locale)}</span>
+              <span className={`text-sm font-semibold ${positive ? "text-[#159A55]" : "text-[#D92D20]"}`}>{formatChange(ticker?.changePercent, locale)}</span>
             </span>
           );
         })}

@@ -3,12 +3,12 @@
 import { useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
-import { Bold, CalendarClock, ChevronDown, ChevronRight, ExternalLink, Eye, Highlighter, Image as ImageIcon, Italic, Link2, List, Redo2, Save, Table2, Trash2, Underline, Undo2 } from "lucide-react";
+import { Bold, CalendarClock, ChevronDown, ChevronRight, Eye, Highlighter, Image as ImageIcon, Italic, Link2, List, Redo2, Save, Table2, Trash2, Underline, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { createManualPost, saveManualPostDraft, scheduleManualPost } from "./manual-post-adapter";
+import { saveManualPostDraft, scheduleManualPost } from "./manual-post-adapter";
 
 export function ManualPostFeature() {
   const [title, setTitle] = useState("");
@@ -16,7 +16,7 @@ export function ManualPostFeature() {
   const [contentHistory, setContentHistory] = useState<string[]>([]);
   const [redoHistory, setRedoHistory] = useState<string[]>([]);
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
-  const [attemptedAction, setAttemptedAction] = useState<"draft" | "preview" | "publish" | "schedule" | null>(null);
+  const [attemptedAction, setAttemptedAction] = useState<"draft" | "preview" | "schedule" | null>(null);
   const [previewError, setPreviewError] = useState("");
   const [schedulePanelOpen, setSchedulePanelOpen] = useState(false);
   const [publishAtLocal, setPublishAtLocal] = useState(() => toDatetimeLocalValue(new Date(Date.now() + 30 * 60 * 1000).toISOString()));
@@ -30,11 +30,8 @@ export function ManualPostFeature() {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorHtmlRef = useRef("");
   const titleError = attemptedAction && title.trim().length === 0 ? "Nhập tiêu đề bài viết." : "";
-  const contentError = (attemptedAction === "preview" || attemptedAction === "publish" || attemptedAction === "schedule") && content.trim().length === 0 ? "Nhập nội dung bài viết." : "";
+  const contentError = (attemptedAction === "preview" || attemptedAction === "schedule") && content.trim().length === 0 ? "Nhập nội dung bài viết." : "";
   const scheduleError = attemptedAction === "schedule" && !isValidDatetimeLocal(publishAtLocal) ? "Chọn ngày và giờ đăng hợp lệ." : "";
-  const create = useMutation({
-    mutationFn: () => createManualPost({ title, content: expandUploadedImages(readEditorMarkdown(), uploadedImages) })
-  });
   const saveDraft = useMutation({
     mutationFn: () => saveManualPostDraft({ title, content: expandUploadedImages(readEditorMarkdown(), uploadedImages) })
   });
@@ -110,7 +107,6 @@ export function ManualPostFeature() {
     setLinkMenuOpen(false);
     setLinkUrl("https://");
     setPublishAtLocal(toDatetimeLocalValue(new Date(Date.now() + 30 * 60 * 1000).toISOString()));
-    create.reset();
     saveDraft.reset();
     schedule.reset();
     window.requestAnimationFrame(() => editorRef.current?.focus());
@@ -324,7 +320,7 @@ export function ManualPostFeature() {
     setLinkMenuOpen(false);
   }
 
-  const busy = saveDraft.isPending || create.isPending || schedule.isPending;
+  const busy = saveDraft.isPending || schedule.isPending;
 
   return <>
     <PageHeader description="Nhập tiêu đề và nội dung, có thể lưu nháp, xem trước hoặc đặt lịch đăng bài." eyebrow="Admin" title="Đăng bài thủ công" />
@@ -532,12 +528,10 @@ export function ManualPostFeature() {
         </div>
         {contentError ? <span className="text-xs font-medium text-red-600">{contentError}</span> : null}
       </div>
-      {create.error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{create.error.message}</p> : null}
       {saveDraft.error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{saveDraft.error.message}</p> : null}
       {schedule.error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{schedule.error.message}</p> : null}
       {previewError ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{previewError}</p> : null}
       {saveDraft.data?.article.id ? <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">Đã lưu nháp. Bài viết chưa hiển thị ngoài Reader.</div> : null}
-      {create.data?.article.livePath ? <div className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">Đã publish bài viết. <Link className="inline-flex items-center gap-1 underline" href={create.data.article.livePath}><ExternalLink size={14} />Xem public</Link></div> : null}
       {schedule.data?.article.id ? <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">Đã đặt lịch đăng bài lúc {formatLocalSchedule(schedule.data.article.publishAt)}. Bài viết chưa hiển thị ngoài Reader.</div> : null}
       {schedulePanelOpen ? <div className="grid gap-2 rounded-lg border bg-[#fafaf7] p-3 sm:max-w-md">
         <label className="grid gap-1 text-sm font-semibold">
@@ -553,7 +547,7 @@ export function ManualPostFeature() {
           <Button disabled={busy} onClick={save} variant="secondary">{saveDraft.isPending ? "Đang lưu..." : <><Save size={16} />Lưu nháp</>}</Button>
           <Button disabled={busy} onClick={preview} type="button" variant="secondary"><Eye size={16} />Xem trước</Button>
           <Button disabled={busy} onClick={openSchedulePanel} type="button"><CalendarClock size={16} />Đặt lịch đăng bài</Button>
-          {create.data?.article.id || saveDraft.data?.article.id || schedule.data?.article.id ? <Link href="/admin/articles"><Button type="button" variant="secondary">Về danh sách</Button></Link> : null}
+          {saveDraft.data?.article.id || schedule.data?.article.id ? <Link href="/admin/articles"><Button type="button" variant="secondary">Về danh sách</Button></Link> : null}
         </div>
       </div>
     </section>

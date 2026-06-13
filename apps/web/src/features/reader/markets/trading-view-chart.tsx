@@ -1,5 +1,6 @@
 "use client";
 
+import type { Locale } from "@cmsauto/contracts";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 declare global {
@@ -97,14 +98,14 @@ function loadTradingViewScript() {
   return tradingViewScriptPromise;
 }
 
-function getFallbackChartUrl(symbol: string) {
+function getFallbackChartUrl(symbol: string, theme: "dark" | "light", locale: Locale) {
   const params = new URLSearchParams({
     symbol,
     interval: "D",
     timezone: "Asia/Ho_Chi_Minh",
-    theme: "dark",
+    theme,
     style: "1",
-    locale: "vi",
+    locale: locale === "vi-vn" ? "vi" : "en",
     hide_side_toolbar: "0",
     allow_symbol_change: "1",
     save_image: "0"
@@ -116,11 +117,13 @@ function getFallbackChartUrl(symbol: string) {
 export function TradingViewChart({
   symbol,
   heightClass = "h-[420px] md:h-[520px] lg:h-[600px]",
-  theme = "dark"
+  theme = "dark",
+  locale = "vi-vn"
 }: {
   symbol: string;
   heightClass?: string;
   theme?: "dark" | "light";
+  locale?: Locale;
 }) {
   const reactId = useId();
   const containerId = useMemo(() => `tradingview-${reactId.replace(/:/g, "")}`, [reactId]);
@@ -164,7 +167,7 @@ export function TradingViewChart({
           timezone: "Asia/Ho_Chi_Minh",
           theme,
           style: "1",
-          locale: "vi_VN",
+          locale: locale === "vi-vn" ? "vi_VN" : "en",
           enable_publishing: false,
           hide_side_toolbar: false,
           allow_symbol_change: true,
@@ -193,7 +196,7 @@ export function TradingViewChart({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [containerId, symbol]);
+  }, [containerId, locale, symbol, theme]);
 
   return (
     <div className={`relative overflow-hidden rounded-lg border ${theme === "light" ? "border-[#E9DDBF] bg-white" : "border-[#2B313D] bg-[#0F1115]"}`}>
@@ -202,7 +205,7 @@ export function TradingViewChart({
         <iframe
           className="absolute inset-0 h-full w-full border-0"
           loading="lazy"
-          src={getFallbackChartUrl(symbol).replace("theme=dark", `theme=${theme}`)}
+          src={getFallbackChartUrl(symbol, theme, locale)}
           title={`${symbol} fallback chart`}
         />
       ) : null}

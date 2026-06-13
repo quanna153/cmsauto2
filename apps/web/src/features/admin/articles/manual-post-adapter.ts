@@ -10,10 +10,6 @@ export type ManualScheduledPostInput = ManualPostInput & {
   publishAt: string;
 };
 
-export function createManualPost(input: ManualPostInput) {
-  return postJson<{ article: ArticleSession }>("/articles/manual", input);
-}
-
 export function scheduleManualPost(input: ManualScheduledPostInput) {
   return postJson<{ article: ArticleSession }>("/articles/manual/schedule", input);
 }

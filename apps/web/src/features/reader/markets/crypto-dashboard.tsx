@@ -229,10 +229,6 @@ const fallbackGlobalStats: GlobalMarketStats = {
   totalVolumeUsd: 98_420_000_000
 };
 
-function numericPrice(price: string) {
-  return Number(price.replace(/[$,]/g, ""));
-}
-
 function finiteNumber(value: unknown, fallback: number) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : fallback;
