@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BookOpenText, FilePenLine, FileSpreadsheet, FlaskConical, Link2, SearchCode, ShieldUser } from "lucide-react";
+import { BarChart3, BookOpenText, FilePenLine, FileSpreadsheet, FlaskConical, Image, Link2, SearchCode, ShieldUser } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,6 +12,7 @@ const navigation = [
   { href: "/admin/articles", label: "Quản lý bài", icon: FilePenLine },
   { href: "/admin/internal-links", label: "Internal links", icon: Link2 },
   { href: "/admin/link-library", label: "Kho links", icon: FileSpreadsheet },
+  { href: "/admin/image-library", label: "Kho ảnh", icon: Image },
   { href: "/admin/keyword-research", label: "Nghiên cứu từ khóa", icon: SearchCode },
   { href: "/admin/users", label: "Tài khoản", icon: ShieldUser }
 ];

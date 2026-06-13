@@ -2633,3 +2633,72 @@ export function startPublishWorker() {
       });
   }, pollMs);
 }
+
+export async function readImageLibrary() {
+  const db = await getDatabase();
+  const rows = dbAll<{
+    id: string;
+    created_at: string;
+    provider: string;
+    prompt: string;
+    url: string;
+    metadata_json: string;
+  }>(db, `
+    SELECT *
+    FROM image_library
+    ORDER BY created_at DESC
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    createdAt: row.created_at,
+    provider: row.provider,
+    prompt: row.prompt,
+    url: row.url,
+    metadataJson: row.metadata_json
+  }));
+}
+
+export async function createImageLibraryItem(item: {
+  id: string;
+  createdAt: string;
+  provider: string;
+  prompt: string;
+  url: string;
+  metadataJson: string;
+}) {
+  const db = await getDatabase();
+  db.run(`
+    INSERT INTO image_library (id, created_at, provider, prompt, url, metadata_json)
+    VALUES ($id, $createdAt, $provider, $prompt, $url, $metadataJson)
+  `, {
+    $id: item.id,
+    $createdAt: item.createdAt,
+    $provider: item.provider,
+    $prompt: item.prompt,
+    $url: item.url,
+    $metadataJson: item.metadataJson
+  } as never);
+  return item;
+}
+
+export async function readImageLibraryItem(id: string) {
+  const row = await queryFirst<any>(`SELECT * FROM image_library WHERE id = $id`, { $id: id });
+  if (!row) return null;
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    provider: row.provider,
+    prompt: row.prompt,
+    url: row.url,
+    metadataJson: row.metadata_json
+  };
+}
+
+export async function deleteImageLibraryItem(id: string) {
+  const db = await getDatabase();
+  db.run(`
+    DELETE FROM image_library
+    WHERE id = $id
+  `, { $id: id } as never);
+}

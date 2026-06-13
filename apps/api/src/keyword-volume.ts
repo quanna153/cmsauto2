@@ -34,6 +34,36 @@ const semrushKeywordSchema = z.object({
   volume: z.number().nullable().optional()
 });
 
+function compactProviderText(value: string) {
+  return value.replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
+export function isSemrushSessionExpiredText(value: string) {
+  return /session\s+ex/i.test(value) || /session.*expir/i.test(value);
+}
+
+export function isSemrushSessionExpiredError(error: Error) {
+  return isSemrushSessionExpiredText(error.message);
+}
+
+export function semrushResponseErrorMessage(serverId: number, text: string, status?: number) {
+  if (isSemrushSessionExpiredText(text)) {
+    return `Semrush proxy token/session đã hết hạn ở server ${serverId}. Cập nhật lại Semrush Proxy Token trong Cài đặt API rồi thử lại.`;
+  }
+
+  const prefix = status ? `Semrush API lỗi ${status}` : "Semrush API trả về dữ liệu không hợp lệ";
+  const detail = compactProviderText(text);
+  return detail ? `${prefix} (server ${serverId}): ${detail}` : `${prefix} (server ${serverId}).`;
+}
+
+export function parseSemrushJsonText<T>(text: string, serverId: number) {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(semrushResponseErrorMessage(serverId, text));
+  }
+}
+
 function nowStamp() {
   return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
@@ -168,6 +198,7 @@ async function fetchSemrushKeywordRows(keyword: string, context: VolumeProviderC
 
   const servers = [1, 2, 3, 4, 5, 6];
   let lastError: Error | null = null;
+  let sessionExpiredError: Error | null = null;
 
   for (const serverId of servers) {
     try {
@@ -185,11 +216,12 @@ async function fetchSemrushKeywordRows(keyword: string, context: VolumeProviderC
         body: JSON.stringify(payload)
       });
 
+      const responseText = await response.text();
       if (!response.ok) {
-        throw new Error(`Semrush API lỗi ${response.status} (server ${serverId}): ${await response.text()}`);
+        throw new Error(semrushResponseErrorMessage(serverId, responseText, response.status));
       }
 
-      const data = await response.json() as { error?: unknown; result?: { keywords?: unknown[] } };
+      const data = parseSemrushJsonText<{ error?: unknown; result?: { keywords?: unknown[] } }>(responseText, serverId);
       if (data.error) {
         throw new Error(`Semrush error (server ${serverId}): ${JSON.stringify(data.error)}`);
       }
@@ -197,10 +229,13 @@ async function fetchSemrushKeywordRows(keyword: string, context: VolumeProviderC
       return z.array(semrushKeywordSchema).parse(data.result?.keywords ?? []);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      if (!sessionExpiredError && isSemrushSessionExpiredError(lastError)) {
+        sessionExpiredError = lastError;
+      }
     }
   }
 
-  throw lastError ?? new Error("Không lấy được volume từ Semrush.");
+  throw sessionExpiredError ?? lastError ?? new Error("Không lấy được volume từ Semrush.");
 }
 
 async function fetchAhrefsVolumes(

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
@@ -41,7 +43,13 @@ import {
   slugify
 } from "./factory.js";
 import { generateStructuredJson, hasGeminiConfig } from "./gemini.js";
-import { enrichKeywordIdeasWithVolumes, keywordVolumeHealth } from "./keyword-volume.js";
+import {
+  enrichKeywordIdeasWithVolumes,
+  isSemrushSessionExpiredError,
+  keywordVolumeHealth,
+  parseSemrushJsonText,
+  semrushResponseErrorMessage
+} from "./keyword-volume.js";
 import {
   appendHistory,
   createArticleLibraryItem,
@@ -64,7 +72,11 @@ import {
   reviewGateArticle,
   retryPublishJob,
   runDuePublishJobs,
-  startPublishWorker
+  startPublishWorker,
+  readImageLibrary,
+  readImageLibraryItem,
+  createImageLibraryItem,
+  deleteImageLibraryItem
 } from "./store.js";
 import { ResourceRevisionConflictError, RevisionConflictError } from "./store.js";
 import { defaultPromptTemplates } from "./prompt-defaults.js";
@@ -89,7 +101,8 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use("/api/public/images", express.static(path.join(process.cwd(), "data", "images")));
 
 function getApiConfigFromHeaders(request: express.Request) {
   return {
@@ -1400,6 +1413,7 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
     availableServers.sort(() => Math.random() - 0.5);
 
     let lastError: Error | null = null;
+    let sessionExpiredError: Error | null = null;
     let dataResult: any = null;
 
     for (const serverId of availableServers) {
@@ -1420,11 +1434,12 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
           body: JSON.stringify(semrushPayload)
         });
 
+        const semrushResponseText = await semrushResponse.text();
         if (!semrushResponse.ok) {
-          throw new Error(`Semrush API lỗi ${semrushResponse.status} (server ${serverId}): ${await semrushResponse.text()}`);
+          throw new Error(semrushResponseErrorMessage(serverId, semrushResponseText, semrushResponse.status));
         }
 
-        const data = await semrushResponse.json() as any;
+        const data = parseSemrushJsonText<any>(semrushResponseText, serverId);
         if (data.error) {
           throw new Error(`Semrush error (server ${serverId}): ${JSON.stringify(data.error)}`);
         }
@@ -1433,12 +1448,15 @@ app.post("/api/keywords/suggest", async (request, response, next) => {
         break; // Thành công, thoát vòng lặp
       } catch (err: any) {
         lastError = err instanceof Error ? err : new Error(String(err));
+        if (!sessionExpiredError && isSemrushSessionExpiredError(lastError)) {
+          sessionExpiredError = lastError;
+        }
         console.warn(`[Semrush Suggest] Failed on server ${serverId}`, lastError.message);
       }
     }
 
     if (!dataResult) {
-      throw lastError || new Error("All Semrush servers failed.");
+      throw sessionExpiredError || lastError || new Error("All Semrush servers failed.");
     }
 
     const keywords = dataResult.keywords || [];
@@ -2054,6 +2072,279 @@ app.post("/api/links/apply", async (request, response, next) => {
     const markdown = applyInternalLinks(payload.markdown, payload.suggestions);
     const record = await appendHistory("apply-links", payload, { markdown }, getAuth(request).user.id);
     response.json({ markdown, recordId: record.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/images", async (request, response, next) => {
+  try {
+    const images = await readImageLibrary();
+    response.json(images);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/images/:id", async (request, response, next) => {
+  try {
+    const id = request.params.id as string;
+    const item = await readImageLibraryItem(id);
+    if (item && item.url.startsWith("/public/images/")) {
+      const publicImagesDir = path.join(process.cwd(), "data", "images");
+      const filename = item.url.replace("/public/images/", "");
+      const filePath = path.join(publicImagesDir, filename);
+      try {
+        await fs.unlink(filePath);
+      } catch (err) {
+        console.error(`Failed to delete physical file: ${filePath}`, err);
+      }
+    }
+    await deleteImageLibraryItem(id);
+    response.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/article-images/suggest-prompts", async (request, response, next) => {
+  try {
+    const { draft, keyword } = request.body;
+    
+    const systemPrompt = `Suggest short image prompts for a crypto article.
+Each prompt must be one sentence only, in English, starting with: "Create a simple abstract image related to:".
+Use symbolic crypto/finance visuals only: symbol-free circular tokens, blockchain node dots, glowing connection lines, wallet cubes, abstract market line shapes without labels, clean 3D icons.
+Never include people, humanoids, faces, hands, characters, avatars, statues, text, numbers, labels, logos, watermarks, or UI screens.`;
+
+    const contextLines = [
+      `Keyword: ${keyword}`,
+      `Title: ${draft.title}`,
+      `Excerpt: ${draft.excerpt}`,
+      `Content: ${draft.markdown?.substring(0, 3000)}...`
+    ];
+
+    const jsonShapeHint = JSON.stringify({
+      suggestedImages: [
+        {
+          kind: "hero | inline",
+          prompt: "string (English description)",
+          altText: "string (Vietnamese or English alt text)"
+        }
+      ]
+    }, null, 2);
+
+    const schema = z.object({
+      suggestedImages: z.array(z.object({
+        kind: z.enum(["hero", "inline"]),
+        prompt: z.string(),
+        altText: z.string()
+      }))
+    });
+
+    const aiResult = await generateStructuredJson({
+      prompt: systemPrompt,
+      variables: {},
+      contextLines,
+      jsonShapeHint,
+      responseJsonSchema: {
+        type: "object",
+        properties: {
+          suggestedImages: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                kind: { type: "string" },
+                prompt: { type: "string" },
+                altText: { type: "string" }
+              },
+              required: ["kind", "prompt", "altText"]
+            }
+          }
+        },
+        required: ["suggestedImages"]
+      },
+      validator: schema,
+      temperature: 0.7
+    });
+
+    const generatedImages = aiResult.suggestedImages.map((img) => ({
+      id: crypto.randomUUID(),
+      kind: img.kind,
+      provider: "modelslab",
+      model: "default",
+      status: "planned",
+      prompt: img.prompt,
+      aspectRatio: img.kind === "hero" ? "16:9" : "4:3",
+      altText: img.altText,
+      createdAt: new Date().toISOString()
+    }));
+
+    response.json({ images: generatedImages });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/images/generate", async (request, response, next) => {
+  try {
+    const { provider, prompt, negativePrompt, width = 1024, height = 1024, filename, base64Data } = request.body;
+    const imageId = crypto.randomUUID();
+    let targetFilename: string = imageId;
+    const baseTextForSlug = (filename && typeof filename === "string" && filename.trim()) 
+      ? filename 
+      : prompt.slice(0, 60);
+      
+    if (baseTextForSlug) {
+      const slug = baseTextForSlug
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      if (slug) targetFilename = `${slug}-${imageId.slice(0, 8)}`;
+    }
+    let imageUrl = "";
+    let metadataJson = "{}";
+    let imageBuffer: ArrayBuffer | Buffer | null = null;
+
+    if (provider === "modelslab") {
+      const apiKey = process.env.MODELSLAB_API_KEY || "tlszdqhzwfn1mg";
+      const res = await fetch("https://modelslab.com/api/v1/enterprise/realtime/text2img", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-requested-with": "com.waiimagemaker"
+        },
+        body: JSON.stringify({
+          key: apiKey,
+          prompt,
+          negative_prompt: negativePrompt || "",
+          width: width.toString(),
+          height: height.toString(),
+          samples: 1,
+          safety_checker: true,
+          seed: null,
+          base64: false,
+          webhook: null,
+          track_id: null
+        })
+      });
+      const data = await res.json();
+      if (data.status !== "success" || !data.output || data.output.length === 0) {
+        throw new Error(data.warning || "Failed to generate image via ModelsLab");
+      }
+      const remoteUrl = data.output[0];
+      const dlRes = await fetch(remoteUrl);
+      if (!dlRes.ok) throw new Error("Failed to download image from ModelsLab");
+      imageBuffer = await dlRes.arrayBuffer();
+      metadataJson = JSON.stringify(data.meta || {});
+    } else if (provider === "cloud_run") {
+      const res = await fetch("https://generateimagev2-gfacqcws4a-uc.a.run.app/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          text: prompt,
+          selectForApiFilter: "enhance",
+          size: [1024, 1024]
+        })
+      });
+      if (!res.ok) {
+        throw new Error(`Cloud Run API failed: ${res.statusText}`);
+      }
+      imageBuffer = await res.arrayBuffer();
+      metadataJson = JSON.stringify({ size: [width, height] });
+    } else if (provider === "magiceraser") {
+      const targetSize = `${width}x${height}`;
+      const url = new URL("https://apiimagen.magiceraser.fyi/imagen_v1");
+      url.searchParams.append("prompt", prompt);
+      url.searchParams.append("negative_prompt", negativePrompt || "");
+      url.searchParams.append("size", targetSize);
+      url.searchParams.append("style", "");
+      url.searchParams.append("custom_style", "");
+      url.searchParams.append("version", "flux");
+      
+      const res = await fetch(url.toString(), { method: "POST" });
+      if (!res.ok) {
+        throw new Error(`MagicEraser API failed: ${res.statusText}`);
+      }
+      imageBuffer = await res.arrayBuffer();
+      metadataJson = JSON.stringify({ size: targetSize, version: "flux" });
+    } else if (provider === "upload" && base64Data) {
+      const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, "");
+      imageBuffer = Buffer.from(base64Content, "base64");
+      metadataJson = JSON.stringify({ type: "upload", originalName: filename });
+    } else if (provider.startsWith("imagen-4")) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("Missing GEMINI_API_KEY in environment variables");
+
+      let modelId = "imagen-4.0-generate-001";
+      if (provider === "imagen-4-ultra") modelId = "imagen-4.0-ultra-generate-001";
+      else if (provider === "imagen-4-fast") modelId = "imagen-4.0-fast-generate-001";
+
+      const ratio = Number(width) / Number(height);
+      const presets = [
+        { name: "1:1", val: 1 },
+        { name: "16:9", val: 16/9 },
+        { name: "9:16", val: 9/16 },
+        { name: "4:3", val: 4/3 },
+        { name: "3:4", val: 3/4 },
+      ];
+      let aspectRatio = "1:1";
+      let minDiff = Infinity;
+      for (const p of presets) {
+        const diff = Math.abs(ratio - p.val);
+        if (diff < minDiff) { minDiff = diff; aspectRatio = p.name; }
+      }
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predict?key=${apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt }],
+          parameters: { sampleCount: 1, aspectRatio, outputMimeType: "image/png" }
+        })
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`Gemini API failed: ${res.statusText} - ${errBody}`);
+      }
+
+      const data = await res.json();
+      if (!data.predictions || data.predictions.length === 0) {
+        throw new Error("No predictions returned from Gemini API");
+      }
+
+      const base64Content = data.predictions[0].bytesBase64Encoded;
+      imageBuffer = Buffer.from(base64Content, "base64");
+      metadataJson = JSON.stringify({ model: modelId, aspectRatio });
+    } else {
+      throw new Error("Unsupported image provider");
+    }
+
+    if (imageBuffer) {
+      const publicImagesDir = path.join(process.cwd(), "data", "images");
+      await fs.mkdir(publicImagesDir, { recursive: true });
+      const filePath = path.join(publicImagesDir, `${targetFilename}.png`);
+      await fs.writeFile(filePath, Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer));
+      imageUrl = `/public/images/${targetFilename}.png`;
+    } else {
+      throw new Error("Failed to get image buffer");
+    }
+
+    const item = await createImageLibraryItem({
+      id: imageId,
+      createdAt: new Date().toISOString(),
+      provider,
+      prompt,
+      url: imageUrl,
+      metadataJson
+    });
+
+    response.json(item);
   } catch (error) {
     next(error);
   }

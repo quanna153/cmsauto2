@@ -13,7 +13,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import type { ArticleSession, InternalLinkSuggestion } from "@/features/admin/types";
+import { ArticleImagesPanel } from "@/features/admin/factory";
+import type { ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
+import type { Draft } from "@/features/admin/factory";
 import { ApiError, deleteJson, getJson, patchJson, postJson } from "@/lib/api";
 
 export function ArticleEditorFeature({ id }: { id: string }) {
@@ -21,6 +23,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   const router = useRouter();
   const query = useQuery({ queryKey: ["articles"], queryFn: () => getJson<{ articles: ArticleSession[] }>("/articles") });
   const article = query.data?.articles.find((item) => item.id === id);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [linkSuggestions, setLinkSuggestions] = useState<InternalLinkSuggestion[]>([]);
   const [markdown, setMarkdown] = useState("");
   const [publishAtLocal, setPublishAtLocal] = useState("");
@@ -32,6 +35,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
 
   useEffect(() => {
     if (article && revision === null) {
+      setDraft(article.draft ?? null);
       setLinkSuggestions(article.linkSuggestions);
       setMarkdown(article.finalMarkdown || article.draft?.markdown || "");
       setRevision(article.revision);
@@ -50,7 +54,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
       if (!article || revision === null) return null;
       return patchJson<{ article: ArticleSession }>(`/articles/${article.id}`, {
         expectedRevision: revision,
-        changes: { finalMarkdown: markdown, linkSuggestions }
+        changes: { finalMarkdown: markdown, linkSuggestions, draft: draft ?? undefined }
       });
     },
     onSuccess(result) {
@@ -72,11 +76,11 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   });
 
   useEffect(() => {
-    if (!article || revision === null || !hasLocalChanges(article, markdown, linkSuggestions)) return;
+    if (!article || revision === null || !hasLocalChanges(article, markdown, linkSuggestions, draft)) return;
     setSyncMessage("Đang chờ tự động lưu...");
     const timer = window.setTimeout(() => save.mutate(), 700);
     return () => window.clearTimeout(timer);
-  }, [article, linkSuggestions, markdown, revision]);
+  }, [article, linkSuggestions, markdown, revision, draft]);
 
   function updateLinkSuggestion(id: string, changes: Partial<InternalLinkSuggestion>) {
     const previous = linkSuggestions.find((item) => item.id === id);
@@ -101,7 +105,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
     setReviewBusy(true);
     setScheduleMessage("");
     try {
-      if (article && hasLocalChanges(article, markdown, linkSuggestions)) {
+      if (article && hasLocalChanges(article, markdown, linkSuggestions, draft)) {
         await save.mutateAsync();
       }
       const result = await postJson<{ article: ArticleSession }>(`/articles/${id}/review-gate`, {
@@ -133,7 +137,7 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   if (query.error) return <ErrorState message={query.error.message} />;
   if (!article) return <ErrorState message="Không tìm thấy bài viết." />;
 
-  const hasUnsavedChanges = hasLocalChanges(article, markdown, linkSuggestions);
+  const hasUnsavedChanges = hasLocalChanges(article, markdown, linkSuggestions, draft);
   const baseActionLabel = article.reviewStatus === "scheduled"
     ? "Cập nhật lịch đăng"
     : article.reviewStatus === "published"
@@ -164,10 +168,19 @@ export function ArticleEditorFeature({ id }: { id: string }) {
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="space-y-5">
         <section className="rounded-xl border bg-white p-5">
-          <label className="grid gap-2">
+          <label className="grid gap-2 mb-4 block">
             <span className="text-xs font-bold uppercase tracking-wide text-[#687386]">Nội dung bài viết</span>
             <Textarea className="min-h-[620px] font-mono" onChange={(event) => setMarkdown(event.target.value)} value={markdown} />
           </label>
+          <ArticleImagesPanel
+            busy={save.isPending}
+            images={draft?.generatedImages ?? []}
+            draft={draft}
+            keyword={article.inputs.seedKeyword}
+            onAddImage={(img) => setDraft((prev: Draft | null) => prev ? { ...prev, generatedImages: [img, ...(prev.generatedImages ?? [])] } : null)}
+            onAddImages={(imgs) => setDraft((prev: Draft | null) => prev ? { ...prev, generatedImages: [...imgs, ...(prev.generatedImages ?? [])] } : null)}
+            onRemoveImage={(id) => setDraft((prev: Draft | null) => prev ? { ...prev, generatedImages: (prev.generatedImages ?? []).filter((i: GeneratedArticleImage) => i.id !== id) } : null)}
+          />
         </section>
         <section className="rounded-xl border bg-white p-5">
           <h2 className="font-semibold">Internal links trong bài</h2>
@@ -223,9 +236,10 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   </>;
 }
 
-function hasLocalChanges(article: ArticleSession, markdown: string, linkSuggestions: InternalLinkSuggestion[]) {
+function hasLocalChanges(article: ArticleSession, markdown: string, linkSuggestions: InternalLinkSuggestion[], draft: Draft | null) {
   return markdown !== (article.finalMarkdown || article.draft?.markdown || "")
-    || JSON.stringify(linkSuggestions) !== JSON.stringify(article.linkSuggestions);
+    || JSON.stringify(linkSuggestions) !== JSON.stringify(article.linkSuggestions)
+    || JSON.stringify(draft) !== JSON.stringify(article.draft ?? null);
 }
 
 function syncMarkdownLink(markdown: string, previous: InternalLinkSuggestion, next: InternalLinkSuggestion) {
