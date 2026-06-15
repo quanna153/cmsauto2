@@ -1,5 +1,5 @@
 import type { Locale } from "@cmsauto/contracts";
-import { BookOpen, Clock3, Filter, Flame, ImageIcon, Search, Zap } from "lucide-react";
+import { Clock3, Filter, Flame, ImageIcon, Search, UserRound, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "@/features/reader/adapter";
@@ -114,7 +114,7 @@ function FeaturedArticle({ article, isVi }: { article: ReaderArticle; isVi: bool
         <p className="mt-4 line-clamp-3 text-sm leading-7 text-[#647084] sm:text-base">{article.excerpt}</p>
         <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-bold text-[#667085]">
           <span className="rounded-full bg-[#FFF4CC] px-3 py-1 text-[#9A7100]">{article.primaryKeyword || (isVi ? "Tin tức" : "News")}</span>
-          <ArticleMeta article={article} isVi={isVi} />
+          <ArticleMeta article={article} />
         </div>
       </div>
     </Link>
@@ -152,7 +152,7 @@ function NewsList({ articles, isVi, locale }: { articles: ReaderArticle[]; isVi:
                 <span className="rounded-md bg-[#F2E9FF] px-2.5 py-1 text-[#7A4AC7]">{article.primaryKeyword || (isVi ? "Tin tức" : "News")}</span>
                 <span>{formatTime(article.publishedAt, locale)}</span>
                 <span>•</span>
-                <span>{readingTime(article, isVi)}</span>
+                <span>{articleAuthor(article)}</span>
               </div>
             </div>
           </Link>
@@ -276,7 +276,7 @@ function imageSource(image: ReaderArticle["thumbnailImage"] | ReaderArticle["her
   return "";
 }
 
-function ArticleMeta({ article, className, isVi }: { article: ReaderArticle; className?: string; isVi: boolean }) {
+function ArticleMeta({ article, className }: { article: ReaderArticle; className?: string }) {
   return (
     <div className={`flex flex-wrap items-center gap-3 text-xs font-semibold text-[#667085] ${className ?? ""}`}>
       <span className="inline-flex items-center gap-1.5">
@@ -285,11 +285,15 @@ function ArticleMeta({ article, className, isVi }: { article: ReaderArticle; cla
       </span>
       <span>•</span>
       <span className="inline-flex items-center gap-1.5">
-        <BookOpen className="h-4 w-4" />
-        {readingTime(article, isVi)}
+        <UserRound className="h-4 w-4" />
+        {articleAuthor(article)}
       </span>
     </div>
   );
+}
+
+function articleAuthor(article: ReaderArticle) {
+  return article.authorName?.trim() || "CoinRadar";
 }
 
 function buildHotTopics(articles: ReaderArticle[], locale: Locale) {
@@ -314,12 +318,6 @@ function formatDateTime(value: string, locale: Locale) {
 
 function formatTime(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function readingTime(article: ReaderArticle, isVi: boolean) {
-  const words = `${article.title} ${article.excerpt} ${article.markdown}`.split(/\s+/).filter(Boolean).length;
-  const minutes = Math.max(2, Math.ceil(words / 220));
-  return isVi ? `${minutes} phút đọc` : `${minutes} min read`;
 }
 
 function unique(values: string[]) {
