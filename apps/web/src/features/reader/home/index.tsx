@@ -262,20 +262,30 @@ function BeginnerJourney({ locale }: { locale: Locale }) {
   const copy = homeCopy[locale];
   return (
     <section className="mx-auto max-w-7xl px-5 pb-8">
-      <div className="rounded-2xl border border-[#E7D094] bg-[#FFF9E8] p-5 shadow-[0_16px_44px_rgba(184,132,0,0.08)]">
+      <div className="rounded-2xl border border-[#E7D094] bg-[#FFF9E8] p-5 shadow-[0_16px_44px_rgba(184,132,0,0.08)] md:p-6">
         <p className="text-xs font-semibold uppercase text-[#A97900]">{copy.beginnerEyebrow}</p>
         <h2 className="mt-2 text-2xl font-semibold text-[#111111]">{copy.beginnerTitle}</h2>
-        <div className="mt-5 grid gap-4 md:grid-cols-4">
+        <div className="relative mt-6 grid gap-4 md:grid-cols-4 md:gap-5">
+          <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-8 hidden h-px bg-gradient-to-r from-transparent via-[#D5A319] to-transparent md:block" />
           {beginnerCopy[locale].map(([step, title, text], index) => {
             const icons = [BookOpenText, WalletCards, TrendingUp, ShieldCheck];
             const Icon = icons[index];
             return (
-              <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3 rounded-xl bg-white p-4" key={step}>
-                <span className="flex size-12 items-center justify-center rounded-full border border-[#E7D094] bg-white text-[#B88400]"><Icon size={22} /></span>
-                <div>
-                  <p className="text-xs font-semibold text-[#B88400]">{step}</p>
-                  <h3 className="mt-1 text-sm font-semibold text-[#111111]">{title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-[#5F6673]">{text}</p>
+              <div className="relative rounded-xl border border-[#F0E3BD] bg-white p-4 shadow-[0_10px_28px_rgba(17,17,17,0.04)]" key={step}>
+                {index < beginnerCopy[locale].length - 1 ? (
+                  <span className="pointer-events-none absolute -right-3 top-7 z-20 hidden size-6 items-center justify-center rounded-full border border-[#E7D094] bg-[#FFF9E8] text-xs font-bold text-[#B88400] md:flex">
+                    →
+                  </span>
+                ) : null}
+                <div className="relative z-10 flex items-start gap-3 md:block">
+                  <span className="flex size-16 shrink-0 flex-col items-center justify-center rounded-full border border-[#E7D094] bg-[#111111] text-[#F5D98A] shadow-[0_12px_26px_rgba(17,17,17,0.12)] md:mx-auto">
+                    <span className="text-[11px] font-bold leading-none">{step}</span>
+                    <Icon className="mt-1" size={19} />
+                  </span>
+                  <div className="min-w-0 md:mt-4 md:text-center">
+                    <h3 className="text-sm font-semibold text-[#111111]">{title}</h3>
+                    <p className="mt-2 text-xs leading-5 text-[#5F6673]">{text}</p>
+                  </div>
                 </div>
               </div>
             );
