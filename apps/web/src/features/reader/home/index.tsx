@@ -209,9 +209,11 @@ function GlobalMarketSection({ locale }: { locale: Locale }) {
 
   return (
     <section className="relative scroll-mt-20 overflow-hidden border-y border-[#E7DFCF] bg-white md:scroll-mt-24">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_50%,rgba(213,163,25,0.12),transparent_34%)]" />
-      <div className="relative mx-auto grid max-w-7xl items-center gap-6 px-5 py-10 lg:grid-cols-[minmax(20rem,0.72fr)_minmax(32rem,1.18fr)] lg:py-12">
-        <div className="max-w-xl">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-5 py-10 lg:grid-cols-[minmax(32rem,1.12fr)_minmax(20rem,0.88fr)] lg:py-12">
+        <div className="relative h-[22rem] min-w-0 sm:h-[27rem] lg:h-[31rem]">
+          <CryptoSphere locale={locale} />
+        </div>
+        <div className="max-w-xl lg:justify-self-end">
           <p className="text-xs font-semibold uppercase text-[#A97900]">{copy.globeEyebrow}</p>
           <h2 className="mt-3 text-3xl font-semibold leading-tight text-[#111111] md:text-4xl">{copy.globeTitle}</h2>
           <p className="mt-4 text-sm leading-7 text-[#5F6673] md:text-base">{copy.globeText}</p>
@@ -223,9 +225,6 @@ function GlobalMarketSection({ locale }: { locale: Locale }) {
               </div>
             ))}
           </div>
-        </div>
-        <div className="relative h-[22rem] min-w-0 sm:h-[27rem] lg:h-[31rem]">
-          <CryptoSphere locale={locale} />
         </div>
       </div>
     </section>

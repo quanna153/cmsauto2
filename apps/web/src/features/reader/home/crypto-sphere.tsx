@@ -270,7 +270,7 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
       new THREE.SphereGeometry(1.7, 96, 96),
       new THREE.MeshBasicMaterial({
         color: 0xc8a227,
-        opacity: 0.16,
+        opacity: 0,
         side: THREE.BackSide,
         transparent: true
       })
@@ -515,7 +515,6 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
       onPointerEnter={() => setIsHovering(true)}
       onPointerLeave={() => setIsHovering(false)}
     >
-      <div className="pointer-events-none absolute inset-6 rounded-full bg-[radial-gradient(circle,rgba(200,162,39,0.2),rgba(15,17,21,0.1)_42%,transparent_72%)] blur-2xl" />
       <canvas
         aria-label={copy.ariaLabel}
         className={`absolute inset-0 h-full w-full ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
