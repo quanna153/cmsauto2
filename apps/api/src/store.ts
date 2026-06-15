@@ -1913,10 +1913,11 @@ export async function reviewGateArticle(
     const now = nowIso();
     const review = validateArticleForReview(article);
     const nextStatus: ReviewStatus = review.passed ? "scheduled" : "needs_fix";
+    const requestedPublishAt = publishAtOverride ?? article.publishAt ?? null;
     const nextPublishAt = review.passed
-      ? (publishAtOverride ?? article.publishAt ?? new Date(Date.now() + 30 * 60 * 1000).toISOString())
-      : null;
-    const scheduledAt = nextPublishAt ?? now;
+      ? (requestedPublishAt ?? new Date(Date.now() + 30 * 60 * 1000).toISOString())
+      : requestedPublishAt;
+    const scheduledAt = review.passed ? nextPublishAt ?? now : now;
     const nextReviewNote = buildReviewNote(
       review.passed,
       review.issues,

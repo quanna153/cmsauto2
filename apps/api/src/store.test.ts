@@ -7,6 +7,7 @@ import {
   importArticleLibraryItems,
   patchArticleSession,
   readArticleLibrary,
+  readArticleSessions,
   readPublishedArticles,
   RevisionConflictError,
   reviewGateArticle,
@@ -81,6 +82,23 @@ describe("SQLite foundation", () => {
     expect(updated.versions?.length).toBeGreaterThan(0);
     await expect(patchArticleSession(created.id, created.revision ?? 1, { finalMarkdown: "stale" }, actor))
       .rejects.toBeInstanceOf(RevisionConflictError);
+  });
+
+  it("keeps the requested publish time when review gate needs fixes", async () => {
+    const article = completeArticle(`needs-fix-schedule-${crypto.randomUUID()}`);
+    const shortMarkdown = "Nội dung quá ngắn để pass review gate.";
+    article.finalMarkdown = shortMarkdown;
+    article.draft = article.draft ? { ...article.draft, markdown: shortMarkdown } : article.draft;
+    const created = await createArticleSession(article, actor);
+    const requestedPublishAt = new Date(Date.now() + 90 * 60 * 1000).toISOString();
+
+    const reviewed = await reviewGateArticle(created.id, actor, requestedPublishAt);
+    const persisted = (await readArticleSessions(actor)).find((item) => item.id === created.id);
+
+    expect(reviewed.article.reviewStatus).toBe("needs_fix");
+    expect(reviewed.publishJob).toBeNull();
+    expect(reviewed.article.publishAt).toBe(requestedPublishAt);
+    expect(persisted?.publishAt).toBe(requestedPublishAt);
   });
 
   it("publishes locale-aware live paths for Vietnamese and English", async () => {
