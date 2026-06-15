@@ -1,5 +1,5 @@
 import type { Locale } from "@cmsauto/contracts";
-import { ArrowRight, CheckCircle2, FileCheck2, Layers3, Mail, Newspaper, ShieldCheck, Target, UsersRound } from "lucide-react";
+import { ArrowRight, BarChart3, CheckCircle2, FileCheck2, Layers3, Mail, Newspaper, ShieldCheck, Target, UsersRound } from "lucide-react";
 import Link from "next/link";
 
 import { CryptoSphere } from "@/features/reader/home/crypto-sphere";
@@ -151,7 +151,9 @@ export function AboutFeature({ locale }: { locale: Locale }) {
           </div>
         </div>
 
-        <aside className="relative h-[22rem] overflow-visible rounded-2xl border border-[#E7DFCF] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)] [transform:perspective(900px)_rotateX(1deg)_rotateY(-3deg)] md:h-[24rem] lg:h-[25rem]">
+        <aside className="relative h-[22rem] overflow-visible [transform:perspective(900px)_rotateX(1deg)_rotateY(-3deg)] md:h-[24rem] lg:h-[25rem]">
+          <div className="pointer-events-none absolute inset-8 rounded-full bg-[radial-gradient(circle,rgba(232,211,145,0.26),rgba(232,211,145,0.08)_44%,transparent_68%)]" />
+          <div className="pointer-events-none absolute inset-x-20 bottom-8 h-px bg-gradient-to-r from-transparent via-[#C8A227]/45 to-transparent" />
           <CryptoSphere locale={locale} />
         </aside>
       </section>
@@ -183,9 +185,10 @@ export function AboutFeature({ locale }: { locale: Locale }) {
               return (
                 <article className="group relative grid gap-4 px-6 py-5 transition duration-300 hover:bg-[#111827] hover:text-white md:grid-cols-[3rem_10rem_minmax(0,1fr)] md:items-center" key={title}>
                   <span className="pointer-events-none absolute inset-y-0 left-0 w-1 origin-top scale-y-0 bg-[#C8A227] transition duration-300 group-hover:scale-y-100" />
-                  <span className="text-xs font-bold tracking-[0.18em] text-[#A88412] transition group-hover:text-[#F5E7B3]">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-[#FFFAE8] text-[#A88412] transition group-hover:bg-[#F5E7B3] group-hover:text-[#111827]">
+                    <Icon className="size-5" />
+                  </span>
                   <span className="inline-flex items-center gap-3 font-semibold">
-                    <Icon className="size-5 text-[#A88412] transition group-hover:text-[#F5E7B3]" />
                     {title}
                   </span>
                   <span className="text-sm leading-7 text-[#667085] transition group-hover:text-white/72">{text}</span>
@@ -198,9 +201,10 @@ export function AboutFeature({ locale }: { locale: Locale }) {
               return (
                 <article className="group relative grid gap-4 px-6 py-5 transition duration-300 hover:bg-[#F8F3E4] md:grid-cols-[3rem_10rem_minmax(0,1fr)] md:items-center" key={title}>
                   <span className="pointer-events-none absolute inset-y-0 left-0 w-1 origin-top scale-y-0 bg-[#111827] transition duration-300 group-hover:scale-y-100" />
-                  <span className="text-xs font-bold tracking-[0.18em] text-[#A88412]">{String(index + c.principles.length + 1).padStart(2, "0")}</span>
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-[#111827] text-[#F5E7B3]">
+                    <Icon className="size-5" />
+                  </span>
                   <span className="inline-flex items-center gap-3 font-semibold">
-                    <Icon className="size-5 text-[#111827]" />
                     {title}
                   </span>
                   <span className="text-sm leading-7 text-[#667085]">{text}</span>
@@ -222,18 +226,24 @@ export function AboutFeature({ locale }: { locale: Locale }) {
               <p className="mt-4 text-sm leading-7 text-white/62">Ba nhóm độc giả chính được tách thành các dải ưu tiên để nội dung phục vụ đúng nhu cầu đọc.</p>
             </header>
             <div className="grid gap-4">
-              {c.audience.map(([title, text], index) => (
+              {c.audience.map(([title, text], index) => {
+                const icons = [UsersRound, BarChart3, FileCheck2];
+                const Icon = icons[index] ?? UsersRound;
+
+                return (
                 <article className="group relative overflow-hidden border border-white/10 bg-white/[0.035] px-5 py-5 transition duration-300 hover:-translate-y-0.5 hover:border-[#F5E7B3]/60 hover:bg-white/[0.075] hover:shadow-[0_20px_54px_rgba(0,0,0,0.22)]" key={title}>
-                  <span className="pointer-events-none absolute right-5 top-2 text-7xl font-semibold leading-none text-white/[0.035] transition group-hover:text-[#F5E7B3]/10">{String(index + 1).padStart(2, "0")}</span>
                   <div className="relative grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:items-center">
-                    <span className="text-xs font-bold uppercase tracking-[0.22em] text-[#F5E7B3]">Segment {String(index + 1).padStart(2, "0")}</span>
+                    <span className="flex size-11 items-center justify-center rounded-full border border-[#F5E7B3]/35 bg-[#F5E7B3]/10 text-[#F5E7B3] shadow-[0_0_32px_rgba(245,231,179,0.08)]">
+                      <Icon size={19} />
+                    </span>
                     <div>
                       <h3 className="text-lg font-semibold">{title}</h3>
                       <p className="mt-2 max-w-3xl text-sm leading-7 text-white/68">{text}</p>
                     </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -256,7 +266,6 @@ export function AboutFeature({ locale }: { locale: Locale }) {
               }`}
               key={title}
             >
-              <span className={`absolute right-5 top-4 text-5xl font-semibold leading-none ${index === 0 ? "text-white/10" : "text-[#C8A227]/18"}`}>{String(index + 1).padStart(2, "0")}</span>
               <Target className={`relative size-6 ${index === 0 ? "text-[#F5E7B3]" : "text-[#A88412]"}`} />
               <h3 className={`relative mt-6 text-xl font-semibold ${index === 0 ? "max-w-md text-3xl leading-tight" : ""}`}>{title}</h3>
               <p className={`relative mt-3 text-sm leading-7 ${index === 0 ? "max-w-xl text-white/68" : "text-[#667085]"}`}>{text}</p>
@@ -316,9 +325,9 @@ export function AboutFeature({ locale }: { locale: Locale }) {
                 <span className="ml-2">coinradar/editorial-guardrails</span>
               </div>
               <ul className="divide-y divide-white/10">
-                {c.guardrails.map((item, index) => (
+                {c.guardrails.map((item) => (
                   <li className="group grid gap-3 px-4 py-4 transition duration-300 hover:bg-[#F5E7B3]/8 md:grid-cols-[5.5rem_minmax(0,1fr)_2rem] md:items-center" key={item}>
-                    <span className="text-[#F5E7B3]">$ rule:{String(index + 1).padStart(2, "0")}</span>
+                    <span className="text-[#F5E7B3]">$ block</span>
                     <span className="leading-7 text-white/72 transition group-hover:text-white">{item}</span>
                     <CheckCircle2 className="size-5 text-[#F5E7B3]" />
                   </li>

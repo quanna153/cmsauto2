@@ -77,7 +77,7 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
               </div>
               <div className="divide-y divide-[#E5E7EB]">
                 {featuredRelated.length > 0
-                  ? featuredRelated.map((item, index) => <SidebarArticle article={item} index={index} key={item.id} />)
+                  ? featuredRelated.map((item) => <SidebarArticle article={item} key={item.id} />)
                   : <p className="p-4 text-sm leading-6 text-[#4B5563]">{article.locale === "vi-vn" ? "Bài viết khác sẽ hiển thị tại đây." : "More articles will appear here."}</p>}
               </div>
             </section>
@@ -278,10 +278,10 @@ function QuickView({ sections }: { sections: MarkdownSection[] }) {
   );
 }
 
-function SidebarArticle({ article, index }: { article: ReaderArticle; index: number }) {
+function SidebarArticle({ article }: { article: ReaderArticle }) {
   return (
     <Link className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 px-4 py-4 transition hover:bg-[#FAFAF7]" href={article.livePath || `/${article.locale}/${article.slug}`}>
-      <span className="text-sm font-bold text-[#C8A227]">{String(index + 1).padStart(2, "0")}</span>
+      <span className="mt-2 size-2 rounded-full bg-[#C8A227] shadow-[0_0_0_6px_rgba(200,162,39,0.12)]" />
       <span className="min-w-0">
         <span className="line-clamp-2 text-[14px] font-bold leading-6 text-[#111827]">{article.title}</span>
         <span className="mt-2 block text-sm text-[#4B5563]">{formatDate(article.publishedAt, article.locale)}</span>

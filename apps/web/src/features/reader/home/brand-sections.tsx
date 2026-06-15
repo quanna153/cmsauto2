@@ -81,13 +81,13 @@ export function HomeVisionSection() {
         </div>
         <div className="grid gap-3">
           {[
-            ["01", "Dữ liệu rõ ràng", "Theo dõi giá, dòng tiền và tin tức trong cùng một mạch đọc."],
-            ["02", "Biên tập có chọn lọc", "Ưu tiên bối cảnh, nguồn tin và tín hiệu có ích cho quyết định."],
-            ["03", "Trải nghiệm nhanh", "Reader nhẹ, dễ đọc, tối ưu cho mobile và desktop."]
-          ].map(([index, title, text]) => (
-            <article className="rounded-lg border border-[#E5E7EB] bg-white/88 p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)] backdrop-blur" key={index}>
-              <p className="text-xs font-bold text-[#A88412]">{index}</p>
-              <h3 className="mt-2 text-base font-bold text-[#111827]">{title}</h3>
+            ["Dữ liệu rõ ràng", "Theo dõi giá, dòng tiền và tin tức trong cùng một mạch đọc."],
+            ["Biên tập có chọn lọc", "Ưu tiên bối cảnh, nguồn tin và tín hiệu có ích cho quyết định."],
+            ["Trải nghiệm nhanh", "Reader nhẹ, dễ đọc, tối ưu cho mobile và desktop."]
+          ].map(([title, text]) => (
+            <article className="rounded-lg border border-[#E5E7EB] bg-white/88 p-4 shadow-[0_14px_34px_rgba(17,24,39,0.05)] backdrop-blur" key={title}>
+              <span className="block h-1 w-10 rounded-full bg-[#A88412]" />
+              <h3 className="mt-4 text-base font-bold text-[#111827]">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-[#4B5563]">{text}</p>
             </article>
           ))}

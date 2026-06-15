@@ -237,6 +237,7 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
   const isHoveringRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [useFallback, setUseFallback] = useState(false);
   const copy = globeCopy[locale];
 
   useEffect(() => {
@@ -253,12 +254,19 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
     camera.position.set(0, 0, 5.75);
 
-    const renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      canvas,
-      preserveDrawingBuffer: true
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        canvas,
+        preserveDrawingBuffer: true
+      });
+    } catch {
+      setUseFallback(true);
+      return;
+    }
+
     renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -508,6 +516,10 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
     };
   }, [copy.cards]);
 
+  if (useFallback) {
+    return <CryptoSphereFallback locale={locale} />;
+  }
+
   return (
     <div
       className="relative h-full w-full"
@@ -542,6 +554,46 @@ export function CryptoSphere({ locale }: { locale: Locale }) {
               cardRefs.current[index] = element;
             }}
             style={{ opacity: index < 2 ? 1 : 0 }}
+          >
+            <div className="flex gap-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#0F1115] text-[#F5E7B3]">
+                <Icon size={16} />
+              </span>
+              <span>
+                <strong className="block text-xs font-bold text-[#111827]">{card.title}</strong>
+                <span className="mt-1 block text-[11px] leading-4 text-[#4B5563]">{card.description}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CryptoSphereFallback({ locale }: { locale: Locale }) {
+  const copy = globeCopy[locale];
+
+  return (
+    <div className="relative h-full w-full" data-home-globe-scene="fallback">
+      <div className="absolute left-1/2 top-1/2 h-[74%] w-[74%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_38%_34%,#FFFDF4_0%,#F8F2DE_42%,#E5CC76_76%,transparent_77%)] shadow-[0_28px_68px_rgba(200,162,39,0.16)]">
+        <div className="absolute inset-[12%] rounded-full border border-[#C8A227]/30" />
+        <div className="absolute inset-[22%] rounded-full border border-[#111827]/14" />
+        <div className="absolute inset-[8%] rounded-full bg-[linear-gradient(90deg,rgba(17,24,39,0.12)_1px,transparent_1px),linear-gradient(180deg,rgba(17,24,39,0.08)_1px,transparent_1px)] bg-[size:2.4rem_2.4rem] opacity-70 [clip-path:circle(50%)]" />
+        <div className="absolute left-[20%] top-[22%] h-[22%] w-[32%] rounded-[48%] bg-[#111827]/78" />
+        <div className="absolute bottom-[22%] right-[18%] h-[30%] w-[28%] rounded-[45%] bg-[#111827]/78" />
+        <div className="absolute left-[-7%] top-1/2 h-px w-[114%] -translate-y-1/2 rotate-[-10deg] bg-[#C8A227]/55" />
+        <div className="absolute left-[-8%] top-1/2 h-px w-[116%] -translate-y-1/2 rotate-[13deg] bg-[#C8A227]/25" />
+      </div>
+
+      {copy.cards.slice(0, 3).map((card, index) => {
+        const Icon = card.icon;
+        const positions = ["left-[6%] top-[18%]", "right-[2%] top-[22%]", "right-[8%] bottom-[20%]"];
+
+        return (
+          <div
+            className={`absolute ${positions[index]} hidden w-44 rounded-lg border border-[#E5E7EB] bg-white/96 px-3 py-2.5 shadow-[0_12px_30px_rgba(17,24,39,0.16)] backdrop-blur md:block`}
+            key={card.title}
           >
             <div className="flex gap-2.5">
               <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#0F1115] text-[#F5E7B3]">

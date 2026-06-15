@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
+import { buildFactoryRetryHref, shouldShowFactoryRetry } from "@/features/admin/articles/factory-retry";
 import type { ArticleSession } from "@/features/admin/types";
 import { deleteJson, getJson } from "@/lib/api";
 
@@ -88,6 +89,9 @@ export function ArticlesFeature() {
                       <div className="flex flex-wrap gap-3">
                         {article.activeStep !== "ready"
                           ? <Link className="inline-flex items-center gap-1 font-semibold text-[#80640b]" href={`/admin/factory?articleId=${article.id}`}><FlaskConical size={14} />Tiếp tục tạo</Link>
+                          : null}
+                        {shouldShowFactoryRetry(article)
+                          ? <Link className="inline-flex items-center gap-1 font-semibold text-[#80640b]" href={buildFactoryRetryHref(article)}><FlaskConical size={14} />Tạo lại AI</Link>
                           : null}
                         <Link className="inline-flex items-center gap-1 font-semibold text-[#80640b]" href={`/admin/articles/${article.id}`}><Pencil size={14} />Sửa bài</Link>
                         {article.livePath ? <Link className="inline-flex items-center gap-1 font-semibold text-[#566174]" href={article.livePath}><ExternalLink size={14} />Xem public</Link> : null}

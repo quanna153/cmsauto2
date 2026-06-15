@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Save, Trash2 } from "lucide-react";
+import { CalendarClock, FlaskConical, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
+import { buildFactoryRetryHref, shouldShowFactoryRetry } from "@/features/admin/articles/factory-retry";
 import { ArticleImagesPanel } from "@/features/admin/factory";
 import type { ArticleSession, GeneratedArticleImage, InternalLinkSuggestion } from "@/features/admin/types";
 import type { Draft } from "@/features/admin/factory";
@@ -146,10 +147,18 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   const actionLabel = hasUnsavedChanges
     ? `Lưu & ${baseActionLabel.toLocaleLowerCase("vi-VN")}`
     : baseActionLabel;
+  const showFactoryRetry = shouldShowFactoryRetry(article);
+  const factoryRetryHref = buildFactoryRetryHref(article);
 
   return <>
     <PageHeader
       actions={<div className="flex flex-wrap gap-2">
+        {showFactoryRetry ? <Link
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#172033] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#273247]"
+          href={factoryRetryHref}
+        >
+          <FlaskConical size={16} />Tạo lại bằng AI
+        </Link> : null}
         <Button disabled={save.isPending || reviewBusy || remove.isPending} onClick={confirmDeleteArticle} variant="danger">
           <Trash2 size={16} />{remove.isPending ? "Đang xóa..." : "Xóa bài"}
         </Button>
@@ -230,6 +239,12 @@ export function ArticleEditorFeature({ id }: { id: string }) {
         <section className="rounded-xl border bg-white p-4">
           <h2 className="font-semibold">Review note</h2>
           <p className="mt-2 whitespace-pre-wrap text-sm text-[#687386]">{article.reviewNote || "Chưa có ghi chú."}</p>
+          {showFactoryRetry ? <Link
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#172033] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#273247]"
+            href={factoryRetryHref}
+          >
+            <FlaskConical size={15} />Quay lại 6 bước để gen lại
+          </Link> : null}
         </section>
       </aside>
     </div>

@@ -615,6 +615,34 @@ const anchorPredicateWords = new Set([
   "cap"
 ]);
 
+function isStrongVietnameseTopicPhrase(value: string) {
+  const normalized = normalizeComparable(value);
+  return /^(phan tich thi truong|tin tuc altcoin|cap nhat tin tuc|thi truong crypto|thi truong tien dien tu|von hoa thi truong|dong tien|gia bitcoin|gia coin)/u.test(normalized);
+}
+
+function hasDanglingVietnameseAnchorStart(value: string) {
+  const tokens = normalizeComparable(value).split(" ").filter(Boolean);
+  if (tokens.length === 0) {
+    return true;
+  }
+
+  return tokens[0] === "nhat"
+    || (tokens[0] === "moi" && tokens[1] === "nhat")
+    || (tokens[0] === "tich" && tokens[1] === "thi")
+    || (tokens[0] === "truong" && tokens[1] === "crypto");
+}
+
+function hasBrokenVietnameseAnchorPattern(value: string) {
+  const normalized = normalizeComparable(value);
+  return /\b(nhat cho|nhat cung)\b/u.test(normalized)
+    || /^(tich thi truong|truong crypto)\b/u.test(normalized);
+}
+
+function hasAnchorPredicateAfterFirst(value: string) {
+  const tokens = normalizeComparable(value).split(" ").filter(Boolean);
+  return tokens.some((token, index) => index > 0 && anchorPredicateWords.has(token));
+}
+
 const titleTopicNoiseWords = new Set([
   ...weakAnchorEdgeWords,
   "101",
@@ -746,6 +774,10 @@ function hasWeakAnchorEdge(value: string) {
     return true;
   }
 
+  if (isStrongVietnameseTopicPhrase(value)) {
+    return weakAnchorEdgeWords.has(tokens[tokens.length - 1]);
+  }
+
   return weakAnchorEdgeWords.has(tokens[0]) || weakAnchorEdgeWords.has(tokens[tokens.length - 1]);
 }
 
@@ -796,6 +828,8 @@ function isLinkableAnchorText(anchorText: string, language: Language) {
   if (
     isWeakAnchor(trimmed)
     || hasWeakAnchorEdge(trimmed)
+    || (language === "vi" && hasDanglingVietnameseAnchorStart(trimmed))
+    || (language === "vi" && hasBrokenVietnameseAnchorPattern(trimmed))
     || crossesSentenceBoundary(trimmed)
     || tokens.length === 0
     || contentTokens.length === 0
@@ -833,7 +867,7 @@ function isWellFormedAnchorText(anchorText: string, language: Language) {
     return false;
   }
 
-  if (tokens.some((token, index) => index > 0 && anchorPredicateWords.has(token))) {
+  if (hasAnchorPredicateAfterFirst(trimmed)) {
     return false;
   }
 
@@ -1355,6 +1389,200 @@ export type InternalLinkTargetSelection = {
   confidence?: number;
 };
 
+function trimAnchorEdges(value: string) {
+  return value
+    .replace(/^\s*[[("'`]+/u, "")
+    .replace(/[\])"'`.,:;!?，。！？]+$/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sourceContextForAnchorRepair(markdown: string, anchor: string, sourceContext?: string) {
+  const trimmedContext = sourceContext?.trim();
+  if (trimmedContext) {
+    return trimmedContext;
+  }
+  return extractSourceContext(markdown, anchor);
+}
+
+function tokenWindowForAnchor(context: string, anchor: string) {
+  const normalizedAnchor = normalizeComparable(anchor);
+  if (!normalizedAnchor) {
+    return null;
+  }
+
+  const spans = contentTokenSpans(context);
+  const normalizedTokens = spans.map((span) => normalizeComparable(span.text));
+  const anchorTokens = normalizedAnchor.split(" ").filter(Boolean);
+  if (anchorTokens.length === 0) {
+    return null;
+  }
+
+  for (let index = 0; index + anchorTokens.length <= normalizedTokens.length; index += 1) {
+    const slice = normalizedTokens.slice(index, index + anchorTokens.length);
+    if (slice.join(" ") === anchorTokens.join(" ")) {
+      return { start: index, end: index + anchorTokens.length - 1 };
+    }
+  }
+
+  let best: { start: number; end: number; score: number } | null = null;
+  for (let index = 0; index < normalizedTokens.length; index += 1) {
+    for (let size = 1; size <= Math.min(8, normalizedTokens.length - index); size += 1) {
+      const phrase = normalizedTokens.slice(index, index + size).join(" ");
+      const score = fuzzyTokenCoverage(anchorTokens, phrase.split(" "));
+      if (score > (best?.score ?? 0)) {
+        best = { start: index, end: index + size - 1, score };
+      }
+    }
+  }
+
+  return best && best.score >= 0.66 ? best : null;
+}
+
+function anchorPhraseFromTokenWindow(context: string, spans: ReturnType<typeof contentTokenSpans>, start: number, end: number) {
+  const first = spans[start];
+  const last = spans[end];
+  if (!first || !last) {
+    return "";
+  }
+  return trimAnchorEdges(context.slice(first.startOffset, last.endOffset));
+}
+
+function anchorRepairCandidateScore(
+  phrase: string,
+  rawAnchor: string,
+  language: Language,
+  targetArticle?: ArticleLibraryItem
+) {
+  const phraseTokens = uniqueTokens(phrase, language);
+  const rawTokens = uniqueTokens(rawAnchor, language);
+  const normalizedPhrase = normalizeComparable(phrase);
+  const normalizedRaw = normalizeComparable(rawAnchor);
+  const phraseWordCount = wordCount(phrase);
+  let score = 0;
+
+  if (normalizedPhrase.includes(normalizedRaw)) {
+    score += 3;
+  }
+  if (normalizedRaw.includes(normalizedPhrase)) {
+    score += 1;
+  }
+  score += fuzzyTokenCoverage(rawTokens, phraseTokens) * 2.5;
+
+  if (targetArticle) {
+    const targetTokens = uniqueTokens(articleSearchText(targetArticle), language);
+    score += Math.max(
+      fuzzyTokenCoverage(phraseTokens, targetTokens),
+      fuzzyTokenCoverage(targetTokens, phraseTokens)
+    ) * 5;
+  }
+
+  if (hasTopicSignal(phrase)) {
+    score += 1.5;
+  }
+  if (isStrongVietnameseTopicPhrase(phrase)) {
+    score += 1;
+  }
+  if (phraseWordCount >= 3 && phraseWordCount <= 6) {
+    score += 1;
+  } else if (phraseWordCount === 2) {
+    score += 0.35;
+  } else if (phraseWordCount > 8) {
+    score -= 1;
+  }
+  if (language === "vi" && hasDanglingVietnameseAnchorStart(phrase)) {
+    score -= 4;
+  }
+
+  return score;
+}
+
+function repairedInternalLinkAnchor(
+  draft: Draft,
+  language: Language,
+  rawAnchor: string,
+  sourceContext?: string,
+  targetArticle?: ArticleLibraryItem
+) {
+  const cleanedAnchor = trimAnchorEdges(rawAnchor);
+  const currentContext = sourceContextForAnchorRepair(draft.markdown, cleanedAnchor, sourceContext);
+  const cleanedSourceContext = currentContext || extractSourceContext(draft.markdown, cleanedAnchor);
+
+  if (hasAnchorPredicateAfterFirst(cleanedAnchor)) {
+    return null;
+  }
+
+  const canUseCleanedAnchor = cleanedAnchor
+    && !isMainTopicAnchor(draft.title, cleanedAnchor, language)
+    && isWellFormedAnchorText(cleanedAnchor, language)
+    && anchorAppearsWithBoundaries(draft.markdown, cleanedAnchor);
+
+  if (canUseCleanedAnchor) {
+    return {
+      anchor: cleanedAnchor,
+      sourceContext: cleanedSourceContext || extractSourceContext(draft.markdown, cleanedAnchor)
+    };
+  }
+
+  const context = cleanedSourceContext || draft.markdown.split(/\n\s*\n/).find((block) => !isMarkdownHeadingLine(block)) || "";
+  const spans = contentTokenSpans(context);
+  const anchorWindow = tokenWindowForAnchor(context, cleanedAnchor);
+  const candidates: Array<{ phrase: string; score: number }> = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (start: number, end: number) => {
+    const phrase = anchorPhraseFromTokenWindow(context, spans, start, end);
+    const normalized = normalizeComparable(phrase);
+    if (
+      !phrase
+      || seen.has(normalized)
+      || isMainTopicAnchor(draft.title, phrase, language)
+      || !isWellFormedAnchorText(phrase, language)
+      || !anchorAppearsWithBoundaries(draft.markdown, phrase)
+    ) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push({
+      phrase,
+      score: anchorRepairCandidateScore(phrase, cleanedAnchor, language, targetArticle)
+    });
+  };
+
+  if (anchorWindow) {
+    for (let left = 0; left <= 4; left += 1) {
+      for (let right = 0; right <= 4; right += 1) {
+        const start = Math.max(0, anchorWindow.start - left);
+        const end = Math.min(spans.length - 1, anchorWindow.end + right);
+        if (end >= start && end - start + 1 <= 8) {
+          addCandidate(start, end);
+        }
+      }
+    }
+  }
+
+  for (let index = 0; index < spans.length; index += 1) {
+    for (let size = 2; size <= 7 && index + size <= spans.length; size += 1) {
+      addCandidate(index, index + size - 1);
+    }
+  }
+
+  const best = candidates.sort((left, right) =>
+    right.score - left.score
+    || wordCount(left.phrase) - wordCount(right.phrase)
+    || left.phrase.length - right.phrase.length
+  )[0];
+
+  if (!best || best.score < 2) {
+    return null;
+  }
+
+  return {
+    anchor: best.phrase,
+    sourceContext: extractSourceContext(draft.markdown, best.phrase) || context.trim().slice(0, 220)
+  };
+}
+
 function rejectedUrlsForAnchor(
   anchor: string,
   rejectedSuggestions: InternalLinkSuggestion[]
@@ -1413,7 +1641,12 @@ export function mapAnchorCandidatesToInternalLinks(
 ) {
   const mapped = candidates
     .map((candidate) => {
-      const anchor = candidate.anchor.trim();
+      const repair = repairedInternalLinkAnchor(draft, language, candidate.anchor, candidate.sourceContext);
+      if (!repair) {
+        return null;
+      }
+
+      const { anchor, sourceContext } = repair;
       if (
         !anchor
         || isMainTopicAnchor(draft.title, anchor, language)
@@ -1423,7 +1656,6 @@ export function mapAnchorCandidatesToInternalLinks(
         return null;
       }
 
-      const sourceContext = candidate.sourceContext?.trim() || extractSourceContext(draft.markdown, anchor);
       const bestMatch = findBestInternalLinkMatch(
         anchor,
         sourceContext,
@@ -1485,7 +1717,22 @@ export function mapSelectedInternalLinkTargetsToSuggestions(
   const byId = new Map(articleLibrary.map((article) => [article.id, article]));
   const mapped = selections
     .map((selection) => {
-      const anchor = selection.anchor.trim();
+      const targetUrl = selection.targetUrl?.trim().toLowerCase();
+      const targetArticle = selection.targetArticleId
+        ? byId.get(selection.targetArticleId)
+        : targetUrl
+          ? byUrl.get(targetUrl)
+          : undefined;
+      if (!targetArticle) {
+        return null;
+      }
+
+      const repair = repairedInternalLinkAnchor(draft, language, selection.anchor, selection.sourceContext, targetArticle);
+      if (!repair) {
+        return null;
+      }
+
+      const { anchor, sourceContext } = repair;
       if (
         !anchor
         || isMainTopicAnchor(draft.title, anchor, language)
@@ -1495,21 +1742,13 @@ export function mapSelectedInternalLinkTargetsToSuggestions(
         return null;
       }
 
-      const targetUrl = selection.targetUrl?.trim().toLowerCase();
-      const targetArticle = selection.targetArticleId
-        ? byId.get(selection.targetArticleId)
-        : targetUrl
-          ? byUrl.get(targetUrl)
-          : undefined;
       if (
-        !targetArticle
-        || isMainTopicArticleTarget(draft.title, targetArticle, language)
+        isMainTopicArticleTarget(draft.title, targetArticle, language)
         || rejectedUrlsForAnchor(anchor, rejectedSuggestions).has(targetArticle.url.trim().toLowerCase())
       ) {
         return null;
       }
 
-      const sourceContext = selection.sourceContext?.trim() || extractSourceContext(draft.markdown, anchor);
       const match = scoreInternalLinkArticleMatch(anchor, sourceContext, targetArticle, language);
 
       return {

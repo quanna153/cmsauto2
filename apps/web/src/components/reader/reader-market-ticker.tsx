@@ -91,7 +91,7 @@ export function ReaderMarketTicker({ locale = "vi-vn" }: { locale?: Locale }) {
   const marqueeItems = useMemo(() => [...tickers, ...tickers], [tickers]);
 
   return (
-    <section className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden border-y border-[#EFE7D6] bg-white">
+    <section className="relative w-full overflow-hidden border-y border-[#EFE7D6] bg-white">
       <div className="reader-ticker-track flex h-14 w-max items-center gap-10 whitespace-nowrap text-sm">
         {marqueeItems.map((ticker, index) => {
           const positive = ticker.changePercent >= 0;

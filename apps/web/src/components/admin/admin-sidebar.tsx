@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BookOpenText, FilePenLine, FileSpreadsheet, FlaskConical, Image, Link2, LogOut, SearchCode, ShieldUser } from "lucide-react";
+import { BarChart3, FilePenLine, FileSpreadsheet, FlaskConical, Image, Link2, LogOut, SearchCode, ShieldUser } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,6 +19,8 @@ const navigation = [
   { href: "/admin/users", label: "Tài khoản", icon: ShieldUser }
 ];
 
+const adminLogoUrl = "https://micace.com/_next/static/media/logo.c7580c5f.png";
+
 type AdminSidebarProps = {
   canManageUsers: boolean;
   onLogout: () => void;
@@ -32,9 +34,11 @@ export function AdminSidebar({ canManageUsers, onLogout, user }: AdminSidebarPro
   return (
     <aside className="flex flex-col border-b bg-[#172033] text-white lg:min-h-screen lg:w-64 lg:border-b-0 lg:border-r">
       <div className="flex items-center gap-3 border-b border-white/10 p-5">
-        <BookOpenText className="text-[#d2b34d]" />
-        <div>
-          <strong className="block text-sm">CMS Auto</strong>
+        <span className="flex h-10 w-24 shrink-0 items-center rounded-lg bg-white px-2 shadow-sm ring-1 ring-white/15">
+          <img alt="Micace" className="h-auto w-full object-contain" src={adminLogoUrl} />
+        </span>
+        <div className="min-w-0">
+          <strong className="block truncate text-sm">Micace CMS</strong>
           <span className="text-xs text-white/55">Content workspace</span>
         </div>
       </div>

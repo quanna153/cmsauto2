@@ -244,6 +244,67 @@ describe("internal link matching", () => {
     expect(suggestions).toHaveLength(0);
   });
 
+  it("repairs AI-selected Vietnamese anchor fragments into meaningful phrases", () => {
+    const viDraft: Draft = {
+      ...draft,
+      title: "Dòng tiền altcoin",
+      markdown: "Cập nhật tin tức Altcoin mới nhất cho một altcoin tiềm năng cần dựa trên dữ liệu thị trường và mức độ rủi ro."
+    };
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      viDraft,
+      "vi",
+      [
+        libraryItem({
+          id: "altcoin-news",
+          title: "Cập nhật tin tức Altcoin mới nhất cùng CoinMinutes",
+          url: "/vi-vn/altcoin",
+          language: "vi"
+        })
+      ],
+      [{
+        anchor: "nhất cho một altcoin",
+        targetUrl: "/vi-vn/altcoin",
+        confidence: 0.99,
+        reason: "Selected by AI."
+      }]
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(normalizeTestText(suggestions[0]?.anchor ?? "")).toContain("altcoin");
+    expect(normalizeTestText(suggestions[0]?.anchor ?? "")).not.toBe("nhat cho mot altcoin");
+    expect(normalizeTestText(suggestions[0]?.anchor ?? "")).not.toContain("nhat cho");
+  });
+
+  it("repairs clipped Vietnamese analysis anchors instead of accepting mid-phrase cuts", () => {
+    const viDraft: Draft = {
+      ...draft,
+      title: "Dòng tiền đầu năm",
+      markdown: "Phân tích thị trường Crypto đầu năm 2026 giúp nhà đầu tư hiểu dòng tiền, narrative và các cơ hội đáng chú ý."
+    };
+    const suggestions = mapSelectedInternalLinkTargetsToSuggestions(
+      viDraft,
+      "vi",
+      [
+        libraryItem({
+          id: "market-analysis",
+          title: "Phân tích thị trường Crypto đầu năm 2026: Dòng chảy Narrative và cơ hội đầu tư",
+          url: "/vi-vn/thi-truong-crypto-dau-nam",
+          language: "vi"
+        })
+      ],
+      [{
+        anchor: "tích thị trường crypto",
+        targetUrl: "/vi-vn/thi-truong-crypto-dau-nam",
+        confidence: 0.99,
+        reason: "Selected by AI."
+      }]
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(normalizeTestText(suggestions[0]?.anchor ?? "")).toContain("phan tich thi truong crypto");
+    expect(normalizeTestText(suggestions[0]?.anchor ?? "")).not.toBe("tich thi truong crypto");
+  });
+
   it("does not accept descriptive clauses as anchor candidates", () => {
     const viDraft: Draft = {
       ...draft,

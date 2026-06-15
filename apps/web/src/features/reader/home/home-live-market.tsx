@@ -472,7 +472,7 @@ export function InlineMarketTicker({ coins, locale }: { coins: LiveCoin[]; local
   const { tickers } = useLiveTickers(coins);
 
   return (
-    <div className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden border-y border-[#EFE7D6] bg-white">
+    <div className="relative w-full overflow-hidden border-y border-[#EFE7D6] bg-white">
       <div className="flex h-14 animate-[coin-home-marquee_70s_linear_infinite] items-center gap-10 whitespace-nowrap">
         {[...coins, ...coins].map((coin, index) => {
           const ticker = tickers[coin.pair];

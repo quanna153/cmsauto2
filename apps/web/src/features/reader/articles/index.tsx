@@ -1,10 +1,9 @@
 import type { Locale } from "@cmsauto/contracts";
-import { Clock3, Filter, Flame, ImageIcon, Search, UserRound, Zap } from "lucide-react";
+import { Clock3, Flame, ImageIcon, UserRound, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "@/features/reader/adapter";
 import { getFallbackReaderArticles } from "@/features/reader/fallback-articles";
-import { localeCopy } from "@/features/reader/locale";
 import type { ReaderArticle } from "@/features/reader/model";
 
 import { ArticlesMarketPulse } from "./articles-market-pulse";
@@ -15,7 +14,6 @@ const defaultCategories = {
 } satisfies Record<Locale, string[]>;
 
 export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
-  const copy = localeCopy(locale);
   let apiArticles: ReaderArticle[] = getFallbackReaderArticles(locale);
   try {
     const loadedArticles = await getReaderArticles(locale);
@@ -44,36 +42,21 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
                   : "Fast, focused coverage of the most important crypto market moves."}
               </p>
             </div>
-            <Link
-              className="inline-flex h-11 w-fit items-center gap-2 rounded-lg border border-[#D8DDE5] bg-white px-4 text-sm font-bold text-[#111827] shadow-sm transition hover:border-[#C8A227] hover:text-[#A88412]"
-              href={`/${locale}/search`}
-            >
-              <Search className="h-4 w-4" />
-              {copy.search}
-            </Link>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {defaultCategories[locale].map((category, index) => (
-              <Link
+              <span
                 className={`rounded-lg border px-4 py-2 text-sm font-bold transition ${
                   index === 0
                     ? "border-[#C8950B] bg-[#B98200] text-white shadow-[0_10px_24px_rgba(184,130,0,0.18)]"
-                    : "border-[#DCE1E8] bg-white text-[#394456] hover:border-[#C8A227] hover:text-[#A88412]"
+                    : "border-[#DCE1E8] bg-white text-[#394456]"
                 }`}
-                href={index === 0 ? `/${locale}/articles` : `/${locale}/search?q=${encodeURIComponent(category)}`}
                 key={category}
               >
                 {category}
-              </Link>
+              </span>
             ))}
-            <Link
-              className="ml-0 inline-flex items-center gap-2 rounded-lg border border-[#DCE1E8] bg-white px-4 py-2 text-sm font-bold text-[#394456] transition hover:border-[#C8A227] hover:text-[#A88412] lg:ml-auto"
-              href={`/${locale}/search`}
-            >
-              <Filter className="h-4 w-4" />
-              {isVi ? "Bộ lọc" : "Filters"}
-            </Link>
           </div>
 
           <div className="mt-6 space-y-4">
@@ -84,7 +67,7 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
 
         <aside className="space-y-5 lg:pt-[4.25rem]">
           <LatestPanel articles={latest} isVi={isVi} />
-          <HotTopicsPanel isVi={isVi} locale={locale} topics={hotTopics} />
+          <HotTopicsPanel isVi={isVi} topics={hotTopics} />
           <ArticlesMarketPulse locale={locale} />
         </aside>
       </section>
@@ -167,9 +150,9 @@ function LatestPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: bool
     <section className="rounded-xl border border-[#E3E5E8] bg-white p-5 shadow-[0_16px_42px_rgba(17,24,39,0.04)]">
       <h2 className="text-lg font-bold text-[#080B11]">{isVi ? "Bài mới" : "Latest articles"}</h2>
       <div className="mt-4 divide-y divide-[#E6E9EE]">
-        {articles.map((article, index) => (
+        {articles.map((article) => (
           <Link className="group grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-4 first:pt-0 last:pb-0" href={articleHref(article)} key={article.id}>
-            <ArticleThumbnail article={article} className="h-16" compact index={index + 1} />
+            <ArticleThumbnail article={article} className="h-16" compact />
             <span className="min-w-0">
               <span className="line-clamp-2 text-sm font-bold leading-6 text-[#111827] transition group-hover:text-[#A88412]">{article.title}</span>
               <span className="mt-1 block text-xs font-semibold text-[#667085]">{formatTime(article.publishedAt, article.locale)}</span>
@@ -181,7 +164,7 @@ function LatestPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: bool
   );
 }
 
-function HotTopicsPanel({ topics, isVi, locale }: { topics: string[]; isVi: boolean; locale: Locale }) {
+function HotTopicsPanel({ topics, isVi }: { topics: string[]; isVi: boolean }) {
   return (
     <section className="rounded-xl border border-[#E3E5E8] bg-white p-5 shadow-[0_16px_42px_rgba(17,24,39,0.04)]">
       <h2 className="inline-flex items-center gap-2 text-lg font-bold text-[#080B11]">
@@ -190,13 +173,12 @@ function HotTopicsPanel({ topics, isVi, locale }: { topics: string[]; isVi: bool
       </h2>
       <div className="mt-4 flex flex-wrap gap-2">
         {topics.map((topic) => (
-          <Link
-            className="rounded-md border border-[#E1E5EC] bg-[#FBFCFE] px-3 py-1.5 text-xs font-semibold text-[#475467] transition hover:border-[#C8A227] hover:text-[#A88412]"
-            href={`/${locale}/search?q=${encodeURIComponent(topic)}`}
+          <span
+            className="rounded-md border border-[#E1E5EC] bg-[#FBFCFE] px-3 py-1.5 text-xs font-semibold text-[#475467]"
             key={topic}
           >
             #{topic}
-          </Link>
+          </span>
         ))}
       </div>
     </section>
@@ -207,13 +189,11 @@ function ArticleThumbnail({
   article,
   className,
   compact = false,
-  index,
   priority = false
 }: {
   article: ReaderArticle;
   className: string;
   compact?: boolean;
-  index?: number;
   priority?: boolean;
 }) {
   const image = article.thumbnailImage ?? article.heroImage;
@@ -230,10 +210,8 @@ function ArticleThumbnail({
           loading={priority ? "eager" : "lazy"}
           src={src}
         />
-        {compact && index ? (
-          <span className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-bold text-[#F8D66D]">
-            {String(index).padStart(2, "0")}
-          </span>
+        {compact ? (
+          <span className="absolute inset-0 bg-gradient-to-tr from-black/28 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
         ) : null}
       </span>
     );
@@ -247,11 +225,6 @@ function ArticleThumbnail({
         <ImageIcon className="h-4 w-4" />
         CoinRadar
       </span>
-      {compact && index ? (
-        <span className="absolute right-2 top-2 rounded bg-white/10 px-2 py-1 text-xs font-bold text-[#F8D66D]">
-          {String(index).padStart(2, "0")}
-        </span>
-      ) : null}
     </span>
   );
 }

@@ -172,8 +172,11 @@ export function FactoryFeature() {
   };
   const selectedAiStep = selectedStep === "ready" ? null : selectedStep;
   useEffect(() => {
-    const articleId = new URLSearchParams(window.location.search).get("articleId");
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get("articleId");
     if (!articleId) return;
+    const requestedStep = parseFactoryStepParam(params.get("step"));
+    const isRegenerateMode = params.get("mode") === "regenerate";
 
     let cancelled = false;
     setBusy(true);
@@ -186,8 +189,10 @@ export function FactoryFeature() {
           setError("Không tìm thấy bài đang làm dở.");
           return;
         }
-        hydrateFromArticle(article);
-        setSaveMessage(`Đã nạp bài lưu tạm, revision ${article.revision}.`);
+        const restoredStep = hydrateFromArticle(article, requestedStep);
+        setSaveMessage(isRegenerateMode
+          ? `Đã nạp bài cần sửa, revision ${article.revision}. Đang mở bước ${getStageTitle(restoredStep)} để gen lại bằng AI.`
+          : `Đã nạp bài lưu tạm, revision ${article.revision}.`);
       })
       .catch((restoreError) => setError(restoreError instanceof Error ? restoreError.message : "Không nạp được bài đang làm dở."))
       .finally(() => {
@@ -422,7 +427,7 @@ export function FactoryFeature() {
     }
   }
 
-  function hydrateFromArticle(article: ArticleSession) {
+  function hydrateFromArticle(article: ArticleSession, requestedStep?: Step | null) {
     setLanguage(article.inputs.language);
     setSeedKeyword(article.inputs.seedKeyword);
     setKeywords(article.keywordIdeas);
@@ -434,7 +439,20 @@ export function FactoryFeature() {
     setLinks(article.linkSuggestions);
     setSavedArticleId(article.id);
     setSavedRevision(article.revision);
-    setSelectedStep(article.activeStep);
+    const restoredStep = getHydratedSelectedStep(article, requestedStep);
+    setSelectedStep(restoredStep);
+    return restoredStep;
+  }
+
+  function getHydratedSelectedStep(article: ArticleSession, requestedStep?: Step | null) {
+    const hydratedActiveStep = getHydratedActiveStep(article);
+    if (requestedStep && isStepSelectableForActiveStep(requestedStep, hydratedActiveStep)) {
+      return requestedStep;
+    }
+    if (isStepSelectableForActiveStep(article.activeStep, hydratedActiveStep)) {
+      return article.activeStep;
+    }
+    return hydratedActiveStep;
   }
 
   function buildCurrentFactorySessionValues(stepToSave: Step, finalMarkdown: string): FactorySessionValues {
@@ -738,6 +756,30 @@ export function FactoryFeature() {
       />
     </div>
   </div>;
+}
+
+function parseFactoryStepParam(value: string | null): Step | null {
+  if (!value) return null;
+  return workflowStages.some((stage) => stage.key === value) ? value as Step : null;
+}
+
+function getHydratedActiveStep(article: ArticleSession): Step {
+  if (!article.keywordIdeas.length) return "keywords";
+  if (!article.brief) return "brief";
+  if (!article.outline) return "outline";
+  if (!article.draft) return "draft";
+  if (!article.linkSuggestions.length) return "links";
+  return "ready";
+}
+
+function isStepSelectableForActiveStep(step: Step, activeStep: Step) {
+  const stageIndex = workflowStages.findIndex((item) => item.key === step);
+  const activeIndex = workflowStages.findIndex((item) => item.key === activeStep);
+  return stageIndex >= 0 && activeIndex >= 0 && stageIndex <= activeIndex;
+}
+
+function getStageTitle(step: Step) {
+  return workflowStages.find((stage) => stage.key === step)?.title ?? step;
 }
 
 function WorkflowStepper({

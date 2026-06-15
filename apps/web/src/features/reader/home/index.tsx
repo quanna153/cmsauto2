@@ -1,12 +1,11 @@
 import type { Locale } from "@cmsauto/contracts";
-import { ArrowRight, BookOpenText, Mail, ShieldCheck, TrendingUp, WalletCards } from "lucide-react";
+import { ArrowRight, BookOpenText, CheckCircle2, Newspaper, ShieldCheck, TrendingUp, WalletCards } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "../adapter";
 import { getFallbackReaderArticles } from "../fallback-articles";
 import type { ReaderArticle } from "../model";
 import {
-  HeroArticleCarousel,
   HeroPriceCard,
   HomeMarketProvider,
   InlineMarketTicker,
@@ -15,13 +14,6 @@ import {
   type LiveCoin
 } from "./home-live-market";
 import { CryptoSphere } from "./crypto-sphere";
-
-type FeatureArticle = {
-  title: string;
-  excerpt: string;
-  href: string;
-  tag: string;
-};
 
 const coreCoins: LiveCoin[] = [
   { name: "Bitcoin", symbol: "BTC", pair: "BTCUSDT" },
@@ -38,17 +30,20 @@ const coreCoins: LiveCoin[] = [
 
 const homeCopy = {
   "vi-vn": {
-    fallbackTitle: "Theo dõi thị trường crypto với dữ liệu và bối cảnh rõ ràng",
-    fallbackExcerpt: "Cập nhật giá, kiến thức và phân tích mới nhất từ CoinRadar.",
-    featured: "Tin nổi bật",
+    heroEyebrow: "CoinRadar",
+    heroTitle: "Đọc thị trường crypto bằng dữ liệu và bối cảnh rõ ràng",
+    heroText: "CoinRadar gom giá, dòng tiền, kiến thức và phân tích thành một màn hình dễ đọc để bạn nắm biến động chính mà không bị cuốn theo nhiễu ngắn hạn.",
+    heroPrimary: "Xem thị trường",
+    heroSecondary: "Đọc tin mới",
+    heroProofs: ["Giá & biến động", "Kiến thức nền tảng", "Phân tích có điều kiện"],
     latest: "Cập nhật mới nhất",
     viewAll: "Xem tất cả",
     news: "Tin tức",
     topicsTitle: "Khám phá chủ đề",
     explore: "Khám phá",
     editorPicks: "Lựa chọn của biên tập",
-    beginnerEyebrow: "Hành trình cho người mới",
-    beginnerTitle: "4 bước để bắt đầu với crypto",
+    beginnerEyebrow: "Bộ công cụ cho người mới",
+    beginnerTitle: "Những nền tảng cần mở trước khi đọc thị trường",
     bulletinTitle: "Theo dõi những diễn biến đáng chú ý của thị trường crypto",
     bulletinText: "Đọc bài mới nhất về thị trường, phân tích và kiến thức trên CoinRadar.",
     bulletinAction: "Xem bài mới",
@@ -59,17 +54,20 @@ const homeCopy = {
     globePoints: ["Nguồn tin được chọn lọc", "Dữ liệu thị trường cập nhật", "Bối cảnh rõ ràng, dễ đọc"]
   },
   "en-us": {
-    fallbackTitle: "Follow crypto markets with clear data and context",
-    fallbackExcerpt: "Get the latest market updates, explainers and analysis from CoinRadar.",
-    featured: "Featured",
+    heroEyebrow: "CoinRadar",
+    heroTitle: "Read crypto markets with data and context",
+    heroText: "CoinRadar brings prices, capital flows, explainers and analysis into one readable surface so readers can track important market moves without short-term noise.",
+    heroPrimary: "View markets",
+    heroSecondary: "Read latest",
+    heroProofs: ["Prices & moves", "Clear explainers", "Conditional analysis"],
     latest: "Latest updates",
     viewAll: "View all",
     news: "News",
     topicsTitle: "Explore topics",
     explore: "Explore",
     editorPicks: "Editor picks",
-    beginnerEyebrow: "Beginner journey",
-    beginnerTitle: "Four steps to get started with crypto",
+    beginnerEyebrow: "Beginner toolkit",
+    beginnerTitle: "Foundations to keep open before reading markets",
     bulletinTitle: "Keep up with the crypto market",
     bulletinText: "Read the latest market coverage, analysis and explainers on CoinRadar.",
     bulletinAction: "Browse latest articles",
@@ -102,16 +100,16 @@ const topicCopy = {
 
 const beginnerCopy = {
   "vi-vn": [
-    ["01", "Hiểu cơ bản", "Nắm các khái niệm nền tảng trước khi đọc dữ liệu."],
-    ["02", "Chọn ví an toàn", "Chọn ví phù hợp và bảo vệ thông tin khôi phục."],
-    ["03", "Đọc thị trường", "Hiểu bảng giá, biến động và các chỉ số chính."],
-    ["04", "Quản trị rủi ro", "Xây dựng nguyên tắc phân bổ vốn phù hợp."]
+    ["Hiểu cơ bản", "Nắm các khái niệm nền tảng trước khi đọc dữ liệu."],
+    ["Ví an toàn", "Chọn ví phù hợp và bảo vệ thông tin khôi phục."],
+    ["Đọc thị trường", "Hiểu bảng giá, biến động và các chỉ số chính."],
+    ["Quản trị rủi ro", "Xây dựng nguyên tắc phân bổ vốn phù hợp."]
   ],
   "en-us": [
-    ["01", "Learn the basics", "Understand core concepts before reading market data."],
-    ["02", "Choose a wallet", "Select a suitable wallet and protect recovery details."],
-    ["03", "Read the market", "Understand prices, moves and key indicators."],
-    ["04", "Manage risk", "Build sensible rules for allocating capital."]
+    ["Learn the basics", "Understand core concepts before reading market data."],
+    ["Wallet safety", "Select a suitable wallet and protect recovery details."],
+    ["Read the market", "Understand prices, moves and key indicators."],
+    ["Manage risk", "Build sensible rules for allocating capital."]
   ]
 } satisfies Record<Locale, string[][]>;
 
@@ -123,29 +121,45 @@ function articleHref(locale: Locale, article: ReaderArticle) {
   return article.livePath || href(locale, `/${article.slug}`);
 }
 
-function mapHeroSlides(locale: Locale, articles: ReaderArticle[]): FeatureArticle[] {
-  const copy = homeCopy[locale];
-  const slides = articles.slice(0, 5).map((article) => ({
-    title: article.title,
-    excerpt: article.excerpt || copy.fallbackExcerpt,
-    href: articleHref(locale, article),
-    tag: article.primaryKeyword || copy.featured
-  }));
-
-  return slides.length
-    ? slides
-    : [{ title: copy.fallbackTitle, excerpt: copy.fallbackExcerpt, href: href(locale, "/articles"), tag: copy.featured }];
-}
-
-function HeroSection({ slides, locale }: { slides: FeatureArticle[]; locale: Locale }) {
+function HeroSection({ locale }: { locale: Locale }) {
   return (
     <section className="relative overflow-hidden bg-[#FAFAF7]">
       <InlineMarketTicker coins={coreCoins.slice(0, 6)} locale={locale} />
       <div className="relative mx-auto grid max-w-[88rem] gap-8 px-5 py-8 md:py-10 lg:grid-cols-[minmax(22rem,0.76fr)_minmax(42rem,1fr)] lg:items-center xl:grid-cols-[minmax(24rem,0.72fr)_minmax(48rem,1fr)]">
-        <HeroArticleCarousel locale={locale} marketHref={href(locale, "/markets")} slides={slides} />
+        <FixedHeroIntro locale={locale} />
         <HeroPriceCard coin={coreCoins[0]} locale={locale} />
       </div>
     </section>
+  );
+}
+
+function FixedHeroIntro({ locale }: { locale: Locale }) {
+  const copy = homeCopy[locale];
+  const proofs = copy.heroProofs as string[];
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#A97900]">{copy.heroEyebrow}</p>
+      <h1 className="mt-4 max-w-2xl text-4xl font-semibold leading-[1.08] text-[#111111] md:text-[44px] xl:text-5xl">
+        {copy.heroTitle}
+      </h1>
+      <p className="mt-6 max-w-xl text-base leading-7 text-[#5F6673]">{copy.heroText}</p>
+      <div className="mt-7 flex flex-wrap gap-3">
+        <Link className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#B88400] px-5 text-sm font-semibold text-white transition hover:bg-[#111111]" href={href(locale, "/markets")}>
+          {copy.heroPrimary} <ArrowRight size={17} />
+        </Link>
+        <Link className="inline-flex h-12 items-center justify-center rounded-xl border border-[#E7DFCF] bg-white px-5 text-sm font-semibold text-[#111111] transition hover:bg-[#FFF6DD]" href={href(locale, "/articles")}>
+          {copy.heroSecondary}
+        </Link>
+      </div>
+      <div className="mt-8 grid max-w-xl gap-2 sm:grid-cols-3">
+        {proofs.map((proof) => (
+          <div className="rounded-xl border border-[#E7DFCF] bg-white/82 px-4 py-3 text-sm font-semibold text-[#303642] shadow-[0_12px_28px_rgba(17,17,17,0.04)]" key={proof}>
+            {proof}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -218,9 +232,11 @@ function GlobalMarketSection({ locale }: { locale: Locale }) {
           <h2 className="mt-3 text-3xl font-semibold leading-tight text-[#111111] md:text-4xl">{copy.globeTitle}</h2>
           <p className="mt-4 text-sm leading-7 text-[#5F6673] md:text-base">{copy.globeText}</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            {points.map((point, index) => (
+            {points.map((point) => (
               <div className="flex items-center gap-3 border-t border-[#EFE7D6] pt-3" key={point}>
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#111111] text-xs font-semibold text-[#F5D98A]">{index + 1}</span>
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#111111] text-[#F5D98A]">
+                  <CheckCircle2 size={15} />
+                </span>
                 <span className="text-sm font-semibold text-[#303642]">{point}</span>
               </div>
             ))}
@@ -262,32 +278,26 @@ function BeginnerJourney({ locale }: { locale: Locale }) {
   const copy = homeCopy[locale];
   return (
     <section className="mx-auto max-w-7xl px-5 pb-8">
-      <div className="rounded-2xl border border-[#E7D094] bg-[#FFF9E8] p-5 shadow-[0_16px_44px_rgba(184,132,0,0.08)] md:p-6">
-        <p className="text-xs font-semibold uppercase text-[#A97900]">{copy.beginnerEyebrow}</p>
-        <h2 className="mt-2 text-2xl font-semibold text-[#111111]">{copy.beginnerTitle}</h2>
-        <div className="relative mt-6 grid gap-4 md:grid-cols-4 md:gap-5">
-          <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-8 hidden h-px bg-gradient-to-r from-transparent via-[#D5A319] to-transparent md:block" />
-          {beginnerCopy[locale].map(([step, title, text], index) => {
+      <div className="grid overflow-hidden rounded-2xl border border-[#111827] bg-[#111827] text-white shadow-[0_22px_60px_rgba(17,24,39,0.14)] lg:grid-cols-[21rem_minmax(0,1fr)]">
+        <header className="relative overflow-hidden border-b border-white/10 p-6 lg:border-b-0 lg:border-r">
+          <div className="pointer-events-none absolute -left-16 -top-16 size-48 rounded-full bg-[#D5A319]/20 blur-3xl" />
+          <p className="relative text-xs font-semibold uppercase tracking-[0.18em] text-[#F5D98A]">{copy.beginnerEyebrow}</p>
+          <h2 className="relative mt-3 text-3xl font-semibold leading-tight">{copy.beginnerTitle}</h2>
+        </header>
+        <div className="grid gap-px bg-white/10 p-px sm:grid-cols-2 lg:grid-cols-4">
+          {beginnerCopy[locale].map(([title, text], index) => {
             const icons = [BookOpenText, WalletCards, TrendingUp, ShieldCheck];
             const Icon = icons[index];
             return (
-              <div className="relative rounded-xl border border-[#F0E3BD] bg-white p-4 shadow-[0_10px_28px_rgba(17,17,17,0.04)]" key={step}>
-                {index < beginnerCopy[locale].length - 1 ? (
-                  <span className="pointer-events-none absolute -right-3 top-7 z-20 hidden size-6 items-center justify-center rounded-full border border-[#E7D094] bg-[#FFF9E8] text-xs font-bold text-[#B88400] md:flex">
-                    →
-                  </span>
-                ) : null}
-                <div className="relative z-10 flex items-start gap-3 md:block">
-                  <span className="flex size-16 shrink-0 flex-col items-center justify-center rounded-full border border-[#E7D094] bg-[#111111] text-[#F5D98A] shadow-[0_12px_26px_rgba(17,17,17,0.12)] md:mx-auto">
-                    <span className="text-[11px] font-bold leading-none">{step}</span>
-                    <Icon className="mt-1" size={19} />
-                  </span>
-                  <div className="min-w-0 md:mt-4 md:text-center">
-                    <h3 className="text-sm font-semibold text-[#111111]">{title}</h3>
-                    <p className="mt-2 text-xs leading-5 text-[#5F6673]">{text}</p>
-                  </div>
+              <article className="group bg-[#111827] p-5 transition hover:bg-[#F5D98A]" key={title}>
+                <span className="flex size-12 items-center justify-center rounded-2xl bg-white/8 text-[#F5D98A] ring-1 ring-white/12 transition group-hover:bg-[#111827]">
+                  <Icon size={21} />
+                </span>
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold transition group-hover:text-[#111827]">{title}</h3>
+                  <p className="mt-2 text-xs leading-5 text-white/62 transition group-hover:text-[#303642]">{text}</p>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
@@ -302,7 +312,7 @@ function Bulletin({ locale }: { locale: Locale }) {
     <section className="mx-auto max-w-7xl px-5 pb-10">
       <div className="grid gap-4 rounded-2xl bg-[#08090B] p-6 text-white md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="flex items-center gap-4">
-          <span className="flex size-14 items-center justify-center rounded-xl bg-[#D5A319] text-white shadow-[0_12px_30px_rgba(213,163,25,0.28)]"><Mail size={24} /></span>
+          <span className="flex size-14 items-center justify-center rounded-xl bg-[#D5A319] text-white shadow-[0_12px_30px_rgba(213,163,25,0.28)]"><Newspaper size={24} /></span>
           <div>
             <h2 className="text-xl font-semibold">{copy.bulletinTitle}</h2>
             <p className="mt-1 text-sm text-white/70">{copy.bulletinText}</p>
@@ -337,11 +347,10 @@ export async function ReaderHomeFeature({ locale }: { locale: Locale }) {
     articles = getFallbackReaderArticles(locale);
   }
 
-  const heroSlides = mapHeroSlides(locale, articles);
   return (
     <main className="bg-[#FAFAF7] font-sans text-[#111111]">
       <HomeMarketProvider coins={coreCoins}>
-        <HeroSection locale={locale} slides={heroSlides} />
+        <HeroSection locale={locale} />
         <GlobalMarketSection locale={locale} />
         <DashboardSection articles={articles} locale={locale} />
       </HomeMarketProvider>

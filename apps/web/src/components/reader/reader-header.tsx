@@ -1,7 +1,7 @@
 "use client";
 
 import type { Locale } from "@cmsauto/contracts";
-import { Menu, Search, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -28,7 +28,6 @@ const navItems = {
 export function ReaderHeader({ locale }: { locale: Locale }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const searchLabel = locale === "vi-vn" ? "Tìm kiếm" : "Search";
   const menuLabel = menuOpen
     ? locale === "vi-vn" ? "Đóng menu" : "Close menu"
     : locale === "vi-vn" ? "Mở menu" : "Open menu";
@@ -55,22 +54,9 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
               </Link>
             );
           })}
-          <Link
-            aria-label={searchLabel}
-            className="flex size-10 items-center justify-center rounded-lg border border-[#C8A227]/40 bg-white/8 text-[#F5E7B3] transition hover:border-[#F5E7B3] hover:bg-[#C8A227] hover:text-[#0F1115]"
-            href={`/${locale}/search`}
-          >
-            <Search size={19} />
-          </Link>
         </nav>
+
         <div className="ml-auto flex items-center gap-2 md:hidden">
-          <Link
-            aria-label={searchLabel}
-            className="flex size-10 items-center justify-center rounded-lg border border-[#C8A227]/40 bg-white/8 text-[#F5E7B3] transition hover:border-[#F5E7B3] hover:bg-[#C8A227] hover:text-[#0F1115]"
-            href={`/${locale}/search`}
-          >
-            <Search size={19} />
-          </Link>
           <button
             aria-expanded={menuOpen}
             aria-label={menuLabel}
@@ -82,6 +68,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
           </button>
         </div>
       </div>
+
       {menuOpen ? (
         <nav className="border-t border-[#2B313D] bg-[#0F1115] px-5 py-3 text-sm font-semibold md:hidden">
           <div className="mx-auto grid max-w-7xl gap-1">

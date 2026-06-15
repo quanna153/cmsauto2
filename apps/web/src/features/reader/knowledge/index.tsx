@@ -1,59 +1,60 @@
 import type { Locale } from "@cmsauto/contracts";
-import { ArrowRight, BookOpenText, CheckCircle2, GraduationCap, Layers3, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpenText, GraduationCap, Layers3, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { ArticleCard } from "@/components/reader/article-card";
 import { getReaderArticles } from "@/features/reader/adapter";
 import { getFallbackReaderArticles } from "@/features/reader/fallback-articles";
-import { CryptoSphere } from "@/features/reader/home/crypto-sphere";
 import type { ReaderArticle } from "@/features/reader/model";
+
+import { LearningVisual } from "./learning-visual";
 
 const copy = {
   "vi-vn": {
     eyebrow: "Kiến thức",
-    title: "Học crypto theo lộ trình rõ ràng",
-    lead: "Từ khái niệm nền tảng đến cách đọc thị trường, CoinRadar gom các bài hướng dẫn thành những cụm dễ theo dõi và dễ áp dụng.",
+    title: "Bản đồ kiến thức crypto dễ đọc",
+    lead: "Từ khái niệm nền tảng đến cách đọc thị trường, CoinRadar gom bài hướng dẫn theo cụm chủ đề để người đọc chọn đúng thứ mình cần.",
     start: "Bắt đầu học",
     allArticles: "Xem tất cả bài",
-    tracksTitle: "Lộ trình nên đọc",
-    focusTitle: "Nên học theo thứ tự",
+    tracksTitle: "Cụm chủ đề nên đọc",
+    focusTitle: "Ba lớp kiến thức cốt lõi",
     articlesTitle: "Bài kiến thức nổi bật",
     glossaryTitle: "Bộ khái niệm cần nắm",
     minutes: "phút đọc",
     focus: [
-      ["01", "Hiểu tài sản", "Coin, token, ví, private key và cách giao dịch được xác nhận."],
-      ["02", "Đọc dữ liệu", "Giá, volume, vốn hóa, dominance và tín hiệu dễ gây nhiễu."],
-      ["03", "Quản trị rủi ro", "Bảo mật ví, phân bổ vốn, tránh FOMO và nhận diện thông tin thiếu nguồn."]
+      ["Tài sản", "Coin, token, ví, private key và cách giao dịch được xác nhận."],
+      ["Dữ liệu", "Giá, volume, vốn hóa, dominance và tín hiệu dễ gây nhiễu."],
+      ["Rủi ro", "Bảo mật ví, phân bổ vốn, tránh FOMO và nhận diện thông tin thiếu nguồn."]
     ],
     tracks: [
-      ["01", "Nền tảng crypto", "Blockchain, ví cá nhân, private key và cách giao dịch được xác nhận."],
-      ["02", "Đọc dữ liệu thị trường", "Giá, volume, vốn hóa, dominance và cách tránh nhiễu ngắn hạn."],
-      ["03", "DeFi & hệ sinh thái", "AMM, lending, stablecoin, TVL và rủi ro smart contract."],
-      ["04", "Kỷ luật đầu tư", "Quản trị rủi ro, phân bổ vốn và tránh quyết định theo FOMO."]
+      ["Nền tảng crypto", "Blockchain, ví cá nhân, private key và cách giao dịch được xác nhận."],
+      ["Đọc dữ liệu thị trường", "Giá, volume, vốn hóa, dominance và cách tránh nhiễu ngắn hạn."],
+      ["DeFi & hệ sinh thái", "AMM, lending, stablecoin, TVL và rủi ro smart contract."],
+      ["Kỷ luật đầu tư", "Quản trị rủi ro, phân bổ vốn và tránh quyết định theo FOMO."]
     ],
     glossary: ["Blockchain", "Ví crypto", "DeFi", "TVL", "Dominance", "Funding rate"]
   },
   "en-us": {
     eyebrow: "Knowledge",
-    title: "Learn crypto through a clear path",
-    lead: "From first principles to market reading, CoinRadar organizes explainers into practical clusters that readers can follow without noise.",
+    title: "A readable crypto knowledge map",
+    lead: "From first principles to market reading, CoinRadar organizes explainers by topic clusters so readers can pick what they need.",
     start: "Start learning",
     allArticles: "View all articles",
-    tracksTitle: "Suggested paths",
-    focusTitle: "Recommended order",
+    tracksTitle: "Topic clusters",
+    focusTitle: "Core knowledge layers",
     articlesTitle: "Featured explainers",
     glossaryTitle: "Concepts to know",
     minutes: "min read",
     focus: [
-      ["01", "Understand assets", "Coins, tokens, wallets, private keys and how transactions settle."],
-      ["02", "Read data", "Price, volume, market cap, dominance and signals that often create noise."],
-      ["03", "Manage risk", "Wallet safety, capital allocation, avoiding FOMO and spotting weak sourcing."]
+      ["Assets", "Coins, tokens, wallets, private keys and how transactions settle."],
+      ["Data", "Price, volume, market cap, dominance and signals that often create noise."],
+      ["Risk", "Wallet safety, capital allocation, avoiding FOMO and spotting weak sourcing."]
     ],
     tracks: [
-      ["01", "Crypto foundations", "Blockchain, personal wallets, private keys and how transactions settle."],
-      ["02", "Market data reading", "Price, volume, market cap, dominance and avoiding short-term noise."],
-      ["03", "DeFi ecosystems", "AMMs, lending, stablecoins, TVL and smart contract risk."],
-      ["04", "Investment discipline", "Risk management, capital allocation and avoiding FOMO-driven decisions."]
+      ["Crypto foundations", "Blockchain, personal wallets, private keys and how transactions settle."],
+      ["Market data reading", "Price, volume, market cap, dominance and avoiding short-term noise."],
+      ["DeFi ecosystems", "AMMs, lending, stablecoins, TVL and smart contract risk."],
+      ["Investment discipline", "Risk management, capital allocation and avoiding FOMO-driven decisions."]
     ],
     glossary: ["Blockchain", "Wallets", "DeFi", "TVL", "Dominance", "Funding rate"]
   }
@@ -96,8 +97,8 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
           </div>
         </div>
 
-        <aside className="relative h-[21rem] overflow-visible rounded-2xl border border-[#E7DFCF] bg-white shadow-[0_28px_70px_rgba(17,24,39,0.08)] [transform:perspective(900px)_rotateX(1deg)_rotateY(-3deg)] md:h-[23rem] lg:h-[24rem]">
-          <CryptoSphere locale={locale} />
+        <aside className="relative h-[23rem] overflow-visible md:h-[25rem] lg:h-[26rem]">
+          <LearningVisual locale={locale} />
         </aside>
       </section>
 
@@ -105,13 +106,19 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
         <div className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_18px_46px_rgba(17,24,39,0.05)]">
           <SectionTitle title={c.focusTitle} />
           <div className="grid gap-3 md:grid-cols-3">
-            {c.focus.map(([step, title, text]) => (
-              <article className="rounded-xl bg-[#FAFAF7] p-4" key={title}>
-                <p className="text-xs font-bold text-[#A88412]">{step}</p>
-                <h2 className="mt-2 font-semibold">{title}</h2>
+            {c.focus.map(([title, text], index) => {
+              const icons = [GraduationCap, BarChart3, ShieldCheck];
+              const Icon = icons[index] ?? GraduationCap;
+              return (
+              <article className="group rounded-xl bg-[#FAFAF7] p-4 transition hover:bg-[#111827] hover:text-white" key={title}>
+                <span className="flex size-10 items-center justify-center rounded-xl bg-white text-[#A88412] shadow-sm transition group-hover:bg-[#F5E7B3]">
+                  <Icon size={18} />
+                </span>
+                <h2 className="mt-4 font-semibold">{title}</h2>
                 <p className="mt-2 text-sm leading-6 text-[#5F6673]">{text}</p>
               </article>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -120,16 +127,16 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
         <div>
           <SectionTitle title={c.tracksTitle} />
           <div className="grid gap-4 md:grid-cols-2">
-            {c.tracks.map(([step, title, text], index) => {
+            {c.tracks.map(([title, text], index) => {
               const icons = [GraduationCap, Layers3, Sparkles, ShieldCheck];
-              const Icon = icons[index] ?? CheckCircle2;
+              const Icon = icons[index] ?? BookOpenText;
               return (
                 <article className="group rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_18px_46px_rgba(17,24,39,0.05)] transition hover:-translate-y-1 hover:border-[#C8A227]" key={title}>
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
                     <span className="flex size-11 items-center justify-center rounded-xl bg-[#111827] text-[#F5E7B3] shadow-[0_14px_30px_rgba(17,24,39,0.18)] transition group-hover:rotate-3">
                       <Icon size={21} />
                     </span>
-                    <span className="text-2xl font-semibold text-[#C8A227]">{step}</span>
+                    <span className="mt-1 h-px flex-1 bg-gradient-to-r from-[#C8A227]/55 to-transparent" />
                   </div>
                   <h2 className="mt-6 text-lg font-semibold">{title}</h2>
                   <p className="mt-3 text-sm leading-6 text-[#5F6673]">{text}</p>
@@ -154,9 +161,9 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
             <h2 className="text-lg font-semibold">{c.glossaryTitle}</h2>
             <div className="mt-4 flex flex-wrap gap-2">
               {c.glossary.map((item) => (
-                <Link className="rounded-lg border border-[#E3DAC6] bg-[#FFFCF3] px-3 py-2 text-sm font-semibold text-[#4B5563] transition hover:border-[#C8A227] hover:text-[#A88412]" href={`/${locale}/search?q=${encodeURIComponent(item)}`} key={item}>
+                <span className="rounded-lg border border-[#E3DAC6] bg-[#FFFCF3] px-3 py-2 text-sm font-semibold text-[#4B5563]" key={item}>
                   {item}
-                </Link>
+                </span>
               ))}
             </div>
           </section>
