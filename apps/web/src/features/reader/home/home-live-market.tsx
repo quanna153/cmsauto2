@@ -280,10 +280,7 @@ export function HeroArticleCarousel({ slides, marketHref, locale }: { slides: He
 
   return (
     <div>
-      <span className="inline-flex rounded-lg bg-[#F4E4B5] px-3 py-1 text-xs font-semibold uppercase text-[#8A6500]">
-        {activeSlide.tag}
-      </span>
-      <h1 className="mt-5 line-clamp-3 max-w-2xl text-4xl font-semibold leading-[1.08] text-[#111111] md:text-[44px] xl:text-5xl">
+      <h1 className="line-clamp-3 max-w-2xl text-4xl font-semibold leading-[1.08] text-[#111111] md:text-[44px] xl:text-5xl">
         {activeSlide.title}
       </h1>
       <p className="mt-6 max-w-xl text-base leading-7 text-[#5F6673]">{activeSlide.excerpt}</p>
