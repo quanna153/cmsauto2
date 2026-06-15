@@ -119,6 +119,19 @@ export function AboutFeature({ locale }: { locale: Locale }) {
         "Coverage is edited so Vietnamese readers can follow global crypto context.",
         "CoinRadar provides data and context without pushing readers into trades."
       ];
+  const marketPanel = locale === "vi-vn"
+    ? {
+        title: "Bảng tín hiệu đọc nhanh",
+        subtitle: "Tách các chỉ số quan trọng để người đọc nhìn được nhịp thị trường trước khi vào bài.",
+        chips: ["Giá", "Volume", "Dominance"],
+        rows: [["BTC/USDT", "+1.62%", "Động lượng"], ["ETH/USDT", "+0.85%", "Thanh khoản"], ["Altcoin", "42%", "Độ rộng"]]
+      }
+    : {
+        title: "Quick signal board",
+        subtitle: "Separates the key indicators readers need before opening a full story.",
+        chips: ["Price", "Volume", "Dominance"],
+        rows: [["BTC/USDT", "+1.62%", "Momentum"], ["ETH/USDT", "+0.85%", "Liquidity"], ["Altcoins", "42%", "Breadth"]]
+      };
 
   return (
     <main className="overflow-hidden bg-[#FAFAF7] text-[#111827]">
@@ -234,7 +247,7 @@ export function AboutFeature({ locale }: { locale: Locale }) {
             <article
               className={`group relative overflow-hidden p-6 transition duration-300 hover:-translate-y-0.5 ${
                 index === 0
-                  ? "bg-[#111827] text-white md:col-span-2 md:row-span-3"
+                  ? "flex flex-col bg-[#111827] text-white md:col-span-2 md:row-span-3"
                   : index === 1
                     ? "bg-[#F7F2E4]"
                     : index === 3
@@ -247,6 +260,42 @@ export function AboutFeature({ locale }: { locale: Locale }) {
               <Target className={`relative size-6 ${index === 0 ? "text-[#F5E7B3]" : "text-[#A88412]"}`} />
               <h3 className={`relative mt-6 text-xl font-semibold ${index === 0 ? "max-w-md text-3xl leading-tight" : ""}`}>{title}</h3>
               <p className={`relative mt-3 text-sm leading-7 ${index === 0 ? "max-w-xl text-white/68" : "text-[#667085]"}`}>{text}</p>
+              {index === 0 ? (
+                <div className="relative mt-8 grid gap-4 rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:grid-cols-[minmax(0,1.1fr)_minmax(11rem,0.8fr)]">
+                  <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(245,231,179,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(245,231,179,0.06)_1px,transparent_1px)] bg-[size:2.75rem_2.75rem]" />
+                  <div className="relative">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F5E7B3]">{marketPanel.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-white/58">{marketPanel.subtitle}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {marketPanel.chips.map((chip) => (
+                        <span className="rounded-full border border-[#F5E7B3]/25 bg-[#F5E7B3]/10 px-3 py-1 text-xs font-semibold text-[#F5E7B3]" key={chip}>
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="relative space-y-3 rounded-xl border border-white/10 bg-[#080D16]/70 p-3">
+                    {marketPanel.rows.map(([pair, value, label], rowIndex) => (
+                      <div className="text-xs" key={pair}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold text-white/82">{pair}</span>
+                          <span className="font-bold text-[#86EFAC]">{value}</span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+                          <span className="text-[0.66rem] font-semibold uppercase tracking-[0.06em] text-white/42">{label}</span>
+                          <span className="relative h-2 overflow-hidden rounded-full bg-white/10">
+                          <span
+                            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#F5E7B3] to-[#C8A227]"
+                            style={{ width: `${58 + rowIndex * 12}%` }}
+                          />
+                          <span className="absolute inset-y-0 left-1/2 w-px bg-white/30" />
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <span className={`absolute inset-x-6 bottom-5 h-px origin-left scale-x-0 transition duration-500 group-hover:scale-x-100 ${index === 0 ? "bg-[#F5E7B3]" : "bg-[#C8A227]"}`} />
             </article>
           ))}
