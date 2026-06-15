@@ -1,4 +1,5 @@
 const configuredApiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8787/api").replace(/\/$/, "");
+const configuredInternalApiBaseUrl = process.env.INTERNAL_API_BASE_URL?.replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -50,6 +51,10 @@ export function publicApiUrl(path: string) {
 
 function getApiBaseUrl() {
   if (typeof window === "undefined") {
+    if (configuredApiBaseUrl.startsWith("/")) {
+      return configuredInternalApiBaseUrl ?? `http://127.0.0.1:${process.env.API_PORT ?? "8787"}${configuredApiBaseUrl}`;
+    }
+
     return configuredApiBaseUrl;
   }
 
