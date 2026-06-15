@@ -149,7 +149,7 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
         </div>
 
         <aside className="space-y-5">
-          {featured ? <FeaturedLesson article={featured} locale={locale} minutesLabel={c.minutes} /> : null}
+          {featured ? <FeaturedLesson article={featured} minutesLabel={c.minutes} /> : null}
           <section className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_18px_46px_rgba(17,24,39,0.05)]">
             <h2 className="text-lg font-semibold">{c.glossaryTitle}</h2>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -180,7 +180,7 @@ function SectionTitle({ title }: { title: string }) {
   return <h2 className="mb-5 text-sm font-bold uppercase tracking-[0.14em] text-[#111827]">{title}</h2>;
 }
 
-function FeaturedLesson({ article, locale, minutesLabel }: { article: ReaderArticle; locale: Locale; minutesLabel: string }) {
+function FeaturedLesson({ article, minutesLabel }: { article: ReaderArticle; minutesLabel: string }) {
   return (
     <Link className="group block rounded-2xl bg-[#111827] p-5 text-white shadow-[0_24px_58px_rgba(17,24,39,0.18)] transition hover:-translate-y-1" href={articleHref(article)}>
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#F5E7B3]">{article.primaryKeyword}</p>

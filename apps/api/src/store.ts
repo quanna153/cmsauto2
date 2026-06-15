@@ -6,6 +6,7 @@ import type {
   ArticleSessionSnapshot,
   AuthUser,
   Draft,
+  GeneratedArticleImage,
   HistoryRecord,
   HistoryStep,
   ArticleLibraryImportItem,
@@ -215,6 +216,17 @@ function parseJson<T>(value: string | null | undefined, fallback: T) {
   } catch {
     return fallback;
   }
+}
+
+function selectPublishedArticleImages(draftJson: string | null | undefined) {
+  const draft = parseJson<Draft | null>(draftJson, null);
+  const images = (draft?.generatedImages ?? []).filter(
+    (image): image is GeneratedArticleImage => image.status === "generated" && Boolean(image.url || image.base64)
+  );
+  const heroImage = images.find((image) => image.kind === "hero") ?? images[0];
+  const thumbnailImage = images.find((image) => image.kind === "thumbnail") ?? heroImage;
+
+  return { heroImage, thumbnailImage };
 }
 
 function normalizeKeywordIdeaProvider(keywordIdea: KeywordIdea): KeywordIdea {
@@ -2219,12 +2231,14 @@ export async function readPublishedArticles(locale?: Locale) {
     internal_links_json: string;
     primary_keyword: string;
     secondary_keywords_json: string;
+    draft_json: string | null;
     author_name: string | null;
     author_title: string | null;
     author_bio: string | null;
   }>(`
     SELECT
       pa.*,
+      a.draft_json,
       u.full_name AS author_name,
       u.author_title,
       u.author_bio
@@ -2236,27 +2250,33 @@ export async function readPublishedArticles(locale?: Locale) {
     ORDER BY pa.published_at DESC
   `, { $locale: locale ?? null });
 
-  return rows.map((row) => ({
-    id: row.id,
-    articleId: row.article_id,
-    articleSection: "articles",
-    slug: row.slug,
-    locale: row.locale,
-    language: row.language,
-    title: row.title,
-    excerpt: row.excerpt,
-    metaTitle: row.meta_title,
-    metaDescription: row.meta_description,
-    markdown: row.markdown,
-    publishedAt: row.published_at,
-    livePath: row.live_path,
-    internalLinks: parseJson<InternalLinkSuggestion[]>(row.internal_links_json, []),
-    primaryKeyword: row.primary_keyword,
-    secondaryKeywords: parseJson<string[]>(row.secondary_keywords_json, []),
-    authorName: row.author_name?.trim() || "CMS Auto",
-    authorTitle: row.author_title?.trim() ?? "",
-    authorBio: row.author_bio?.trim() ?? ""
-  } satisfies PublishedArticle));
+  return rows.map((row) => {
+    const images = selectPublishedArticleImages(row.draft_json);
+
+    return {
+      id: row.id,
+      articleId: row.article_id,
+      articleSection: "articles",
+      slug: row.slug,
+      locale: row.locale,
+      language: row.language,
+      title: row.title,
+      excerpt: row.excerpt,
+      metaTitle: row.meta_title,
+      metaDescription: row.meta_description,
+      markdown: row.markdown,
+      publishedAt: row.published_at,
+      livePath: row.live_path,
+      internalLinks: parseJson<InternalLinkSuggestion[]>(row.internal_links_json, []),
+      primaryKeyword: row.primary_keyword,
+      secondaryKeywords: parseJson<string[]>(row.secondary_keywords_json, []),
+      heroImage: images.heroImage,
+      thumbnailImage: images.thumbnailImage,
+      authorName: row.author_name?.trim() || "CMS Auto",
+      authorTitle: row.author_title?.trim() ?? "",
+      authorBio: row.author_bio?.trim() ?? ""
+    } satisfies PublishedArticle;
+  });
 }
 
 export async function readPublishedArticleBySlug(locale: Locale, slug: string) {

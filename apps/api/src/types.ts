@@ -294,6 +294,8 @@ export type PublishedArticle = {
   internalLinks: InternalLinkSuggestion[];
   primaryKeyword: string;
   secondaryKeywords: string[];
+  heroImage?: GeneratedArticleImage;
+  thumbnailImage?: GeneratedArticleImage;
   authorName?: string;
   authorTitle?: string;
   authorBio?: string;

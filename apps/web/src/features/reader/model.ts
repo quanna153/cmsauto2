@@ -1,5 +1,24 @@
 import type { Locale } from "@cmsauto/contracts";
 
+export type ReaderArticleImage = {
+  id: string;
+  kind: "hero" | "inline" | "thumbnail";
+  provider: string;
+  model: string;
+  status: "planned" | "generated" | "failed";
+  prompt: string;
+  revisedPrompt?: string;
+  url?: string;
+  base64?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  aspectRatio: "16:9" | "4:3" | "1:1" | "3:4";
+  altText: string;
+  caption?: string;
+  createdAt: string;
+};
+
 export type ReaderArticle = {
   id: string;
   articleId: string;
@@ -16,6 +35,8 @@ export type ReaderArticle = {
   livePath: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
+  heroImage?: ReaderArticleImage;
+  thumbnailImage?: ReaderArticleImage;
   authorName?: string;
   authorTitle?: string;
   authorBio?: string;

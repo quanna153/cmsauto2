@@ -1,5 +1,5 @@
 import type { Locale } from "@cmsauto/contracts";
-import { BookOpen, Clock3, Filter, Flame, Search, Zap } from "lucide-react";
+import { BookOpen, Clock3, Filter, Flame, ImageIcon, Search, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { getReaderArticles } from "@/features/reader/adapter";
@@ -95,34 +95,26 @@ export async function ReaderArticlesFeature({ locale }: { locale: Locale }) {
 function FeaturedArticle({ article, isVi }: { article: ReaderArticle; isVi: boolean }) {
   return (
     <Link
-      className="group grid overflow-hidden rounded-xl border border-[#E0C984] bg-white shadow-[0_18px_55px_rgba(17,24,39,0.06)] transition hover:border-[#C8A227] lg:grid-cols-[minmax(0,1fr)_390px]"
+      className="group grid overflow-hidden rounded-xl border border-[#E0C984] bg-white shadow-[0_18px_55px_rgba(17,24,39,0.06)] transition hover:-translate-y-0.5 hover:border-[#C8A227] hover:shadow-[0_24px_70px_rgba(17,24,39,0.10)] sm:grid-cols-[240px_minmax(0,1fr)] lg:grid-cols-[290px_minmax(0,1fr)]"
       href={articleHref(article)}
     >
-      <div className="p-5 sm:p-7">
+      <ArticleThumbnail article={article} className="h-56 sm:h-full sm:min-h-[260px]" priority />
+      <div className="flex min-w-0 flex-col justify-center p-5 sm:p-7">
         <div className="flex items-center justify-between gap-4">
           <span className="inline-flex items-center gap-3 text-xs font-bold uppercase text-[#B98200]">
-            <span className="flex size-10 items-center justify-center rounded-full bg-[#C8950B] text-white">
-              <Zap className="h-5 w-5 fill-current" />
+            <span className="flex size-9 items-center justify-center rounded-full bg-[#C8950B] text-white">
+              <Zap className="h-4 w-4 fill-current" />
             </span>
             {isVi ? "Tin nổi bật" : "Featured"}
           </span>
         </div>
-        <h2 className="mt-5 text-2xl font-bold leading-tight text-[#080B11] transition group-hover:text-[#A88412] sm:text-[28px]">
+        <h2 className="mt-5 text-2xl font-bold leading-tight text-[#080B11] transition group-hover:text-[#A88412] sm:text-[30px]">
           {article.title}
         </h2>
         <p className="mt-4 line-clamp-3 text-sm leading-7 text-[#647084] sm:text-base">{article.excerpt}</p>
-        <ArticleMeta article={article} className="mt-6" isVi={isVi} />
-      </div>
-
-      <div className="border-t border-[#E7E1D0] bg-[#FCFBF7] p-5 sm:p-7 lg:border-l lg:border-t-0">
-        <p className="text-xs font-bold uppercase text-[#6D778B]">{isVi ? "Thông tin bài viết" : "Article information"}</p>
-        <div className="mt-4 divide-y divide-[#E5E7EB]">
-          {featuredStats(article, isVi).map((stat) => (
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4 text-sm" key={stat.label}>
-              <span className="min-w-0 text-[#667085]">{stat.label}</span>
-              <span className="max-w-44 truncate text-right font-bold text-[#080B11]">{stat.value}</span>
-            </div>
-          ))}
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-bold text-[#667085]">
+          <span className="rounded-full bg-[#FFF4CC] px-3 py-1 text-[#9A7100]">{article.primaryKeyword || (isVi ? "Tin tức" : "News")}</span>
+          <ArticleMeta article={article} isVi={isVi} />
         </div>
       </div>
     </Link>
@@ -145,19 +137,23 @@ function NewsList({ articles, isVi, locale }: { articles: ReaderArticle[]; isVi:
     <section className="overflow-hidden rounded-xl border border-[#E3E5E8] bg-white shadow-[0_16px_44px_rgba(17,24,39,0.04)]">
       <div className="divide-y divide-[#E6E9EE]">
         {articles.map((article) => (
-          <Link className="group grid gap-3 px-4 py-5 transition hover:bg-[#FAF8EF] sm:grid-cols-[minmax(0,1fr)_auto] sm:px-6" href={articleHref(article)} key={article.id}>
-            <div className="grid min-w-0 grid-cols-[10px_minmax(0,1fr)] gap-4">
-              <span className="mt-2 size-1.5 rounded-full bg-[#080B11]" />
+          <Link
+            className="group grid gap-4 px-4 py-5 transition hover:bg-[#FAF8EF] sm:grid-cols-[170px_minmax(0,1fr)] sm:px-6"
+            href={articleHref(article)}
+            key={article.id}
+          >
+            <ArticleThumbnail article={article} className="h-36 sm:h-28" />
+            <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
               <span className="min-w-0">
                 <h3 className="line-clamp-2 text-base font-bold leading-6 text-[#111827] transition group-hover:text-[#A88412] sm:text-lg">{article.title}</h3>
                 <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#647084]">{article.excerpt}</p>
               </span>
-            </div>
-            <div className="ml-6 flex flex-wrap items-center gap-3 text-xs font-semibold text-[#667085] sm:ml-0 sm:justify-end">
-              <span className="rounded-md bg-[#F2E9FF] px-2.5 py-1 text-[#7A4AC7]">{article.primaryKeyword || (isVi ? "Tin tức" : "News")}</span>
-              <span>{formatTime(article.publishedAt, locale)}</span>
-              <span>•</span>
-              <span>{readingTime(article, isVi)}</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[#667085] sm:justify-end">
+                <span className="rounded-md bg-[#F2E9FF] px-2.5 py-1 text-[#7A4AC7]">{article.primaryKeyword || (isVi ? "Tin tức" : "News")}</span>
+                <span>{formatTime(article.publishedAt, locale)}</span>
+                <span>•</span>
+                <span>{readingTime(article, isVi)}</span>
+              </div>
             </div>
           </Link>
         ))}
@@ -172,10 +168,10 @@ function LatestPanel({ articles, isVi }: { articles: ReaderArticle[]; isVi: bool
       <h2 className="text-lg font-bold text-[#080B11]">{isVi ? "Bài mới" : "Latest articles"}</h2>
       <div className="mt-4 divide-y divide-[#E6E9EE]">
         {articles.map((article, index) => (
-          <Link className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 py-4 first:pt-0 last:pb-0" href={articleHref(article)} key={article.id}>
-            <span className="text-lg font-bold text-[#B98200]">{String(index + 1).padStart(2, "0")}</span>
+          <Link className="group grid grid-cols-[76px_minmax(0,1fr)] gap-3 py-4 first:pt-0 last:pb-0" href={articleHref(article)} key={article.id}>
+            <ArticleThumbnail article={article} className="h-16" compact index={index + 1} />
             <span className="min-w-0">
-              <span className="line-clamp-2 text-sm font-bold leading-6 text-[#111827] transition hover:text-[#A88412]">{article.title}</span>
+              <span className="line-clamp-2 text-sm font-bold leading-6 text-[#111827] transition group-hover:text-[#A88412]">{article.title}</span>
               <span className="mt-1 block text-xs font-semibold text-[#667085]">{formatTime(article.publishedAt, article.locale)}</span>
             </span>
           </Link>
@@ -207,6 +203,79 @@ function HotTopicsPanel({ topics, isVi, locale }: { topics: string[]; isVi: bool
   );
 }
 
+function ArticleThumbnail({
+  article,
+  className,
+  compact = false,
+  index,
+  priority = false
+}: {
+  article: ReaderArticle;
+  className: string;
+  compact?: boolean;
+  index?: number;
+  priority?: boolean;
+}) {
+  const image = article.thumbnailImage ?? article.heroImage;
+  const src = imageSource(image);
+  const alt = image?.altText || article.title;
+
+  if (src) {
+    return (
+      <span className={`relative block overflow-hidden rounded-lg bg-[#111827] ${className}`}>
+        <img
+          alt={alt}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          fetchPriority={priority ? "high" : "auto"}
+          loading={priority ? "eager" : "lazy"}
+          src={src}
+        />
+        {compact && index ? (
+          <span className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-bold text-[#F8D66D]">
+            {String(index).padStart(2, "0")}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+
+  return (
+    <span className={`relative flex overflow-hidden rounded-lg border border-[#E3D49B] bg-[#121824] ${className}`}>
+      <span className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(248,214,109,0.34),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_36%)]" />
+      <span className="absolute -right-8 -top-10 size-28 rounded-full border border-[#F8D66D]/30" />
+      <span className="absolute bottom-3 left-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#F8D66D]">
+        <ImageIcon className="h-4 w-4" />
+        CoinRadar
+      </span>
+      {compact && index ? (
+        <span className="absolute right-2 top-2 rounded bg-white/10 px-2 py-1 text-xs font-bold text-[#F8D66D]">
+          {String(index).padStart(2, "0")}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function imageSource(image: ReaderArticle["thumbnailImage"] | ReaderArticle["heroImage"]) {
+  if (!image) {
+    return "";
+  }
+
+  if (image.url) {
+    if (image.url.startsWith("/api/") || image.url.startsWith("http") || image.url.startsWith("data:")) {
+      return image.url;
+    }
+
+    return image.url.startsWith("/") ? `/api${image.url}` : image.url;
+  }
+
+  if (image.base64) {
+    return `data:${image.mimeType ?? "image/png"};base64,${image.base64}`;
+  }
+
+  return "";
+}
+
 function ArticleMeta({ article, className, isVi }: { article: ReaderArticle; className?: string; isVi: boolean }) {
   return (
     <div className={`flex flex-wrap items-center gap-3 text-xs font-semibold text-[#667085] ${className ?? ""}`}>
@@ -221,15 +290,6 @@ function ArticleMeta({ article, className, isVi }: { article: ReaderArticle; cla
       </span>
     </div>
   );
-}
-
-function featuredStats(article: ReaderArticle, isVi: boolean) {
-  return [
-    { label: isVi ? "Chủ đề chính" : "Primary topic", value: article.primaryKeyword || "Crypto" },
-    { label: isVi ? "Tác giả" : "Author", value: article.authorName || "CoinRadar" },
-    { label: isVi ? "Thời gian đọc" : "Reading time", value: readingTime(article, isVi) },
-    { label: isVi ? "Ngày đăng" : "Published", value: formatDate(article.publishedAt, article.locale) }
-  ];
 }
 
 function buildHotTopics(articles: ReaderArticle[], locale: Locale) {
@@ -254,10 +314,6 @@ function formatDateTime(value: string, locale: Locale) {
 
 function formatTime(value: string, locale: Locale) {
   return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function formatDate(value: string, locale: Locale) {
-  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
 function readingTime(article: ReaderArticle, isVi: boolean) {
