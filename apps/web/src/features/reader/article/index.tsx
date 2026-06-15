@@ -46,6 +46,8 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
               <p className="mt-7 max-w-5xl text-lg font-medium leading-8 text-[#111827]">{article.excerpt}</p>
             </header>
 
+            <ArticleHeroImage article={article} />
+
             {sections.items.length > 0 ? <QuickView sections={sections.items} /> : null}
 
             <ArticleReadingStyles />
@@ -112,6 +114,51 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
       </div>
     </main>
   );
+}
+
+function ArticleHeroImage({ article }: { article: ReaderArticle }) {
+  const image = article.heroImage ?? article.thumbnailImage;
+  const src = imageSource(image);
+
+  if (!src) {
+    return null;
+  }
+
+  return (
+    <figure className="mt-8 max-w-5xl overflow-hidden rounded-xl border border-[#E2D7B8] bg-white shadow-[0_20px_58px_rgba(17,24,39,0.08)]">
+      <img
+        alt={image?.altText || article.title}
+        className="aspect-[16/9] w-full object-cover"
+        fetchPriority="high"
+        src={src}
+      />
+      {image?.caption ? (
+        <figcaption className="border-t border-[#EEE6D2] bg-[#FCFBF7] px-4 py-3 text-center text-sm italic leading-6 text-[#4B5563]">
+          {image.caption}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
+function imageSource(image: ReaderArticle["heroImage"] | ReaderArticle["thumbnailImage"]) {
+  if (!image) {
+    return "";
+  }
+
+  if (image.url) {
+    if (image.url.startsWith("/api/") || image.url.startsWith("http") || image.url.startsWith("data:")) {
+      return image.url;
+    }
+
+    return image.url.startsWith("/") ? `/api${image.url}` : image.url;
+  }
+
+  if (image.base64) {
+    return `data:${image.mimeType ?? "image/png"};base64,${image.base64}`;
+  }
+
+  return "";
 }
 
 function ArticleReadingStyles() {
