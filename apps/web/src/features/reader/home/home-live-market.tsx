@@ -237,10 +237,9 @@ export function useLiveTickers(coins: LiveCoin[]) {
 }
 
 export function HeroPriceCard({ coin, locale }: { coin: LiveCoin; locale: Locale }) {
-  const { tickers, isStale } = useLiveTickers([coin]);
+  const { tickers } = useLiveTickers([coin]);
   const ticker = tickers[coin.pair];
   const changePositive = (ticker?.changePercent ?? 0) >= 0;
-  const copy = marketCopy[locale];
 
   return (
     <article className="rounded-2xl border border-[#E7DFCF] bg-white p-5 shadow-[0_20px_55px_rgba(17,17,17,0.06)] md:p-6">
@@ -264,19 +263,6 @@ export function HeroPriceCard({ coin, locale }: { coin: LiveCoin; locale: Locale
       </div>
       <div className="mt-6 overflow-hidden rounded-xl border border-[#EFE7D6] bg-white">
         <TradingViewChart heightClass="h-[18rem] md:h-[20rem] xl:h-[22rem]" locale={locale} symbol="BINANCE:BTCUSDT" theme="light" />
-      </div>
-      <div className="mt-5 grid divide-y divide-[#EFE7D6] overflow-hidden rounded-xl border border-[#EFE7D6] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
-        {[
-          [copy.currentPrice, `$${formatPrice(ticker?.price, locale)}`],
-          [copy.change24h, formatChange(ticker?.changePercent, locale)],
-          [copy.source, isStale || ticker?.status === "fallback" ? copy.sampleSource : "Binance/API"],
-          [copy.refresh, copy.refreshValue]
-        ].map(([label, value]) => (
-          <div className="min-w-0 p-4 md:p-5" key={label}>
-            <p className="text-xs text-[#6B7280]">{label}</p>
-            <p className="mt-1 break-words text-lg font-semibold leading-6 text-[#111111] md:text-xl">{value}</p>
-          </div>
-        ))}
       </div>
     </article>
   );
