@@ -253,13 +253,6 @@ export function HeroPriceCard({ coin, locale }: { coin: LiveCoin; locale: Locale
             </span>
           </div>
         </div>
-        <div className="flex gap-2 text-xs font-medium text-[#6B7280]">
-          {["1D", "7D", "30D", "1Y"].map((item, index) => (
-            <span className={`rounded-lg px-3 py-1.5 ${index === 0 ? "bg-[#F5D98A] text-[#111111]" : "text-[#6B7280]"}`} key={item}>
-              {item}
-            </span>
-          ))}
-        </div>
       </div>
       <div className="mt-6 overflow-hidden rounded-xl border border-[#EFE7D6] bg-white">
         <TradingViewChart heightClass="h-[18rem] md:h-[20rem] xl:h-[22rem]" locale={locale} symbol="BINANCE:BTCUSDT" theme="light" />
