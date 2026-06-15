@@ -35,7 +35,6 @@ const homeCopy = {
     heroText: "CoinRadar gom giá, dòng tiền, kiến thức và phân tích thành một màn hình dễ đọc để bạn nắm biến động chính mà không bị cuốn theo nhiễu ngắn hạn.",
     heroPrimary: "Xem thị trường",
     heroSecondary: "Đọc tin mới",
-    heroProofs: ["Giá & biến động", "Kiến thức nền tảng", "Phân tích có điều kiện"],
     latest: "Cập nhật mới nhất",
     viewAll: "Xem tất cả",
     news: "Tin tức",
@@ -59,7 +58,6 @@ const homeCopy = {
     heroText: "CoinRadar brings prices, capital flows, explainers and analysis into one readable surface so readers can track important market moves without short-term noise.",
     heroPrimary: "View markets",
     heroSecondary: "Read latest",
-    heroProofs: ["Prices & moves", "Clear explainers", "Conditional analysis"],
     latest: "Latest updates",
     viewAll: "View all",
     news: "News",
@@ -78,6 +76,19 @@ const homeCopy = {
     globePoints: ["Curated industry sources", "Current market data", "Clear, readable context"]
   }
 } satisfies Record<Locale, Record<string, string | string[]>>;
+
+const heroSignalCopy = {
+  "vi-vn": [
+    { label: "Giá realtime", text: "BTC, ETH, altcoin" },
+    { label: "Bối cảnh", text: "Tin tức nối với dữ liệu" },
+    { label: "Rủi ro", text: "Không ép tín hiệu mua bán" }
+  ],
+  "en-us": [
+    { label: "Realtime prices", text: "BTC, ETH, altcoins" },
+    { label: "Context", text: "News linked with data" },
+    { label: "Risk", text: "No forced trading signal" }
+  ]
+} satisfies Record<Locale, Array<{ label: string; text: string }>>;
 
 const topicCopy = {
   "vi-vn": [
@@ -135,7 +146,7 @@ function HeroSection({ locale }: { locale: Locale }) {
 
 function FixedHeroIntro({ locale }: { locale: Locale }) {
   const copy = homeCopy[locale];
-  const proofs = copy.heroProofs as string[];
+  const signals = heroSignalCopy[locale];
 
   return (
     <div>
@@ -152,12 +163,19 @@ function FixedHeroIntro({ locale }: { locale: Locale }) {
           {copy.heroSecondary}
         </Link>
       </div>
-      <div className="mt-8 grid max-w-xl gap-2 sm:grid-cols-3">
-        {proofs.map((proof) => (
-          <div className="rounded-xl border border-[#E7DFCF] bg-white/82 px-4 py-3 text-sm font-semibold text-[#303642] shadow-[0_12px_28px_rgba(17,17,17,0.04)]" key={proof}>
-            {proof}
-          </div>
-        ))}
+      <div className="mt-8 max-w-xl rounded-2xl border border-[#111827] bg-[#0E1420] p-4 text-white shadow-[0_18px_46px_rgba(17,24,39,0.12)]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-[#E5BE4B]/35 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#E5BE4B]">Quick brief</span>
+          <span className="text-sm font-semibold">{locale === "vi-vn" ? "Đọc nhanh trước khi vào bài" : "Fast read before the article"}</span>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {signals.map((signal) => (
+            <div className="group rounded-xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/8 transition hover:bg-[#E5BE4B] hover:text-[#111827]" key={signal.label}>
+              <span className="block text-[11px] font-semibold leading-4">{signal.label}</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-white/58 transition group-hover:text-[#303642]">{signal.text}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
