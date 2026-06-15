@@ -37,6 +37,7 @@ export type ReaderArticle = {
   secondaryKeywords: string[];
   heroImage?: ReaderArticleImage;
   thumbnailImage?: ReaderArticleImage;
+  inlineImages?: ReaderArticleImage[];
   authorName?: string;
   authorTitle?: string;
   authorBio?: string;

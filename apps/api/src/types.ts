@@ -296,6 +296,7 @@ export type PublishedArticle = {
   secondaryKeywords: string[];
   heroImage?: GeneratedArticleImage;
   thumbnailImage?: GeneratedArticleImage;
+  inlineImages?: GeneratedArticleImage[];
   authorName?: string;
   authorTitle?: string;
   authorBio?: string;

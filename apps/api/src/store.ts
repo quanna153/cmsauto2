@@ -225,8 +225,9 @@ function selectPublishedArticleImages(draftJson: string | null | undefined) {
   );
   const heroImage = images.find((image) => image.kind === "hero") ?? images[0];
   const thumbnailImage = images.find((image) => image.kind === "thumbnail") ?? heroImage;
+  const inlineImages = images.filter((image) => image.kind === "inline");
 
-  return { heroImage, thumbnailImage };
+  return { heroImage, thumbnailImage, inlineImages };
 }
 
 function normalizeKeywordIdeaProvider(keywordIdea: KeywordIdea): KeywordIdea {
@@ -2272,6 +2273,7 @@ export async function readPublishedArticles(locale?: Locale) {
       secondaryKeywords: parseJson<string[]>(row.secondary_keywords_json, []),
       heroImage: images.heroImage,
       thumbnailImage: images.thumbnailImage,
+      inlineImages: images.inlineImages,
       authorName: row.author_name?.trim() || "CMS Auto",
       authorTitle: row.author_title?.trim() ?? "",
       authorBio: row.author_bio?.trim() ?? ""

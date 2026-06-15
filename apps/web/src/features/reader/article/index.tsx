@@ -1,6 +1,7 @@
 import type { Locale } from "@cmsauto/contracts";
 import { CalendarDays, Clock3, Copy, UserRound } from "lucide-react";
 import Link from "next/link";
+import { Fragment } from "react";
 
 import { ArticleBody } from "@/components/reader/article-body";
 import { ArticleCard } from "@/components/reader/article-card";
@@ -18,6 +19,7 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
   const copy = localeCopy(article.locale as Locale);
   const sections = splitMarkdownSections(article.markdown, article.title);
   const featuredRelated = related.slice(0, 5);
+  const inlineImages = article.inlineImages ?? [];
 
   return (
     <main className="bg-[#F5F5F2]">
@@ -53,11 +55,17 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
             <ArticleReadingStyles />
             <div className="reader-article-body mt-8 max-w-5xl">
               {sections.intro ? <ArticleBody markdown={sections.intro} showToc={false} /> : null}
-              {sections.items.map((section) => (
-                <section className="scroll-mt-24" id={section.id} key={section.id}>
-                  <ArticleBody markdown={section.markdown} showToc={false} />
-                </section>
+              {sections.items.map((section, index) => (
+                <Fragment key={section.id}>
+                  <section className="scroll-mt-24" id={section.id}>
+                    <ArticleBody markdown={section.markdown} showToc={false} />
+                  </section>
+                  {inlineImages[index] ? <ArticleInlineImage article={article} image={inlineImages[index]} /> : null}
+                </Fragment>
               ))}
+              {sections.items.length === 0
+                ? inlineImages.map((image) => <ArticleInlineImage article={article} image={image} key={image.id} />)
+                : inlineImages.slice(sections.items.length).map((image) => <ArticleInlineImage article={article} image={image} key={image.id} />)}
             </div>
           </div>
 
@@ -116,6 +124,30 @@ export function ReaderArticleFeature({ article, related }: { article: ReaderArti
   );
 }
 
+function ArticleInlineImage({ article, image }: { article: ReaderArticle; image: NonNullable<ReaderArticle["inlineImages"]>[number] }) {
+  const src = imageSource(image);
+
+  if (!src) {
+    return null;
+  }
+
+  return (
+    <figure className="my-8 overflow-hidden rounded-lg border border-[#E5E0CF] bg-white shadow-[0_16px_42px_rgba(17,24,39,0.06)]">
+      <img
+        alt={image.altText || article.title}
+        className="aspect-[3/2] w-full object-cover"
+        loading="lazy"
+        src={src}
+      />
+      {image.caption ? (
+        <figcaption className="border-t border-[#EEE6D2] bg-[#FCFBF7] px-4 py-3 text-center text-sm italic leading-6 text-[#4B5563]">
+          {image.caption}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+
 function ArticleHeroImage({ article }: { article: ReaderArticle }) {
   const image = article.heroImage ?? article.thumbnailImage;
   const src = imageSource(image);
@@ -141,7 +173,7 @@ function ArticleHeroImage({ article }: { article: ReaderArticle }) {
   );
 }
 
-function imageSource(image: ReaderArticle["heroImage"] | ReaderArticle["thumbnailImage"]) {
+function imageSource(image: ReaderArticle["heroImage"] | ReaderArticle["thumbnailImage"] | NonNullable<ReaderArticle["inlineImages"]>[number]) {
   if (!image) {
     return "";
   }
