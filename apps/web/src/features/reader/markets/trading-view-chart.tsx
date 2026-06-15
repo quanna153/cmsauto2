@@ -126,9 +126,14 @@ export function TradingViewChart({
   locale?: Locale;
 }) {
   const reactId = useId();
-  const containerId = useMemo(() => `tradingview-${reactId.replace(/:/g, "")}`, [reactId]);
+  const hydratedContainerId = useMemo(() => `tradingview-${reactId.replace(/:/g, "")}`, [reactId]);
+  const [containerId, setContainerId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [useFallback, setUseFallback] = useState(false);
+
+  useEffect(() => {
+    setContainerId(hydratedContainerId);
+  }, [hydratedContainerId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +142,7 @@ export function TradingViewChart({
     let observer: MutationObserver | undefined;
     setUseFallback(false);
 
-    if (!container) return;
+    if (!container || !containerId) return;
     container.innerHTML = "";
 
     const cachedStatus = readChartStatus(symbol);
@@ -200,7 +205,7 @@ export function TradingViewChart({
 
   return (
     <div className={`relative overflow-hidden rounded-lg border ${theme === "light" ? "border-[#E9DDBF] bg-white" : "border-[#2B313D] bg-[#0F1115]"}`}>
-      <div className={heightClass} id={containerId} ref={containerRef} />
+      <div className={heightClass} id={containerId ?? undefined} ref={containerRef} />
       {useFallback ? (
         <iframe
           className="absolute inset-0 h-full w-full border-0"

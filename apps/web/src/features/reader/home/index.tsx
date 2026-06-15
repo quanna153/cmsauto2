@@ -141,7 +141,7 @@ function HeroSection({ slides, locale }: { slides: FeatureArticle[]; locale: Loc
   return (
     <section className="relative overflow-hidden bg-[#FAFAF7]">
       <InlineMarketTicker coins={coreCoins.slice(0, 6)} locale={locale} />
-      <div className="relative mx-auto grid max-w-7xl gap-8 px-5 py-8 md:py-10 lg:grid-cols-[minmax(0,0.86fr)_minmax(26rem,0.9fr)] lg:items-center">
+      <div className="relative mx-auto grid max-w-[88rem] gap-8 px-5 py-8 md:py-10 lg:grid-cols-[minmax(22rem,0.76fr)_minmax(42rem,1fr)] lg:items-center xl:grid-cols-[minmax(24rem,0.72fr)_minmax(48rem,1fr)]">
         <HeroArticleCarousel locale={locale} marketHref={href(locale, "/markets")} slides={slides} />
         <HeroPriceCard coin={coreCoins[0]} locale={locale} />
       </div>
