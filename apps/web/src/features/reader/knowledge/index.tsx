@@ -97,7 +97,7 @@ export async function KnowledgeFeature({ locale }: { locale: Locale }) {
           </div>
         </div>
 
-        <aside className="relative h-[23rem] overflow-visible md:h-[25rem] lg:h-[26rem]">
+        <aside className="relative min-h-[28rem] overflow-visible md:min-h-[29rem] lg:min-h-[30rem]">
           <LearningVisual locale={locale} />
         </aside>
       </section>

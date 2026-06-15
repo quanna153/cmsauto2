@@ -24,14 +24,14 @@ export function LearningVisual({ locale }: { locale: Locale }) {
   const c = visualCopy[locale];
 
   return (
-    <div className="relative h-full min-h-[21rem] overflow-visible">
+    <div className="relative h-full min-h-[27rem] overflow-visible">
       <div className="pointer-events-none absolute inset-8 rounded-[2rem] bg-[radial-gradient(circle_at_42%_42%,rgba(200,162,39,0.22),transparent_42%)] blur-2xl" />
 
-      <div className="absolute inset-x-0 top-4 h-[22rem] overflow-hidden rounded-[1.75rem] border border-[#1F2937]/15 bg-[#111827] p-5 text-white shadow-[0_34px_80px_rgba(17,24,39,0.18)] md:left-4">
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(245,231,179,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(245,231,179,0.06)_1px,transparent_1px)] bg-[size:3.5rem_3.5rem]" />
-        <div className="absolute -right-20 top-10 size-72 rounded-full border border-[#F5E7B3]/18" />
-        <div className="absolute right-12 top-20 size-44 rounded-full border border-dashed border-[#F5E7B3]/22" />
-        <div className="absolute right-28 top-36 size-16 rounded-full bg-[#F5E7B3]/18 blur-xl" />
+      <div className="relative top-4 min-h-[25rem] overflow-hidden rounded-[1.75rem] border border-[#1F2937]/15 bg-[#111827] p-5 text-white shadow-[0_34px_80px_rgba(17,24,39,0.18)] md:left-4">
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(90deg,rgba(245,231,179,0.08)_1px,transparent_1px),linear-gradient(180deg,rgba(245,231,179,0.06)_1px,transparent_1px)] bg-[size:3.5rem_3.5rem]" />
+        <div className="pointer-events-none absolute -right-24 top-8 z-0 size-72 rounded-full border border-[#F5E7B3]/16" />
+        <div className="pointer-events-none absolute right-10 top-16 z-0 size-44 rounded-full border border-dashed border-[#F5E7B3]/18" />
+        <div className="pointer-events-none absolute right-28 top-32 z-0 size-16 rounded-full bg-[#F5E7B3]/14 blur-xl" />
 
         <div className="relative z-10 flex items-start justify-between gap-5">
           <div>
@@ -43,12 +43,12 @@ export function LearningVisual({ locale }: { locale: Locale }) {
           </span>
         </div>
 
-        <div className="relative z-10 mt-10 grid gap-4">
+        <div className="relative z-10 mt-7 grid gap-3">
           {c.layers.map((layer, index) => {
             const Icon = icons[index] ?? BookOpenText;
 
             return (
-              <div className="group grid grid-cols-[3.25rem_minmax(0,1fr)_4rem] items-center gap-4 rounded-2xl border border-white/12 bg-white/[0.06] p-3 transition duration-300 hover:-translate-y-0.5 hover:border-[#F5E7B3]/45" key={layer}>
+              <div className="group grid grid-cols-[3.25rem_minmax(0,1fr)_3rem] items-center gap-4 rounded-2xl border border-white/12 bg-white/[0.07] p-3 transition duration-300 hover:-translate-y-0.5 hover:border-[#F5E7B3]/45" key={layer}>
                 <span className="flex size-12 items-center justify-center rounded-2xl bg-[#F5E7B3] text-[#111827] shadow-[0_14px_34px_rgba(245,231,179,0.15)]">
                   <Icon size={21} />
                 </span>
