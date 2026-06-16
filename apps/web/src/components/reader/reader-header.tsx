@@ -60,6 +60,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
   const copy = searchCopy[locale];
   const menuLabel = menuOpen
     ? locale === "vi-vn" ? "Đóng menu" : "Close menu"
@@ -123,6 +124,21 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, []);
 
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (searchPanelRef.current?.contains(target)) return;
+      if (target.closest("[data-reader-search-trigger]")) return;
+      setSearchOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [searchOpen]);
+
   function toggleSearch() {
     setSearchOpen((current) => !current);
     setMenuOpen(false);
@@ -158,6 +174,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
           className={`hidden h-10 w-[15.5rem] items-center gap-3 rounded-xl border px-3 text-left text-sm transition lg:flex ${
             searchOpen ? "border-[#E5BE4B] bg-[#E5BE4B]/16 text-[#F5E7B3]" : "border-white/18 bg-white/7 text-white/70 hover:border-[#E5BE4B]/70 hover:text-[#F5E7B3]"
           }`}
+          data-reader-search-trigger
           onClick={toggleSearch}
           type="button"
         >
@@ -172,6 +189,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
           className={`hidden size-10 items-center justify-center rounded-xl border text-white transition md:flex lg:hidden ${
             searchOpen ? "border-[#E5BE4B] bg-[#E5BE4B]/16 text-[#F5E7B3]" : "border-white/18 bg-white/7 hover:border-[#E5BE4B]/70 hover:text-[#F5E7B3]"
           }`}
+          data-reader-search-trigger
           onClick={toggleSearch}
           type="button"
         >
@@ -185,6 +203,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
             className={`flex size-10 items-center justify-center rounded-lg border text-white ${
               searchOpen ? "border-[#E5BE4B] bg-[#E5BE4B]/16" : "border-white/16 bg-white/8"
             }`}
+            data-reader-search-trigger
             onClick={toggleSearch}
             type="button"
           >
@@ -209,7 +228,7 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
           onClick={() => setSearchOpen(false)}
           role="dialog"
         >
-          <div className="mx-auto max-w-3xl" onClick={(event) => event.stopPropagation()}>
+          <div className="mx-auto max-w-3xl" onClick={(event) => event.stopPropagation()} ref={searchPanelRef}>
             <div className="overflow-hidden rounded-2xl border border-white/12 bg-[#FAFAF7] text-[#111827] shadow-[0_26px_80px_rgba(0,0,0,0.35)]">
               <label className="sr-only" htmlFor="reader-header-search">{copy.label}</label>
               <div className="flex items-center gap-3 border-b border-[#E7DFCF] bg-white px-4 py-3">
