@@ -14,6 +14,7 @@ import {
   Save,
   Search,
   Settings,
+  Upload,
   Wand2,
   XCircle
 } from "lucide-react";
@@ -63,6 +64,12 @@ type FactorySessionValues = {
   finalMarkdown: string;
 };
 type PersistTarget = { id: string; revision: number };
+type BatchArticleStatus = {
+  articleId: string | null;
+  keyword: string;
+  message: string;
+  status: "queued" | "running" | "done" | "failed";
+};
 
 const fallbackPrompts: PromptTemplates = {
   keywords: "Đề xuất keyword cluster rõ ràng cho {{keyword}}.",
@@ -149,6 +156,10 @@ export function FactoryFeature() {
   const [saveMessage, setSaveMessage] = useState("");
   const [savedArticleId, setSavedArticleId] = useState<string | null>(null);
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
+  const [batchKeywords, setBatchKeywords] = useState<string[]>([]);
+  const [batchFileName, setBatchFileName] = useState("");
+  const [batchImportError, setBatchImportError] = useState<string | null>(null);
+  const [batchArticles, setBatchArticles] = useState<BatchArticleStatus[]>([]);
   const promptQuery = useQuery({
     queryKey: ["prompts"],
     queryFn: () => getJson<{ prompts: PromptTemplates; defaults: PromptTemplates; records: PromptRecord[] }>("/prompts")
@@ -357,7 +368,26 @@ export function FactoryFeature() {
       return;
     }
 
-    setBusy(true);
+    await runAutoArticleForKeyword(nextSeedKeyword);
+  }
+
+  async function runAutoArticleForKeyword(
+    nextSeedKeyword: string,
+    {
+      manageBusy = true,
+      onTrackingArticle,
+      rethrow = false,
+      updateUrl = true,
+      useCurrentArticle = true
+    }: {
+      manageBusy?: boolean;
+      onTrackingArticle?: (article: ArticleSession) => void;
+      rethrow?: boolean;
+      updateUrl?: boolean;
+      useCurrentArticle?: boolean;
+    } = {}
+  ) {
+    if (manageBusy) setBusy(true);
     setError(null);
     setSaveMessage("");
     setSeedKeyword(nextSeedKeyword);
@@ -370,13 +400,14 @@ export function FactoryFeature() {
     setDraft(null);
     setLinks([]);
 
-    let autoPersistTarget = savedArticleId && savedRevision !== null
+    let autoPersistTarget = useCurrentArticle && savedArticleId && savedRevision !== null
       ? { id: savedArticleId, revision: savedRevision }
       : null;
     const autosaveAutoProgress = async (values: FactorySessionValues, options?: { ready?: boolean }) => {
       const savedArticle = await persistFactorySession(values, {
         ready: options?.ready ?? false,
-        target: autoPersistTarget
+        target: autoPersistTarget,
+        forceCreate: !useCurrentArticle && autoPersistTarget === null
       });
       autoPersistTarget = { id: savedArticle.id, revision: savedArticle.revision };
       return savedArticle;
@@ -397,7 +428,10 @@ export function FactoryFeature() {
         linkSuggestions: [],
         finalMarkdown: ""
       });
-      window.history.replaceState(null, "", `/admin/factory?articleId=${trackingArticle.id}`);
+      if (updateUrl) {
+        window.history.replaceState(null, "", `/admin/factory?articleId=${trackingArticle.id}`);
+      }
+      onTrackingArticle?.(trackingArticle);
       setSaveMessage(`Đã tạo bản theo dõi trong Quản lý bài viết, revision ${trackingArticle.revision}. Có thể mở Quản lý bài để xem tiến độ.`);
 
       setBusyLabel("01/07 Đang lấy keyword và volume từ Semrush...");
@@ -584,8 +618,102 @@ export function FactoryFeature() {
           ? `Đã tạo tự động và lưu bài vào Quản lý bài viết, revision ${savedArticle.revision}.`
           : `Đã tạo tự động và lưu bài vào Quản lý bài viết, nhưng chưa match được internal link nào. Revision ${savedArticle.revision}.`
       );
+      return savedArticle;
     } catch (autoError) {
-      setError(autoError instanceof Error ? autoError.message : "Không chạy được luồng tạo bài tự động.");
+      const message = autoError instanceof Error ? autoError.message : "Không chạy được luồng tạo bài tự động.";
+      setError(message);
+      if (rethrow) throw new Error(message);
+      return null;
+    } finally {
+      if (manageBusy) {
+        setBusy(false);
+        setBusyLabel("");
+      }
+    }
+  }
+
+  async function handleBatchKeywordFile(file: File | null) {
+    setBatchImportError(null);
+    setBatchArticles([]);
+    if (!file) {
+      setBatchKeywords([]);
+      setBatchFileName("");
+      return;
+    }
+
+    try {
+      const parsedKeywords = await extractBatchKeywordsFromFile(file);
+      if (parsedKeywords.length === 0) {
+        setBatchKeywords([]);
+        setBatchFileName(file.name);
+        setBatchImportError("File không có keyword hợp lệ. Dùng cột keyword/từ khóa hoặc đặt keyword ở cột đầu tiên.");
+        return;
+      }
+      setBatchKeywords(parsedKeywords);
+      setBatchFileName(file.name);
+    } catch (fileError) {
+      setBatchKeywords([]);
+      setBatchFileName(file.name);
+      setBatchImportError(fileError instanceof Error ? fileError.message : "Không đọc được file keyword.");
+    }
+  }
+
+  async function runBatchAutoArticles() {
+    const seeds = batchKeywords.map((item) => item.trim()).filter(Boolean);
+    if (seeds.length === 0) {
+      setBatchImportError("Chọn file CSV/XLSX có danh sách keyword trước khi chạy hàng loạt.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setSaveMessage(`Đang khởi tạo ${seeds.length} bài từ file ${batchFileName || "keyword"}...`);
+    setBatchArticles(seeds.map((keyword) => ({
+      articleId: null,
+      keyword,
+      message: "Đang chờ chạy",
+      status: "queued"
+    })));
+
+    let done = 0;
+    let failed = 0;
+
+    try {
+      for (const [index, keyword] of seeds.entries()) {
+        setBatchArticles((current) => updateBatchArticleStatus(current, keyword, {
+          message: `Đang chạy ${index + 1}/${seeds.length}`,
+          status: "running"
+        }));
+
+        try {
+          const article = await runAutoArticleForKeyword(keyword, {
+            manageBusy: false,
+            onTrackingArticle: (trackingArticle) => {
+              setBatchArticles((current) => updateBatchArticleStatus(current, keyword, {
+                articleId: trackingArticle.id,
+                message: `Đã tạo bản theo dõi revision ${trackingArticle.revision}`
+              }));
+            },
+            rethrow: true,
+            updateUrl: false,
+            useCurrentArticle: false
+          });
+          done += 1;
+          setBatchArticles((current) => updateBatchArticleStatus(current, keyword, {
+            articleId: article?.id ?? null,
+            message: article ? `Đã tạo xong revision ${article.revision}` : "Đã chạy xong",
+            status: "done"
+          }));
+        } catch (batchError) {
+          failed += 1;
+          setBatchArticles((current) => updateBatchArticleStatus(current, keyword, {
+            message: batchError instanceof Error ? batchError.message : "Không tạo được bài này",
+            status: "failed"
+          }));
+        }
+      }
+
+      setSaveMessage(`Batch hoàn tất: ${done}/${seeds.length} bài thành công${failed ? `, ${failed} bài lỗi` : ""}.`);
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -636,10 +764,10 @@ export function FactoryFeature() {
     };
   }
 
-  function buildArticleSnapshot(values: FactorySessionValues) {
+  function buildArticleSnapshot(values: FactorySessionValues, initial?: { id?: string; revision?: number }) {
     const now = new Date().toISOString();
     return {
-      id: savedArticleId ?? crypto.randomUUID(), revision: savedRevision ?? 1, createdAt: now, updatedAt: now,
+      id: initial?.id ?? savedArticleId ?? crypto.randomUUID(), revision: initial?.revision ?? savedRevision ?? 1, createdAt: now, updatedAt: now,
       inputs: { language: values.language, seedKeyword: values.seedKeyword }, activeStep: values.activeStep, keywordIdeas: values.keywordIdeas,
       primaryKeywordId: values.primaryKeywordId, secondaryKeywordIds: values.secondaryKeywordIds, brief: values.brief, outline: values.outline, draft: values.draft, linkSuggestions: values.linkSuggestions,
       finalMarkdown: values.finalMarkdown, reviewStatus: values.activeStep === "ready" ? "editor_ready" : "needs_fix", reviewNote: values.activeStep === "ready" ? "" : "Bài đang làm dở trong Article Factory.",
@@ -663,9 +791,9 @@ export function FactoryFeature() {
     };
   }
 
-  async function persistFactorySession(values: FactorySessionValues, { ready = false, target = null }: { ready?: boolean; target?: PersistTarget | null } = {}) {
-    const targetId = target?.id ?? savedArticleId;
-    const targetRevision = target?.revision ?? savedRevision;
+  async function persistFactorySession(values: FactorySessionValues, { ready = false, target = null, forceCreate = false }: { ready?: boolean; target?: PersistTarget | null; forceCreate?: boolean } = {}) {
+    const targetId = forceCreate ? null : target?.id ?? savedArticleId;
+    const targetRevision = forceCreate ? null : target?.revision ?? savedRevision;
     if (targetId && targetRevision !== null) {
       const result = await patchJson<{ article: ArticleSession }>(`/articles/${targetId}`, {
         expectedRevision: targetRevision,
@@ -677,7 +805,9 @@ export function FactoryFeature() {
       return result.article;
     }
 
-    const result = await postJson<{ article: ArticleSession }>("/articles", { article: buildArticleSnapshot(values) });
+    const result = await postJson<{ article: ArticleSession }>("/articles", {
+      article: buildArticleSnapshot(values, forceCreate ? { id: crypto.randomUUID(), revision: 1 } : undefined)
+    });
     setSavedArticleId(result.article.id);
     setSavedRevision(result.article.revision);
     setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
@@ -841,6 +971,10 @@ export function FactoryFeature() {
       <main className="min-w-0">
         {error ? <div className="mb-4"><ErrorState message={error} /></div> : null}
         <WorkflowWorkspace
+          batchArticles={batchArticles}
+          batchFileName={batchFileName}
+          batchImportError={batchImportError}
+          batchKeywords={batchKeywords}
           brief={brief}
           busy={busy}
           draft={draft}
@@ -879,6 +1013,8 @@ export function FactoryFeature() {
             });
           }}
           onGenerateKeywords={() => void run(generateKeywords, "Đang lấy keyword và volume từ Semrush...")}
+          onBatchFileChange={(file) => void handleBatchKeywordFile(file)}
+          onRunBatchAuto={() => void runBatchAutoArticles()}
           onUpdateMarkdown={(md) => {
             setDraft((prev) => {
               if (!prev) return prev;
@@ -950,6 +1086,143 @@ function getStageTitle(step: Step) {
   return workflowStages.find((stage) => stage.key === step)?.title ?? step;
 }
 
+function updateBatchArticleStatus(
+  articles: BatchArticleStatus[],
+  keyword: string,
+  changes: Partial<BatchArticleStatus>
+) {
+  return articles.map((article) => article.keyword === keyword ? { ...article, ...changes } : article);
+}
+
+async function extractBatchKeywordsFromFile(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension === "xlsx") {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) return [];
+    const sheet = workbook.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { defval: "", header: 1 });
+    return extractKeywordsFromMatrix(rows);
+  }
+
+  if (extension === "csv") {
+    const text = await file.text();
+    return extractKeywordsFromMatrix(parseCsvRows(text));
+  }
+
+  throw new Error("Chỉ hỗ trợ file .csv hoặc .xlsx.");
+}
+
+function extractKeywordsFromMatrix(matrix: unknown[][]) {
+  const rows = matrix
+    .map((row) => row.map((cell) => String(cell ?? "").trim()))
+    .filter((row) => row.some(Boolean));
+  if (rows.length === 0) return [];
+
+  const keywordColumn = rows[0].findIndex((cell) => isKeywordHeader(cell));
+  const dataRows = keywordColumn >= 0 ? rows.slice(1) : rows;
+  const rawKeywords = dataRows.map((row) => {
+    if (keywordColumn >= 0) return row[keywordColumn] ?? "";
+    return row.find((cell) => cell && !isKeywordHeader(cell)) ?? "";
+  });
+
+  return uniqueKeywordList(rawKeywords);
+}
+
+function uniqueKeywordList(values: string[]) {
+  const seen = new Set<string>();
+  const keywords: string[] = [];
+  for (const value of values) {
+    const keyword = value.replace(/\s+/g, " ").trim();
+    const key = keyword.toLowerCase();
+    if (!keyword || keyword.length < 2 || isKeywordHeader(keyword) || seen.has(key)) continue;
+    seen.add(key);
+    keywords.push(keyword);
+  }
+  return keywords;
+}
+
+function isKeywordHeader(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return [
+    "keyword",
+    "keywords",
+    "seed",
+    "seed keyword",
+    "topic",
+    "chu de",
+    "tu khoa"
+  ].includes(normalized);
+}
+
+function parseCsvRows(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+
+    if (char === "\"" && quoted && nextChar === "\"") {
+      cell += "\"";
+      index += 1;
+      continue;
+    }
+
+    if (char === "\"") {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (!quoted && char === ",") {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if (!quoted && (char === "\n" || char === "\r")) {
+      if (char === "\r" && nextChar === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell);
+  if (row.some((value) => value.trim())) rows.push(row);
+  return rows;
+}
+
+function BatchStatusBadge({ status }: { status: BatchArticleStatus["status"] }) {
+  const label = {
+    done: "Xong",
+    failed: "Lỗi",
+    queued: "Chờ",
+    running: "Đang chạy"
+  }[status];
+  const className = {
+    done: "bg-green-50 text-green-700",
+    failed: "bg-red-50 text-red-700",
+    queued: "bg-[#f1f2ef] text-[#687386]",
+    running: "bg-[#fbf5dc] text-[#80640b]"
+  }[status];
+  return <span className={`self-start rounded-full px-3 py-1 text-xs font-bold ${className}`}>{label}</span>;
+}
+
 function WorkflowStepper({
   activeStep,
   completedSteps,
@@ -990,6 +1263,10 @@ function WorkflowStepper({
 }
 
 function WorkflowWorkspace(props: {
+  batchArticles: BatchArticleStatus[];
+  batchFileName: string;
+  batchImportError: string | null;
+  batchKeywords: string[];
   brief: Brief | null;
   busy: boolean;
   busyLabel: string;
@@ -998,6 +1275,7 @@ function WorkflowWorkspace(props: {
   language: "vi" | "en";
   links: InternalLinkSuggestion[];
   onFinish: () => void;
+  onBatchFileChange: (file: File | null) => void;
   onGenerateBrief: () => void;
   onGenerateDraft: () => void;
   onUpdateMarkdown: (md: string) => void;
@@ -1011,6 +1289,7 @@ function WorkflowWorkspace(props: {
   onKeywordSelectionConfirm: () => void;
   onOutlineChange: (outline: Outline) => void;
   onPrimaryChange: (id: string) => void;
+  onRunBatchAuto: () => void;
   onSecondaryChange: (id: string) => void;
   onSeedKeywordChange: (value: string) => void;
   onSetLinkStatus: (id: string, status: InternalLinkSuggestion["status"]) => void;
@@ -1044,26 +1323,38 @@ function WorkflowWorkspace(props: {
 }
 
 function KeywordsWorkspace({
+  batchArticles,
+  batchFileName,
+  batchImportError,
+  batchKeywords,
   busy,
   keywords,
   language,
+  onBatchFileChange,
   onGenerateKeywords,
   onKeywordSelectionConfirm,
   onLanguageChange,
   onPrimaryChange,
+  onRunBatchAuto,
   onSecondaryChange,
   onSeedKeywordChange,
   primaryKeywordId,
   secondaryKeywordIds,
   seedKeyword
 }: {
+  batchArticles: BatchArticleStatus[];
+  batchFileName: string;
+  batchImportError: string | null;
+  batchKeywords: string[];
   busy: boolean;
   keywords: Keyword[];
   language: "vi" | "en";
+  onBatchFileChange: (file: File | null) => void;
   onGenerateKeywords: () => void;
   onKeywordSelectionConfirm: () => void;
   onLanguageChange: (language: "vi" | "en") => void;
   onPrimaryChange: (id: string) => void;
+  onRunBatchAuto: () => void;
   onSecondaryChange: (id: string) => void;
   onSeedKeywordChange: (value: string) => void;
   primaryKeywordId: string | null;
@@ -1090,6 +1381,58 @@ function KeywordsWorkspace({
         <p className="self-center text-xs text-[#687386]">Volume được refresh trong cùng lần gọi nếu provider đã cấu hình.</p>
       </div>
       {busy ? <div className="mt-3"><LoadingSkeleton label="Đang lấy keyword và volume từ Semrush..." /></div> : null}
+    </section>
+    <section className="rounded-xl border bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-semibold">Tạo hàng loạt từ file</h3>
+          <p className="mt-1 text-sm text-[#687386]">Upload CSV/XLSX có cột keyword/từ khóa. Hệ thống sẽ chạy tạo bài lần lượt từng keyword.</p>
+        </div>
+        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold text-[#172033] transition hover:bg-[#f7f7f4]">
+          <Upload size={16} />
+          Chọn file CSV/XLSX
+          <input
+            accept=".csv,.xlsx"
+            className="sr-only"
+            disabled={busy}
+            onChange={(event) => {
+              void onBatchFileChange(event.target.files?.[0] ?? null);
+              event.currentTarget.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      </div>
+      {batchFileName ? <p className="mt-3 text-xs font-semibold text-[#687386]">File: {batchFileName}</p> : null}
+      {batchImportError ? <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{batchImportError}</p> : null}
+      {batchKeywords.length > 0 ? (
+        <div className="mt-4 rounded-xl border bg-[#fbfbf8] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-[#172033]">Đã đọc {batchKeywords.length} keyword</p>
+            <Button disabled={busy || batchKeywords.length === 0} onClick={onRunBatchAuto}>
+              <Wand2 size={16} />Khởi tạo & chạy hàng loạt
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {batchKeywords.slice(0, 12).map((keyword) => <Badge key={keyword}>{keyword}</Badge>)}
+            {batchKeywords.length > 12 ? <Badge>+{batchKeywords.length - 12} keyword</Badge> : null}
+          </div>
+        </div>
+      ) : null}
+      {batchArticles.length > 0 ? (
+        <div className="mt-4 grid gap-2">
+          {batchArticles.map((article, index) => (
+            <div className="grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[32px_minmax(0,1fr)_auto]" key={`${article.keyword}-${index}`}>
+              <span className="font-bold text-[#a88412]">{String(index + 1).padStart(2, "0")}</span>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-[#172033]">{article.keyword}</p>
+                <p className="mt-1 text-xs text-[#687386]">{article.message}</p>
+              </div>
+              <BatchStatusBadge status={article.status} />
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
     <section className="rounded-xl border bg-white p-4">
       <h3 className="font-semibold">Danh sách từ khóa</h3>
