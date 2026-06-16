@@ -52,14 +52,19 @@ function articleHref(locale: Locale, article: SearchResult) {
   return article.livePath || `/${locale}/${article.slug}`;
 }
 
+const localeStaticRoutes = new Set(["", "about", "knowledge", "markets", "analysis", "articles"]);
+
 function switchLocaleHref(pathname: string | null, currentLocale: Locale, nextLocale: Locale) {
   if (!pathname) return `/${nextLocale}`;
-  const parts = pathname.split("/");
-  if (parts[1] === currentLocale) {
-    parts[1] = nextLocale;
-    return parts.join("/") || `/${nextLocale}`;
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== currentLocale) return `/${nextLocale}`;
+
+  const route = parts[1] ?? "";
+  if (parts.length <= 2 && localeStaticRoutes.has(route)) {
+    return route ? `/${nextLocale}/${route}` : `/${nextLocale}`;
   }
-  return `/${nextLocale}${pathname === "/" ? "" : pathname}`;
+
+  return `/${nextLocale}`;
 }
 
 export function ReaderHeader({ locale }: { locale: Locale }) {

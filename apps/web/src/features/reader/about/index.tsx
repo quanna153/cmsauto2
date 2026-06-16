@@ -14,6 +14,7 @@ const copy = {
     proofTitle: "Nguyên tắc biên tập",
     workflowTitle: "Cách chúng tôi xử lý thông tin",
     audienceTitle: "CoinRadar phục vụ ai",
+    audienceLead: "Ba nhóm độc giả chính được tách thành các dải ưu tiên để nội dung phục vụ đúng nhu cầu đọc.",
     pillarsTitle: "Nội dung chúng tôi tập trung",
     guardrailsTitle: "Những điều chúng tôi không làm",
     metrics: [["24/7", "Theo dõi thị trường"], ["2 ngôn ngữ", "Việt Nam và quốc tế"], ["0", "Tín hiệu mua bán ép buộc"]],
@@ -55,6 +56,7 @@ const copy = {
     proofTitle: "Editorial principles",
     workflowTitle: "How we process information",
     audienceTitle: "Who CoinRadar serves",
+    audienceLead: "Three core reader groups are separated into priority lanes so each content path serves a clear reading need.",
     pillarsTitle: "What we focus on",
     guardrailsTitle: "What we do not do",
     metrics: [["24/7", "Market monitoring"], ["2 languages", "Vietnam and global"], ["0", "Forced buy/sell signals"]],
@@ -91,6 +93,7 @@ const copy = {
   contact: string;
   cta: string;
   audience: string[][];
+  audienceLead: string;
   audienceTitle: string;
   eyebrow: string;
   guardrails: string[];
@@ -223,7 +226,7 @@ export function AboutFeature({ locale }: { locale: Locale }) {
             <header>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#F5E7B3]">Audience map</p>
               <h2 className="mt-3 text-3xl font-semibold leading-tight">{c.audienceTitle}</h2>
-              <p className="mt-4 text-sm leading-7 text-white/62">Ba nhóm độc giả chính được tách thành các dải ưu tiên để nội dung phục vụ đúng nhu cầu đọc.</p>
+              <p className="mt-4 text-sm leading-7 text-white/62">{c.audienceLead}</p>
             </header>
             <div className="grid gap-4">
               {c.audience.map(([title, text], index) => {
