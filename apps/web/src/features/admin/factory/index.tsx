@@ -361,6 +361,14 @@ export function FactoryFeature() {
     setError(null);
     setSaveMessage("");
     setSeedKeyword(nextSeedKeyword);
+    setSelectedStep("keywords");
+    setKeywords([]);
+    setPrimaryKeywordId(null);
+    setSecondaryKeywordIds([]);
+    setBrief(null);
+    setOutline(null);
+    setDraft(null);
+    setLinks([]);
 
     let autoPersistTarget = savedArticleId && savedRevision !== null
       ? { id: savedArticleId, revision: savedRevision }
@@ -375,7 +383,23 @@ export function FactoryFeature() {
     };
 
     try {
-      setSelectedStep("keywords");
+      setBusyLabel("00/07 Đang tạo bản theo dõi trong Quản lý bài viết...");
+      const trackingArticle = await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "keywords",
+        keywordIdeas: [],
+        primaryKeywordId: null,
+        secondaryKeywordIds: [],
+        brief: null,
+        outline: null,
+        draft: null,
+        linkSuggestions: [],
+        finalMarkdown: ""
+      });
+      window.history.replaceState(null, "", `/admin/factory?articleId=${trackingArticle.id}`);
+      setSaveMessage(`Đã tạo bản theo dõi trong Quản lý bài viết, revision ${trackingArticle.revision}. Có thể mở Quản lý bài để xem tiến độ.`);
+
       setBusyLabel("01/07 Đang lấy keyword và volume từ Semrush...");
       const keywordResult = await apiPost<{ keywordIdeas: Keyword[] }>("/keywords/suggest", {
         seedKeyword: nextSeedKeyword,
