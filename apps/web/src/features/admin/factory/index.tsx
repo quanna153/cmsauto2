@@ -288,12 +288,18 @@ export function FactoryFeature() {
 
   async function generateLinks() {
     if (!primary) return;
+    if (!draft) {
+      setSelectedStep("draft");
+      setError("Cần sinh hoặc nạp bản nháp ở bước 04 trước khi gợi ý internal link.");
+      return;
+    }
+
     const result = await apiPost<{ suggestions: InternalLinkSuggestion[] }>("/links/suggest", {
       primaryKeyword: primary.keyword,
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.links,
-      draft: draft ?? undefined,
+      draft,
       matchLibraryOnly: true
     });
     setLinks(result.suggestions);
@@ -1545,8 +1551,11 @@ function LinksWorkspace({
     actionLabel={links.length ? "Gợi ý lại link" : "Gợi ý link"}
     busy={busy}
     busyLabel={busyLabel}
-    emptyDescription="Sinh draft trước khi gắn internal links."
-    emptyTitle="Chưa có gợi ý link"
+    emptyDescription={draft
+      ? "Đã có bản nháp. Bấm Gợi ý link để phân tích nội dung và so khớp Kho links."
+      : "Quay lại bước 04 để sinh hoặc nạp bản nháp trước khi gắn internal links."}
+    emptyTitle={draft ? "Chưa có gợi ý link" : "Chưa có bản nháp"}
+    generateDisabled={!draft}
     onGenerate={onGenerate}
   >
     {links.length ? <>
@@ -1657,6 +1666,7 @@ function ResultWorkspace({
   children,
   emptyDescription,
   emptyTitle,
+  generateDisabled = false,
   onGenerate
 }: {
   actionLabel: string;
@@ -1665,10 +1675,11 @@ function ResultWorkspace({
   children: React.ReactNode;
   emptyDescription: string;
   emptyTitle: string;
+  generateDisabled?: boolean;
   onGenerate: () => void;
 }) {
   return <section>
-    <Button disabled={busy} onClick={onGenerate}><Wand2 size={16} />{actionLabel}</Button>
+    <Button disabled={busy || generateDisabled} onClick={onGenerate}><Wand2 size={16} />{actionLabel}</Button>
     <div className="mt-4 grid gap-4">
       {busy ? <LoadingSkeleton label={busyLabel || "Đang xử lý..."} /> : null}
       {children || (busy ? null : <EmptyState description={emptyDescription} title={emptyTitle} />)}
