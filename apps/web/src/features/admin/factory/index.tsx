@@ -319,11 +319,14 @@ export function FactoryFeature() {
       secondaryKeywords: secondary.map((item) => item.keyword),
       language,
       prompt: promptTemplates.links,
-      draft,
-      matchLibraryOnly: true
+      draft
     });
     const nextLinks = result.suggestions;
     setLinks(nextLinks);
+    if (nextLinks.length === 0) {
+      setSaveMessage("Không tìm thấy gợi ý internal link phù hợp. Chưa lưu version mới.");
+      return;
+    }
     if (savedArticleId && savedRevision !== null) {
       const applied = await apiPost<{ markdown: string }>("/links/apply", {
         markdown: draft.markdown,
