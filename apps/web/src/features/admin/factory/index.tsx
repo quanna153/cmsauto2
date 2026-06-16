@@ -282,8 +282,28 @@ export function FactoryFeature() {
       prompt: promptTemplates.draft,
       outline
     });
-    setDraft(result.draft);
-    resetFrom("links");
+    const nextDraft = {
+      ...result.draft,
+      generatedImages: result.draft.generatedImages?.length ? result.draft.generatedImages : draft?.generatedImages ?? []
+    };
+    setDraft(nextDraft);
+    setLinks([]);
+    if (savedArticleId && savedRevision !== null) {
+      const savedArticle = await persistFactorySession({
+        language,
+        seedKeyword,
+        activeStep: "links",
+        keywordIdeas: keywords,
+        primaryKeywordId,
+        secondaryKeywordIds,
+        brief,
+        outline,
+        draft: nextDraft,
+        linkSuggestions: [],
+        finalMarkdown: nextDraft.markdown
+      });
+      setSaveMessage(`Đã lưu bản nháp mới vào bài đang sửa, revision ${savedArticle.revision}.`);
+    }
   }
 
   async function generateLinks() {
@@ -302,7 +322,28 @@ export function FactoryFeature() {
       draft,
       matchLibraryOnly: true
     });
-    setLinks(result.suggestions);
+    const nextLinks = result.suggestions;
+    setLinks(nextLinks);
+    if (savedArticleId && savedRevision !== null) {
+      const applied = await apiPost<{ markdown: string }>("/links/apply", {
+        markdown: draft.markdown,
+        suggestions: nextLinks
+      });
+      const savedArticle = await persistFactorySession({
+        language,
+        seedKeyword,
+        activeStep: nextLinks.length > 0 ? "ready" : "links",
+        keywordIdeas: keywords,
+        primaryKeywordId,
+        secondaryKeywordIds,
+        brief,
+        outline,
+        draft,
+        linkSuggestions: nextLinks,
+        finalMarkdown: applied.markdown
+      });
+      setSaveMessage(`Đã lưu gợi ý internal link mới vào bài đang sửa, revision ${savedArticle.revision}.`);
+    }
   }
 
   async function runAutoArticle() {
