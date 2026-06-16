@@ -965,7 +965,7 @@ function KeywordsWorkspace({
             <p className="text-sm text-[#687386]">
               Đã chọn {primaryKeywordId ? "1 từ khóa chính" : "0 từ khóa chính"} và {secondaryKeywordIds.length} từ khóa phụ.
             </p>
-            <Button disabled={!primaryKeywordId} onClick={onKeywordSelectionConfirm}>
+            <Button disabled={busy || !primaryKeywordId} onClick={onKeywordSelectionConfirm}>
               <CheckCircle2 size={16} />Xác nhận bộ từ khóa và tiếp tục
             </Button>
           </div>
@@ -1015,7 +1015,7 @@ function BriefWorkspace({ brief, busy, busyLabel, onGenerate, onConfirm }: { bri
         </ResultCard>
       ) : null}
       <div className="mt-4 flex justify-end border-t pt-4">
-        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận định hướng bài và tiếp tục</Button>
+        <Button disabled={busy || !brief} onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận định hướng bài và tiếp tục</Button>
       </div>
     </div> : null}
   </ResultWorkspace>;
@@ -1121,7 +1121,7 @@ function OutlineWorkspace({
         </ResultCard>
       )}
       <div className="mt-4 flex justify-end border-t pt-4">
-        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận dàn ý và tiếp tục</Button>
+        <Button disabled={busy || !outline} onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận dàn ý và tiếp tục</Button>
       </div>
     </div> : null}
   </ResultWorkspace>;
@@ -1170,7 +1170,7 @@ function DraftWorkspace({
         <Textarea className="min-h-[520px] font-mono text-xs leading-6" value={draft.markdown} onChange={(e) => onUpdateMarkdown(e.target.value)} />
       </ResultCard>
       <div className="mt-4 flex justify-end border-t pt-4">
-        <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận bản nháp và tiếp tục</Button>
+        <Button disabled={busy || !draft} onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận bản nháp và tiếp tục</Button>
       </div>
     </div> : null}
   </ResultWorkspace>;
@@ -1621,7 +1621,7 @@ function LinksWorkspace({
         : null}
       {draft
         ? <div className="mt-4 flex justify-end border-t pt-4">
-            <Button onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận Link và tới bước Bàn giao</Button>
+            <Button disabled={busy || !draft || links.length === 0} onClick={onConfirm}><CheckCircle2 size={16} className="mr-2" />Xác nhận Link và tới bước Bàn giao</Button>
           </div>
         : <p className="mt-4 rounded-lg border bg-white p-3 text-sm text-[#687386]">Sinh draft để có thể gắn và xác nhận các link đã chọn.</p>}
     </> : null}
