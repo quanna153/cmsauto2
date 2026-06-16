@@ -24,6 +24,12 @@ const stepLabels: Record<ArticleSession["activeStep"], string> = {
   ready: "Sẵn sàng editor"
 };
 
+function formatPublishTime(article: ArticleSession) {
+  const publishTime = article.publishedAt ?? article.publishAt;
+  if (!publishTime) return "Chưa lên lịch";
+  return new Date(publishTime).toLocaleString("vi-VN");
+}
+
 export function ArticlesFeature() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["articles"], queryFn: () => getJson<{ articles: ArticleSession[] }>("/articles") });
@@ -75,7 +81,7 @@ export function ArticlesFeature() {
             ? <EmptyState description="Không có bài viết nào thuộc ngôn ngữ đang lọc." title="Không có bài phù hợp" />
           : <div className="overflow-hidden rounded-xl border bg-white">
               <Table>
-                <TableHead><tr><th className="px-4 py-3">Bài viết</th><th>Trạng thái</th><th>Cập nhật</th><th></th></tr></TableHead>
+                <TableHead><tr><th className="px-4 py-3">Bài viết</th><th>Trạng thái</th><th>Thời gian publish</th><th></th></tr></TableHead>
                 <tbody>{filteredArticles.map((article) =>
                   <tr key={article.id}>
                     <TableCell>
@@ -84,7 +90,7 @@ export function ArticlesFeature() {
                       <p className="mt-1 text-xs font-semibold text-[#80640b]">{stepLabels[article.activeStep]}</p>
                     </TableCell>
                     <TableCell><StatusBadge status={article.reviewStatus} /></TableCell>
-                    <TableCell>{new Date(article.updatedAt).toLocaleString("vi-VN")}</TableCell>
+                    <TableCell>{formatPublishTime(article)}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-3">
                         {article.activeStep !== "ready"
