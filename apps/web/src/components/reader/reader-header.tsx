@@ -1,7 +1,7 @@
 "use client";
 
 import type { Locale } from "@cmsauto/contracts";
-import { ArrowUpRight, Loader2, Menu, Search, X } from "lucide-react";
+import { ArrowUpRight, Languages, Loader2, Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -52,6 +52,16 @@ function articleHref(locale: Locale, article: SearchResult) {
   return article.livePath || `/${locale}/${article.slug}`;
 }
 
+function switchLocaleHref(pathname: string | null, currentLocale: Locale, nextLocale: Locale) {
+  if (!pathname) return `/${nextLocale}`;
+  const parts = pathname.split("/");
+  if (parts[1] === currentLocale) {
+    parts[1] = nextLocale;
+    return parts.join("/") || `/${nextLocale}`;
+  }
+  return `/${nextLocale}${pathname === "/" ? "" : pathname}`;
+}
+
 export function ReaderHeader({ locale }: { locale: Locale }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -62,6 +72,10 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
   const copy = searchCopy[locale];
+  const nextLocale: Locale = locale === "vi-vn" ? "en-us" : "vi-vn";
+  const languageHref = switchLocaleHref(pathname, locale, nextLocale);
+  const languageLabel = locale === "vi-vn" ? "EN" : "VI";
+  const languageAriaLabel = locale === "vi-vn" ? "Switch to English" : "Chuyển sang tiếng Việt";
   const menuLabel = menuOpen
     ? locale === "vi-vn" ? "Đóng menu" : "Close menu"
     : locale === "vi-vn" ? "Mở menu" : "Open menu";
@@ -168,6 +182,15 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
           })}
         </nav>
 
+        <Link
+          aria-label={languageAriaLabel}
+          className="hidden h-10 items-center gap-2 rounded-xl border border-white/18 bg-white/7 px-3 text-sm font-bold text-white/78 transition hover:border-[#E5BE4B]/70 hover:text-[#F5E7B3] md:flex"
+          href={languageHref}
+        >
+          <Languages size={16} />
+          {languageLabel}
+        </Link>
+
         <button
           aria-expanded={searchOpen}
           aria-label={searchOpen ? copy.close : copy.button}
@@ -197,6 +220,14 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
         </button>
 
         <div className="ml-auto flex items-center gap-2 md:hidden">
+          <Link
+            aria-label={languageAriaLabel}
+            className="flex h-10 items-center gap-1.5 rounded-lg border border-white/16 bg-white/8 px-3 text-sm font-bold text-white"
+            href={languageHref}
+          >
+            <Languages size={16} />
+            {languageLabel}
+          </Link>
           <button
             aria-expanded={searchOpen}
             aria-label={searchOpen ? copy.close : copy.button}
@@ -293,6 +324,13 @@ export function ReaderHeader({ locale }: { locale: Locale }) {
                 </Link>
               );
             })}
+            <Link
+              className="mt-2 inline-flex items-center gap-2 rounded-lg border border-white/14 px-3 py-2.5 text-white/78 transition hover:bg-white/8 hover:text-[#F5E7B3]"
+              href={languageHref}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Languages size={16} />{locale === "vi-vn" ? "English" : "Tiếng Việt"}
+            </Link>
           </div>
         </nav>
       ) : null}

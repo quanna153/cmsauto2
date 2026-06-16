@@ -45,9 +45,11 @@ export function ArticleEditorFeature({ id }: { id: string }) {
   }, [article, revision]);
 
   useEffect(() => {
-    if (!article || initializedScheduleFor.current === article.id) return;
+    if (!article) return;
+    const scheduleKey = `${article.id}:${article.publishAt ?? "default"}`;
+    if (initializedScheduleFor.current === scheduleKey) return;
     setPublishAtLocal(toDatetimeLocalValue(article.publishAt ?? defaultPublishAt()));
-    initializedScheduleFor.current = article.id;
+    initializedScheduleFor.current = scheduleKey;
   }, [article]);
 
   const save = useMutation({

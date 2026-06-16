@@ -62,6 +62,7 @@ type FactorySessionValues = {
   linkSuggestions: InternalLinkSuggestion[];
   finalMarkdown: string;
 };
+type PersistTarget = { id: string; revision: number };
 
 const fallbackPrompts: PromptTemplates = {
   keywords: "Đề xuất keyword cluster rõ ràng cho {{keyword}}.",
@@ -361,6 +362,18 @@ export function FactoryFeature() {
     setSaveMessage("");
     setSeedKeyword(nextSeedKeyword);
 
+    let autoPersistTarget = savedArticleId && savedRevision !== null
+      ? { id: savedArticleId, revision: savedRevision }
+      : null;
+    const autosaveAutoProgress = async (values: FactorySessionValues, options?: { ready?: boolean }) => {
+      const savedArticle = await persistFactorySession(values, {
+        ready: options?.ready ?? false,
+        target: autoPersistTarget
+      });
+      autoPersistTarget = { id: savedArticle.id, revision: savedArticle.revision };
+      return savedArticle;
+    };
+
     try {
       setSelectedStep("keywords");
       setBusyLabel("01/07 Đang lấy keyword và volume từ Semrush...");
@@ -384,6 +397,19 @@ export function FactoryFeature() {
       setOutline(null);
       setDraft(null);
       setLinks([]);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "brief",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: null,
+        outline: null,
+        draft: null,
+        linkSuggestions: [],
+        finalMarkdown: ""
+      });
 
       setSelectedStep("brief");
       setBusyLabel("02/07 Đang đọc top 10 kết quả và rút insight đối thủ...");
@@ -395,6 +421,19 @@ export function FactoryFeature() {
       });
       const nextBrief = briefResult.brief;
       setBrief(nextBrief);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "outline",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: null,
+        draft: null,
+        linkSuggestions: [],
+        finalMarkdown: ""
+      });
 
       setSelectedStep("outline");
       setBusyLabel("03/07 Đang ghép keyword, volume và insight để sinh outline...");
@@ -408,6 +447,19 @@ export function FactoryFeature() {
       });
       const nextOutline = outlineResult.outline;
       setOutline(nextOutline);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "draft",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: nextOutline,
+        draft: null,
+        linkSuggestions: [],
+        finalMarkdown: ""
+      });
 
       setSelectedStep("draft");
       setBusyLabel("04/07 Đang viết bản nháp bằng Gemini...");
@@ -420,6 +472,19 @@ export function FactoryFeature() {
       });
       const nextDraft = draftResult.draft;
       setDraft(nextDraft);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "links",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: nextOutline,
+        draft: nextDraft,
+        linkSuggestions: [],
+        finalMarkdown: nextDraft.markdown
+      });
 
       setBusyLabel("05/07 Đang tạo ảnh bìa và ảnh minh họa tự động...");
       const generatedImages = await Promise.all([
@@ -431,6 +496,19 @@ export function FactoryFeature() {
         generatedImages: [...generatedImages, ...(nextDraft.generatedImages ?? [])]
       };
       setDraft(nextDraftWithImages);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: "links",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: nextOutline,
+        draft: nextDraftWithImages,
+        linkSuggestions: [],
+        finalMarkdown: nextDraftWithImages.markdown
+      });
 
       setSelectedStep("links");
       setBusyLabel("06/07 Đang phân tích bản nháp và so khớp kho internal links...");
@@ -443,6 +521,19 @@ export function FactoryFeature() {
       });
       const nextLinks = linksResult.suggestions.map((link) => ({ ...link, status: link.targetUrl ? "accepted" as const : "pending" as const }));
       setLinks(nextLinks);
+      await autosaveAutoProgress({
+        language,
+        seedKeyword: nextSeedKeyword,
+        activeStep: nextLinks.length > 0 ? "ready" : "links",
+        keywordIdeas: nextKeywords,
+        primaryKeywordId: nextPrimary.id,
+        secondaryKeywordIds: nextSecondary.map((item) => item.id),
+        brief: nextBrief,
+        outline: nextOutline,
+        draft: nextDraftWithImages,
+        linkSuggestions: nextLinks,
+        finalMarkdown: nextDraftWithImages.markdown
+      });
 
       setSelectedStep("ready");
       setBusyLabel("07/07 Đang áp dụng link và lưu bài vào danh sách chờ duyệt...");
@@ -450,7 +541,7 @@ export function FactoryFeature() {
         markdown: nextDraftWithImages.markdown,
         suggestions: nextLinks
       });
-      const savedArticle = await persistFactorySession({
+      const savedArticle = await autosaveAutoProgress({
         language,
         seedKeyword: nextSeedKeyword,
         activeStep: "ready",
@@ -548,12 +639,15 @@ export function FactoryFeature() {
     };
   }
 
-  async function persistFactorySession(values: FactorySessionValues, { ready = false }: { ready?: boolean } = {}) {
-    if (savedArticleId && savedRevision !== null) {
-      const result = await patchJson<{ article: ArticleSession }>(`/articles/${savedArticleId}`, {
-        expectedRevision: savedRevision,
+  async function persistFactorySession(values: FactorySessionValues, { ready = false, target = null }: { ready?: boolean; target?: PersistTarget | null } = {}) {
+    const targetId = target?.id ?? savedArticleId;
+    const targetRevision = target?.revision ?? savedRevision;
+    if (targetId && targetRevision !== null) {
+      const result = await patchJson<{ article: ArticleSession }>(`/articles/${targetId}`, {
+        expectedRevision: targetRevision,
         changes: buildSessionChanges(values)
       });
+      setSavedArticleId(result.article.id);
       setSavedRevision(result.article.revision);
       setSaveMessage(ready ? "Đã lưu bài vào danh sách chờ duyệt." : `Đã lưu tạm bài đang làm dở, revision ${result.article.revision}.`);
       return result.article;
