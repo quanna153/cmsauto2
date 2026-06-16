@@ -35,10 +35,9 @@ import {
   buildInternalLinkSuggestionsFromAnchorCandidates,
   buildOutline,
   findInternalLinkAnchorCandidates,
-  formatAnchorCandidatesForPrompt,
+  type InternalLinkAnchorCandidate,
   mapAnchorCandidatesToInternalLinks,
   mapAnchorTextCandidatesToInternalLinkCandidates,
-  mapSelectedInternalLinkTargetsToSuggestions,
   retrieveInternalLinkArticles,
   selectInternalLinkCandidatesForAnchorCandidates,
   slugify
@@ -264,13 +263,13 @@ const geminiKeywordResultSchema = z.object({
 const geminiBriefSchema = z.object({ brief: briefSchema });
 const geminiOutlineSchema = z.object({ outline: outlineSchema });
 const geminiDraftSchema = z.object({ draft: draftSchema });
-const geminiInternalLinkSelectionSchema = z.object({
-  internalLinks: z.array(z.object({
-    anchorText: z.string().min(1),
-    targetUrl: z.string().min(1),
+const geminiInternalLinkAnchorSelectionSchema = z.object({
+  anchorCandidates: z.array(z.object({
+    anchorText: z.string().min(2),
+    sourceContext: z.string().min(1),
     confidence: z.number().min(0).max(1),
     reason: z.string().min(1)
-  })).max(8)
+  })).max(12)
 });
 const keywordIdeaResponseJsonSchema = {
   type: "object",
@@ -440,27 +439,27 @@ const draftResponseJsonSchema = {
   },
   required: ["draft"]
 } as const;
-const internalLinkSelectionResponseJsonSchema = {
+const internalLinkAnchorSelectionResponseJsonSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    internalLinks: {
+    anchorCandidates: {
       type: "array",
-      maxItems: 8,
+      maxItems: 12,
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
-          anchorText: { type: "string", description: "Exact phrase from draft_markdown that should become an internal link anchor." },
-          targetUrl: { type: "string", description: "URL copied exactly from candidate_articles." },
+          anchorText: { type: "string", description: "Exact meaningful phrase from draft_markdown that should become an internal link anchor." },
+          sourceContext: { type: "string", description: "Short sentence or paragraph fragment from draft_markdown where anchorText appears." },
           confidence: { type: "number", minimum: 0, maximum: 1 },
-          reason: { type: "string", description: "Short reason why this candidate article is the best destination." }
+          reason: { type: "string", description: "Short reason why this anchor should be linked." }
         },
-        required: ["anchorText", "targetUrl", "confidence", "reason"]
+        required: ["anchorText", "sourceContext", "confidence", "reason"]
       }
     }
   },
-  required: ["internalLinks"]
+  required: ["anchorCandidates"]
 } as const;
 const keywordRequestSchema = z.object({
   seedKeyword: z.string().min(1),
@@ -488,16 +487,53 @@ function trimForPrompt(value: string | undefined, maxLength = 4000) {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-function formatInternalLinkCandidateArticlesForPrompt(articles: ArticleLibraryItem[]) {
-  return articles
-    .map((article, index) => [
-      `${index + 1}. id: ${article.id}`,
-      `   title: ${article.title}`,
-      `   url: ${article.url}`,
-      article.keywords.length ? `   keywords: ${article.keywords.join(", ")}` : null,
-      article.summary.trim() ? `   summary: ${trimForPrompt(article.summary, 220)}` : null
-    ].filter(Boolean).join("\n"))
+function formatDraftMarkdownForAnchorPrompt(markdown: string) {
+  const blocks = markdown
+    .split(/\n\s*\n/)
+    .map((block) => block.replace(/\s+/g, " ").trim())
+    .filter((block) => block && !/^#{1,6}\s/u.test(block))
+    .slice(0, 24);
+
+  const formatted = blocks
+    .map((block, index) => `Đoạn ${index + 1}: ${trimForPrompt(block, 900)}`)
     .join("\n\n");
+
+  return formatted || trimForPrompt(markdown.replace(/\s+/g, " "), 6000);
+}
+
+function normalizeDraftPhrase(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function mapAiAnchorSelectionsToInternalLinkCandidates(
+  selections: z.infer<typeof geminiInternalLinkAnchorSelectionSchema>["anchorCandidates"],
+  draftMarkdown: string,
+  existingAnchors: Set<string>
+): InternalLinkAnchorCandidate[] {
+  const normalizedDraft = normalizeDraftPhrase(draftMarkdown);
+  const seen = new Set<string>();
+
+  return selections.flatMap((selection) => {
+    const anchor = selection.anchorText.trim().replace(/\s+/g, " ");
+    const normalizedAnchor = normalizeDraftPhrase(anchor);
+    if (
+      !anchor
+      || seen.has(normalizedAnchor)
+      || existingAnchors.has(normalizedAnchor)
+      || !normalizedDraft.includes(normalizedAnchor)
+    ) {
+      return [];
+    }
+
+    seen.add(normalizedAnchor);
+    const sourceContext = selection.sourceContext.trim().replace(/\s+/g, " ");
+    return [{
+      anchor,
+      sourceContext: normalizeDraftPhrase(sourceContext).includes(normalizedAnchor) ? sourceContext : undefined,
+      reason: selection.reason.trim(),
+      confidence: Math.round(selection.confidence * 100)
+    }];
+  });
 }
 
 function normalizeSuggestionAnchor(anchor: string) {
@@ -515,18 +551,6 @@ function isExistingInternalLinkSuggestion(
 ) {
   return existingAnchors.has(normalizeSuggestionAnchor(suggestion.anchor))
     || (suggestion.targetUrl.trim() && existingUrls.has(normalizeSuggestionUrl(suggestion.targetUrl)));
-}
-
-function formatRejectedInternalLinkAnchorsForPrompt(suggestions: InternalLinkSuggestion[]) {
-  return suggestions
-    .map((suggestion, index) => [
-      `${index + 1}. anchorText: ${suggestion.anchor}`,
-      `   confidence: ${suggestion.confidence}`,
-      suggestion.sourceContext ? `   sourceContext: ${suggestion.sourceContext}` : null,
-      suggestion.reason ? `   previousReason: ${suggestion.reason}` : null,
-      suggestion.targetUrl ? `   rejectedUrl: ${suggestion.targetUrl}` : null
-    ].filter(Boolean).join("\n"))
-    .join("\n\n");
 }
 
 function mergeAdditionalInternalLinks(
@@ -1892,6 +1916,114 @@ app.post("/api/links/suggest", async (request, response, next) => {
     const eligibleArticleLibrary = shouldRegenerateRejectedOnly || shouldExpandSuggestions
       ? articleLibrary.filter((article) => !unavailableUrls.has(article.url.trim().toLowerCase()))
       : articleLibrary;
+    const shouldUseAiAnchorSelection = hasGeminiConfig(customConfig)
+      && !shouldRegenerateRejectedOnly
+      && !shouldExpandSuggestions;
+
+    if (shouldUseAiAnchorSelection) {
+      let aiSelectionError: string | undefined;
+      const draftMarkdownForPrompt = formatDraftMarkdownForAnchorPrompt(payload.draft.markdown);
+      const aiResult = await withTimeout(generateStructuredJson({
+        prompt: [
+          payload.prompt,
+          "",
+          "QUY TẮC HỆ THỐNG GHI ĐÈ:",
+          "- Chỉ chọn anchor/cụm từ cần gắn internal link từ chính bản nháp.",
+          "- KHÔNG chọn URL, KHÔNG trả targetUrl. Backend sẽ tự tìm URL phù hợp trong Kho links.",
+          "- Output bắt buộc là JSON object duy nhất có key anchorCandidates.",
+          "- Mỗi anchorCandidates item chỉ được có: anchorText, sourceContext, confidence, reason.",
+          "- anchorText phải copy nguyên văn từ draft_markdown, giữ đúng dấu/cách viết trong bài.",
+          "- sourceContext phải là câu hoặc đoạn ngắn trong draft_markdown và phải chứa anchorText nguyên văn.",
+          "- anchorText phải là cụm có nghĩa, thường 2-8 từ; không chọn một từ đơn lẻ như Trump, Musk, Kinh.",
+          "- Không chọn cụm đứt đoạn, không chọn cụm bắt đầu hoặc kết thúc bằng hư từ.",
+          "- Ưu tiên thuật ngữ/chủ đề có thể giải thích sâu hơn: crypto, thị trường, nhân vật/sự kiện, rủi ro, sản phẩm, công nghệ.",
+          "- Ví dụ sai: \"Trump\", \"Musk\", \"lại có xu hướng\", \"nhất cho một altcoin\", \"tích thị trường crypto\".",
+          "- Ví dụ đúng: \"thị trường tiền điện tử\", \"Bitcoin Dominance\", \"mối quan hệ giữa Elon Musk và Donald Trump\", \"chính sách tiền mã hóa\"."
+        ].join("\n"),
+        variables: {
+          keyword: payload.primaryKeyword,
+          primary_keyword: payload.primaryKeyword,
+          secondary_keywords: payload.secondaryKeywords.join(", "),
+          language: payload.language,
+          draft_title: payload.draft.title,
+          draft_markdown: draftMarkdownForPrompt,
+          anchor_candidates: "",
+          candidate_articles: "",
+          articleTitle: payload.draft.title,
+          articleContent: draftMarkdownForPrompt
+        },
+        contextLines: [
+          `Từ khóa chính: ${payload.primaryKeyword}`,
+          `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
+          `Ngôn ngữ: ${payload.language}`,
+          `Tiêu đề bản nháp: ${payload.draft.title}`,
+          `Draft markdown để chọn anchor:\n${draftMarkdownForPrompt}`
+        ],
+        jsonShapeHint: JSON.stringify({
+          anchorCandidates: [
+            {
+              anchorText: "cụm từ có nghĩa xuất hiện nguyên văn trong bài",
+              sourceContext: "Câu hoặc đoạn ngắn chứa cụm từ đó.",
+              confidence: 0.95,
+              reason: "Cụm này là khái niệm/chủ đề nên có link giải thích thêm."
+            }
+          ]
+        }, null, 2),
+        responseJsonSchema: internalLinkAnchorSelectionResponseJsonSchema,
+        validator: geminiInternalLinkAnchorSelectionSchema,
+        temperature: 0.25,
+        customConfig
+      }), 12000, "Gemini internal link anchor selection").catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unknown Gemini error.";
+        if (!canFallbackToLocalInternalLinks(message)) {
+          throw error;
+        }
+        aiSelectionError = message;
+        console.warn("Gemini internal link anchor selection failed; falling back to local suggestions.", message);
+        return null;
+      });
+
+      if (aiResult) {
+        const aiAnchorCandidates = mapAiAnchorSelectionsToInternalLinkCandidates(
+          aiResult.anchorCandidates,
+          payload.draft.markdown,
+          existingAnchors
+        );
+        const retrievedLibrary = Array.from(new Map(aiAnchorCandidates.flatMap((candidate) =>
+          retrieveInternalLinkArticles(
+            candidate.anchor,
+            candidate.sourceContext ?? "",
+            payload.language,
+            eligibleArticleLibrary,
+            40
+          )
+        ).map((article) => [article.id, article])).values());
+        const candidateLibrary = retrievedLibrary.length > 0 ? retrievedLibrary : eligibleArticleLibrary;
+        const suggestions = mapAnchorCandidatesToInternalLinks(
+          payload.draft,
+          payload.language,
+          candidateLibrary,
+          aiAnchorCandidates,
+          rejectedSuggestions
+        );
+
+        const record = await appendHistory("links", payload, {
+          mode: "ai-anchor-selection + backend-link-match",
+          articleLibraryCount: articleLibrary.length,
+          aiAnchorCount: aiAnchorCandidates.length,
+          candidateLibraryCount: candidateLibrary.length,
+          aiSelectionError,
+          suggestions
+        }, getAuth(request).user.id);
+        response.json({
+          suggestions,
+          mappingCsv: buildInternalLinkMappingCsv(payload.draft.title, suggestions),
+          recordId: record.id
+        });
+        return;
+      }
+    }
+
     const localAnchorCandidates = shouldRegenerateRejectedOnly
       ? []
       : findInternalLinkAnchorCandidates(
@@ -1966,96 +2098,9 @@ app.post("/api/links/suggest", async (request, response, next) => {
         rejectedSuggestions
       );
 
-    const shouldUseAiTargetSelection = hasGeminiConfig(customConfig)
-      && !shouldExpandSuggestions;
-    let suggestionMode = shouldUseAiTargetSelection
-      ? "prefiltered-library + ai-target-selection"
-      : "local-anchor + prefiltered-library-match";
+    let suggestionMode = "local-anchor + prefiltered-library-match";
     if (shouldExpandSuggestions) {
       suggestionMode = "local-anchor + prefiltered-library-match + append-more";
-    }
-    let aiSelectionError: string | undefined;
-
-    if (shouldUseAiTargetSelection) {
-      const candidateArticles = formatInternalLinkCandidateArticlesForPrompt(candidateLibrary);
-      const anchorContexts = shouldRegenerateRejectedOnly
-        ? formatRejectedInternalLinkAnchorsForPrompt(currentRejectedSuggestions)
-        : formatAnchorCandidatesForPrompt(
-          payload.draft.markdown,
-          payload.language,
-          localAnchorCandidates
-        );
-      const compactDraftContext = [
-        `title: ${payload.draft.title}`,
-        payload.draft.excerpt ? `excerpt: ${payload.draft.excerpt}` : null,
-        anchorContexts ? `anchor_candidates:\n${anchorContexts}` : null
-      ].filter(Boolean).join("\n\n");
-      const aiResult = await withTimeout(generateStructuredJson({
-        prompt: payload.prompt,
-        variables: {
-          keyword: payload.primaryKeyword,
-          primary_keyword: payload.primaryKeyword,
-          secondary_keywords: payload.secondaryKeywords.join(", "),
-          language: payload.language,
-          draft_title: payload.draft.title,
-          draft_markdown: compactDraftContext,
-          anchor_candidates: anchorContexts,
-          candidate_articles: candidateArticles,
-          articleTitle: payload.draft.title,
-          articleContent: compactDraftContext
-        },
-        contextLines: [
-          `Từ khóa chính: ${payload.primaryKeyword}`,
-          `Từ khóa phụ: ${payload.secondaryKeywords.join(", ")}`,
-          `Ngôn ngữ: ${payload.language}`,
-          `Tiêu đề bản nháp: ${payload.draft.title}`,
-          `Anchor candidates đã detect (${localAnchorCandidates.length}):\n${anchorContexts || "Không có anchor candidate."}`,
-          `Candidate articles đã lọc trước (${candidateLibrary.length}/${articleLibrary.length}):\n${candidateArticles}`,
-          `Compact draft context:\n${compactDraftContext}`
-        ],
-        jsonShapeHint: JSON.stringify({
-          internalLinks: [
-            {
-              anchorText: "Proof of Stake",
-              targetUrl: "https://example.com/proof-of-stake",
-              confidence: 0.95,
-              reason: "This destination best explains the standalone concept implied by the anchor."
-            }
-          ]
-        }, null, 2),
-        responseJsonSchema: internalLinkSelectionResponseJsonSchema,
-        validator: geminiInternalLinkSelectionSchema,
-        temperature: 0.3,
-        customConfig
-      }), 12000, "Gemini internal link selection").catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Unknown Gemini error.";
-        if (!canFallbackToLocalInternalLinks(message)) {
-          throw error;
-        }
-        aiSelectionError = message;
-        suggestionMode = "prefiltered-library + local-fallback-after-ai-network-error";
-        console.warn("Gemini internal link selection failed; falling back to local suggestions.", message);
-        return null;
-      });
-
-      if (aiResult) {
-        const selectedSuggestions = mapSelectedInternalLinkTargetsToSuggestions(
-          payload.draft,
-          payload.language,
-          candidateLibrary,
-          aiResult.internalLinks.map((link) => ({
-            anchor: link.anchorText,
-            targetUrl: link.targetUrl,
-            confidence: link.confidence,
-            reason: link.reason
-          })),
-          rejectedSuggestions
-        );
-
-        if (selectedSuggestions.length > 0) {
-          regeneratedSuggestions = mergeAdditionalInternalLinks(selectedSuggestions, regeneratedSuggestions);
-        }
-      }
     }
     const suggestions = shouldRegenerateRejectedOnly
       ? mergeRegeneratedInternalLinks(existingSuggestions, regeneratedSuggestions)
@@ -2072,7 +2117,6 @@ app.post("/api/links/suggest", async (request, response, next) => {
       mode: suggestionMode,
       articleLibraryCount: articleLibrary.length,
       candidateLibraryCount,
-      aiSelectionError,
       suggestions
     }, getAuth(request).user.id);
     response.json({
