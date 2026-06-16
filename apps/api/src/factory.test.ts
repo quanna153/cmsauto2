@@ -82,13 +82,16 @@ describe("internal link matching", () => {
   });
 
   it("matches title-only library records without inventing URLs", () => {
-    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates(draft, "bitcoin", [], "en", [
-      libraryItem({ title: "blockchain", url: "/en-us/blockchain" })
+    const suggestions = buildInternalLinkSuggestionsFromAnchorCandidates({
+      ...draft,
+      markdown: "Bitcoin uses blockchain consensus to keep transactions verifiable."
+    }, "bitcoin", [], "en", [
+      libraryItem({ title: "blockchain consensus", url: "/en-us/blockchain-consensus" })
     ]);
 
     expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]?.targetUrl).toBe("/en-us/blockchain");
-    expect(suggestions[0]?.matchedKeyword).toBe("blockchain");
+    expect(suggestions[0]?.targetUrl).toBe("/en-us/blockchain-consensus");
+    expect(suggestions[0]?.matchedKeyword).toBe("blockchain consensus");
   });
 
   it("finds anchor candidates before reading the internal link library", () => {
@@ -109,11 +112,11 @@ describe("internal link matching", () => {
     expect(candidates.some((candidate) => candidate.anchorText === "Validator Rewards")).toBe(true);
   });
 
-  it("keeps anchor candidates when at least one anchor quality criterion passes", () => {
-    const candidates = findAnchorTextCandidates("Layer 2 overview", "Solana launched a new scaling roadmap.", "en");
+  it("keeps meaningful multi-word anchor candidates", () => {
+    const candidates = findAnchorTextCandidates("Layer 2 overview", "Solana launched a new scaling roadmap. Solana DeFi protocols expanded liquidity.", "en");
 
     expect(candidates).toContainEqual(expect.objectContaining({
-      anchorText: "Solana",
+      anchorText: "Solana DeFi",
       reason: expect.objectContaining({
         standaloneTopic: true,
         informationGap: true,
@@ -728,9 +731,9 @@ describe("internal link matching", () => {
         "",
         "Smart contract security reduces exploit risk.",
         "",
-        "Tokenomics helps readers evaluate supply design.",
+        "Tokenomics design helps readers evaluate supply design.",
         "",
-        "Governance lets communities change protocol rules.",
+        "Governance rules let communities change protocol rules.",
         "",
         Array.from({ length: 820 }, () => "context").join(" ")
       ].join("\n")
@@ -743,16 +746,16 @@ describe("internal link matching", () => {
         libraryItem({ id: "scale", title: "Blockchain Scalability", url: "/blockchain-scalability", keywords: ["blockchain scalability"] }),
         libraryItem({ id: "bridge", title: "Cross-chain Interoperability", url: "/cross-chain-interoperability", keywords: ["cross-chain interoperability"] }),
         libraryItem({ id: "security", title: "Smart Contract Security", url: "/smart-contract-security", keywords: ["smart contract security"] }),
-        libraryItem({ id: "tokenomics", title: "Tokenomics", url: "/tokenomics", keywords: ["tokenomics"] }),
-        libraryItem({ id: "governance", title: "Governance", url: "/governance", keywords: ["governance"] })
+        libraryItem({ id: "tokenomics", title: "Tokenomics Design", url: "/tokenomics", keywords: ["tokenomics design"] }),
+        libraryItem({ id: "governance", title: "Governance Rules", url: "/governance", keywords: ["governance rules"] })
       ],
       [
         { anchor: "Proof of Stake", sourceContext: "Proof of Stake explains validator incentives.", confidence: 95 },
         { anchor: "Blockchain scalability", sourceContext: "Blockchain scalability affects transaction throughput.", confidence: 94 },
         { anchor: "Cross-chain interoperability", sourceContext: "Cross-chain interoperability depends on bridge design.", confidence: 93 },
         { anchor: "Smart contract security", sourceContext: "Smart contract security reduces exploit risk.", confidence: 92 },
-        { anchor: "Tokenomics", sourceContext: "Tokenomics helps readers evaluate supply design.", confidence: 91 },
-        { anchor: "Governance", sourceContext: "Governance lets communities change protocol rules.", confidence: 90 }
+        { anchor: "Tokenomics design", sourceContext: "Tokenomics design helps readers evaluate supply design.", confidence: 91 },
+        { anchor: "Governance rules", sourceContext: "Governance rules let communities change protocol rules.", confidence: 90 }
       ]
     );
 
@@ -765,7 +768,7 @@ describe("internal link matching", () => {
       {
         ...draft,
         title: "Blockchain guide",
-        markdown: "Blockchain helps readers understand verifiable transactions."
+        markdown: "Blockchain transactions help readers understand verifiable records."
       },
       "en",
       [
@@ -773,7 +776,7 @@ describe("internal link matching", () => {
           id: "rejected",
           title: "Blockchain Basics",
           url: "/blockchain-basics",
-          keywords: ["blockchain"]
+          keywords: ["blockchain transactions"]
         }),
         libraryItem({
           id: "alternative",
@@ -783,18 +786,18 @@ describe("internal link matching", () => {
         })
       ],
       [{
-        anchor: "Blockchain",
-        sourceContext: "Blockchain helps readers understand verifiable transactions.",
+        anchor: "Blockchain transactions",
+        sourceContext: "Blockchain transactions help readers understand verifiable records.",
         confidence: 95
       }],
       [{
         id: "rejected-blockchain",
-        sourceContext: "Blockchain helps readers understand verifiable transactions.",
-        anchor: "Blockchain",
+        sourceContext: "Blockchain transactions help readers understand verifiable records.",
+        anchor: "Blockchain transactions",
         targetArticleId: "rejected",
         targetTitle: "Blockchain Basics",
         targetUrl: "/blockchain-basics",
-        matchedKeyword: "Blockchain",
+        matchedKeyword: "Blockchain transactions",
         matchStatus: "matched",
         reason: "Rejected by editor.",
         confidence: 95,
@@ -807,7 +810,7 @@ describe("internal link matching", () => {
     );
 
     expect(suggestions[0]).toMatchObject({
-      anchor: "Blockchain",
+      anchor: "Blockchain transactions",
       targetArticleId: "alternative",
       targetUrl: "/verifiable-blockchain-transactions"
     });

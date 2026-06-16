@@ -863,6 +863,10 @@ function isWellFormedAnchorText(anchorText: string, language: Language) {
     return false;
   }
 
+  if (tokens.length === 1) {
+    return false;
+  }
+
   if (tokens.length > 1 && contentTokens.length < 2 && !hasTopicSignal(trimmed)) {
     return false;
   }
